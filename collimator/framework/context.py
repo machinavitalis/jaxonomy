@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Context classes for storing 'dynamic' data for the system (state, parameters, etc).
 
@@ -75,6 +66,8 @@ if TYPE_CHECKING:
         Mode,
     )
 
+    PortCache = Mapping[Hashable, Array]
+
 
 __all__ = [
     "ContextBase",
@@ -106,6 +99,7 @@ class ContextBase(metaclass=abc.ABCMeta):
     time: Scalar = None
     is_initialized: bool = False
     parameters: Mapping[str, Array] = None
+    port_cache: PortCache = None
 
     @abc.abstractmethod
     def __getitem__(self, key: Hashable) -> LeafContext:
@@ -216,6 +210,17 @@ class ContextBase(metaclass=abc.ABCMeta):
     def with_parameters(self, new_parameters: Mapping[str, ArrayLike]) -> ContextBase:
         """Create a copy of this context, replacing only the specified parameters."""
         pass
+
+    def with_port_cache(self, cache: PortCache) -> ContextBase:
+        return dataclasses.replace(self, port_cache=cache)
+
+    def with_port_cache_entry(self, key: Hashable, val: Array) -> ContextBase:
+        return dataclasses.replace(self, port_cache={**self.port_cache, key: val})
+
+    def refresh_port_cache(self) -> ContextBase:
+        if not self.owning_system.cache_enabled:
+            return self
+        return self.owning_system.recompute_port_cache(self)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -509,6 +514,7 @@ def _leaf_context_flatten(context: LeafContext):
         context.state,
         context.parameters,
         context.time,
+        context.port_cache,
     )
     aux_data = (
         context.owning_system,
@@ -519,13 +525,14 @@ def _leaf_context_flatten(context: LeafContext):
 
 def _leaf_context_unflatten(aux_data, children):
     owning_system, is_initialized = aux_data
-    state, parameters, time = children
+    state, parameters, time, port_cache = children
     return LeafContext(
         owning_system=owning_system,
         is_initialized=is_initialized,
         state=state,
         parameters=parameters,
         time=time,
+        port_cache=port_cache,
     )
 
 
@@ -543,6 +550,7 @@ def _diagram_context_flatten(context: DiagramContext):
         vals,
         context.time,
         context.parameters,
+        context.port_cache,
     )
     aux_data = (
         keys,
@@ -554,7 +562,7 @@ def _diagram_context_flatten(context: DiagramContext):
 
 def _diagram_context_unflatten(aux_data, children):
     keys, owning_system, is_initialized = aux_data
-    vals, time, parameters = children
+    vals, time, parameters, port_cache = children
     subcontexts = OrderedDict(zip(keys, vals))
     return DiagramContext(
         owning_system=owning_system,
@@ -562,6 +570,7 @@ def _diagram_context_unflatten(aux_data, children):
         subcontexts=subcontexts,
         parameters=parameters,
         time=time,
+        port_cache=port_cache,
     )
 
 

@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Functionality for simulating hybrid dynamical systems.
 
@@ -438,6 +429,7 @@ def simulate(
 
     # Run the simulation
     try:
+        system.cache_enabled = True
         final_context, results_data = _wrapped_simulate()
 
         if postprocess and results_data is not None:
@@ -447,6 +439,7 @@ def simulate(
 
     finally:
         system.post_simulation_finalize()
+        system.cache_enabled = False
 
     # Reset the integer time scale to the default value in case we decreased precision
     # to reach the end time of a long simulation.  Typically this won't do anything.
@@ -739,9 +732,11 @@ class Simulator:
                 minor_step_end_time - minor_step_start_time
             ) / (2 ** (self.zc_bisection_loop_count + 1))
             context_zc_time = context_tf.with_time(zc_occur_time)
+            context_zc_time = context_zc_time.refresh_port_cache()
             results_data = self.save_results(results_data, context_zc_time)
 
             # Handle any triggered zero-crossing events
+            # The port cache refresh here is handled by the system class
             context_tf = self.system.handle_zero_crossings(zc_events, context_tf)
 
             # Re-initialize the solver, since the state may have been reset
@@ -768,6 +763,7 @@ class Simulator:
             # but not at t=tf.  This is okay, since we will save the results at
             # the top of the next major step, as well as at the end of the main
             # simulation loop.
+            context_t0 = context_t0.refresh_port_cache()
             results_data = self.save_results(results_data, context_t0)
 
             zc_events = guard_interval_start(zc_events, context_t0)
@@ -778,6 +774,7 @@ class Simulator:
             context = context_t0.with_time(solver_state.t).with_continuous_state(xc)
 
             # Check for zero-crossing events
+            context = context.refresh_port_cache()
             zc_events = determine_triggered_guards(zc_events, context)
 
             triggered = zc_events.has_triggered
@@ -919,6 +916,7 @@ class Simulator:
         context = cdata.context
         results_data = cdata.results_data
 
+        context = context.refresh_port_cache()
         zc_events = self.system.determine_active_guards(context)
 
         if self.system.has_continuous_state:
@@ -966,6 +964,7 @@ class Simulator:
 
             # Advance time to the end of the interval
             context = context.with_time(IntegerTime.as_decimal(int_tf))
+            context = context.refresh_port_cache()
 
             # Record guard values after the discrete update and check if anything
             # triggered as a result of advancing time
@@ -1018,15 +1017,18 @@ class Simulator:
         # Get the collection of zero-crossing events that _might_ be activated
         # given the current state of the system.  For example, some events may
         # be de-activated as a result of the current state of a state machine.
+        context = context.refresh_port_cache()
         zc_events = system.determine_active_guards(context)
 
         # Record guard values at the start of the interval
         zc_events = guard_interval_start(zc_events, context)
 
         # Handle any active periodic discrete updates
+        # The port refresh here is handled by the system class
         context = system.handle_discrete_update(timed_events, context)
 
         # Record guard values after the discrete update
+        context = context.refresh_port_cache()
         zc_events = guard_interval_end(zc_events, context)
 
         # Check if guards have triggered as a result of these updates
@@ -1245,6 +1247,7 @@ class Simulator:
                 sim_state.context, sim_state.timed_events
             )
             # 2] do update solution
+            context = context.refresh_port_cache()
             results_data = self.save_results(sim_state.results_data, context)
             sim_state = sim_state._replace(
                 context=context,
@@ -1537,6 +1540,7 @@ def _bisection_step_fun(step_sol, i, carry: GuardIsolationData):
     context_mid = carry.context.with_time(time_mid)
     states_mid = step_sol.eval_interpolant(time_mid)
     context_mid = context_mid.with_continuous_state(states_mid)
+    context_mid = context_mid.refresh_port_cache()
     guards_mid = determine_triggered_guards(carry.guards, context_mid)
 
     # bisection algo part 2: decide whether next step will search

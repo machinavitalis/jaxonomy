@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Builder class for constructing block diagrams."""
 
@@ -100,6 +91,7 @@ class DiagramBuilder:
         # should act like a collection of pure functions, but best practice is to have
         # each leaf system be fully unique.
         self._already_built = False
+        self._built_as_name = None
 
     @overload
     def add(self, system: SystemBase) -> SystemBase: ...
@@ -269,7 +261,8 @@ class DiagramBuilder:
         if self._already_built:
             raise BuilderError(
                 "DiagramBuilder: build has already been called to "
-                "create a diagram; this DiagramBuilder may no longer be used."
+                "create a diagram; this DiagramBuilder may no longer be used: "
+                f"{self._built_as_name}"
             )
 
     def _check_system_name_is_unique(self, system: SystemBase):
@@ -414,4 +407,5 @@ class DiagramBuilder:
             diagram.export_output(locator, port_name)
 
         self._already_built = True  # Prevent further use of this builder
+        self._built_as_name = name
         return diagram

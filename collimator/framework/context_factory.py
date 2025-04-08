@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Factory classes for generating context classes.
 
@@ -27,6 +18,7 @@ from collections import OrderedDict
 from .error import StaticError, ErrorCollector
 from ..logging import logger
 from .context import LeafContext, DiagramContext
+from .port import OutputPort
 
 if TYPE_CHECKING:
     from ..backend.typing import Scalar
@@ -54,6 +46,8 @@ class ContextFactory(metaclass=abc.ABCMeta):
     def __call__(
         self,
         time: Scalar = 0.0,
+        check_types=False,
+        error_collector: ErrorCollector = None,
     ) -> ContextBase:
         """Create a context object for the system.
 
@@ -78,6 +72,27 @@ class ContextFactory(metaclass=abc.ABCMeta):
         # determined based on what it's connected to (see `DerivativeDiscrete` block
         # for an example).
         ctx = self.initialize_static_data(ctx)
+
+        # Optionally, perform basic type checking by evaluating all the cache sources.
+        # Systems are allowed to define any implementation-specific type checking.
+        # Since this won't make sense on partially-constructed digrams, it should only
+        # be done for the root context.
+        if check_types:
+            self.check_types(ctx, error_collector=error_collector)
+
+        port_cache = {}
+        for port in self.system.sorted_callbacks:
+            if not isinstance(port, OutputPort):
+                continue
+            if port.default_value is None:
+                # FIXME there are situations where we end up here, due to
+                # changes between the original PR for the port cache and later
+                # changes to fix param evaluation
+                with ErrorCollector.context(error_collector):
+                    port.default_value = port.calc(ctx)
+            port_cache[hash(port)] = port.default_value
+
+        ctx = ctx.with_port_cache(port_cache)
 
         ctx = ctx.mark_initialized()
         return ctx
@@ -231,7 +246,7 @@ class DiagramContextFactory(ContextFactory):
         # Multiple events may refer to the same system, we need to keep the order
         # with regards to the last occuring event of a system.
         nodes = []
-        for cb in reversed(system.sorted_event_callbacks):
+        for cb in reversed(system.sorted_callbacks):
             if cb.system not in nodes:
                 nodes.append(cb.system)
         nodes = list(reversed(nodes))
@@ -285,6 +300,20 @@ class DiagramContextFactory(ContextFactory):
         # order to be able to call the callbacks of ports.
         if check_types:
             self.check_types(ctx, error_collector=error_collector)
+
+        port_cache = {}
+        for port in self.system.sorted_callbacks:
+            if not isinstance(port, OutputPort):
+                continue
+            if port.default_value is None:
+                # FIXME there are situations where we end up here, due to
+                # changes between the original PR for the port cache and later
+                # changes to fix param evaluation
+                with ErrorCollector.context(error_collector):
+                    port.default_value = port.calc(ctx)
+            port_cache[hash(port)] = port.default_value
+
+        ctx = ctx.with_port_cache(port_cache)
 
         ctx = ctx.mark_initialized()
 

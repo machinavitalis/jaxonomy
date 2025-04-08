@@ -13,6 +13,7 @@ pip install pycollimator
 ```
 
 - On Windows: `set JAX_ENABLE_X64=True`.
+- On macOS you may need to install `cmake` first.
 
 ## Optional dependencies
 
@@ -35,18 +36,7 @@ Install all optional dependencies with `pip install pycollimator[all]` or
 just the NMPC dependencies with `pip install pycollimator[nmpc]`.
 
 <details>
-<summary>Licensed under AGPLv3</summary>
+<summary>Licensed under MIT</summary>
 This `pycollimator` package is released and licensed under the
-<a href="https://www.gnu.org/licenses/agpl-3.0.en.html">AGPLv3</a> license.
-
-<br />
-
-Collimator, Inc reserves all rights to release under a different license
-at any time, as well as all rights to use the code in any
-way in their own commercial offerings.
-
-Contact us to obtain a commercial license. Head over to
-<a href="https://www.collimator.ai/contact-us">collimator.ai/contact-us</a>
-for contact information.
-
+<a href="https://mit-license.org/">MIT</a> license.
 </details>

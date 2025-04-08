@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Classes for evaluating and storing results of calculations.
 
@@ -127,6 +118,21 @@ class SystemCallback:
     def __repr__(self) -> str:
         return f"{self.name}(ticket = {self.ticket})"
 
+    def calc(self, root_context: ContextBase) -> Array:
+        """Unconditionally evaluate the callback function.
+
+        This does not check the cache status, but will always recompute the value.
+        Typically `eval` should be preferred to `calc` to take advantage of caching
+        where possible.
+
+        Args:
+            root_context: The root context used for the evaluation.
+
+        Returns:
+            The calculated value from the callback, expected to be a Array.
+        """
+        return self._callback(root_context)
+
     def eval(self, root_context: ContextBase) -> Array:
         """Evaluate the callback function and return the calculated value.
 
@@ -138,13 +144,13 @@ class SystemCallback:
         """
         if not root_context.is_initialized:
             if self.default_value is None:
-                self.default_value = self._callback(root_context)
+                self.default_value = self.calc(root_context)
             return self.default_value
 
         # Note: using the BasicOutputCache here does not give any performance
         # gain, due to the overhead of computing the keys and lookups.
         try:
-            result = self._callback(root_context)
+            result = self.calc(root_context)
         except ValueError as e:
             # this error is raised if the callback is not differentiable
             if "do not support JVP." in str(e):

@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """
 This module records the build commands and generates the code for the diagram.
@@ -44,6 +35,8 @@ __REF_SUBDIAGRAMS__ = {}  # ref_id to variable name
 
 __IS_RECORDING__ = False
 
+__BUILDER_NAMES__ = {}
+
 
 def _init_kwargs_to_str(block, kwargs):
     kwargs_str = {}
@@ -60,7 +53,20 @@ def _init_kwargs_to_str(block, kwargs):
 
 
 def _get_builder_name(builder: "DiagramBuilder"):
-    return f"{__BUILDERS_ID__[builder]}_builder"
+    if builder in __BUILDER_NAMES__:
+        return __BUILDER_NAMES__[builder]
+
+    # Ensure uniqueness of group/submodel builders even if multiple groups/submodels
+    # are found under different group/submodels.
+    name = f"{__BUILDERS_ID__[builder]}_builder"
+    if name in __BUILDER_NAMES__.values():
+        k = 1
+        name = f"{__BUILDERS_ID__[builder]}_{k}_builder"
+        while name in __BUILDER_NAMES__.values():
+            name = f"{__BUILDERS_ID__[builder]}_{k}_builder"
+            k += 1
+    __BUILDER_NAMES__[builder] = name
+    return name
 
 
 def _get_diagram_name(builder: "DiagramBuilder"):
@@ -286,6 +292,7 @@ def clear():
     __IMPORTS__.clear()
     __BUILD_CMDS__.clear()
     __BUILDERS_ID__.clear()
+    __BUILDER_NAMES__.clear()
     __BLOCK_TO_BUILDER__.clear()
     __REF_SUBDIAGRAMS__.clear()
 
@@ -501,7 +508,11 @@ def get_diagram_builders() -> list[str]:
 
 
 def generate_code():
-    imports = ["from collimator import DiagramBuilder"] + list(__IMPORTS__)
+    imports = [
+        "from collimator import DiagramBuilder",
+        "import numpy as np",
+        "from numpy import array",
+    ] + list(__IMPORTS__)
     code = sorted(imports)
     code.append("")
     code.extend(c for c in get_diagram_builders())

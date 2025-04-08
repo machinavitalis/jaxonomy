@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """
 This module defines a system for managing and manipulating parameters in wildcat.
@@ -802,17 +793,17 @@ class Parameter:
         return _value_as_str(self.value), False
 
     def __repr__(self):
+        # This must return a valid python expression since it is used for
+        # serialization to Python.
         ex, _ = self.value_as_api_param(allow_string_literal=False)
         if len(ex) > 100:
             ex = ex[:50] + "..." + ex[-50:]
 
         return (
-            f"Parameter(name={self.name}, value={ex}, "
-            f"value_type={type(self.value).__name__}, "
-            f"is_static={self.is_static}, "
+            "Parameter("
+            f"name={self.name}, value={ex}, "
             f"is_python_expr={self.is_python_expr}, "
-            f"id={self.__hash__()}, "
-            f"system={self.system.name if self.system is not None else None})"
+            f"system={self.system.name if self.system is not None else None}"
             ")"
         )
 

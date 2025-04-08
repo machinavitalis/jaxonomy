@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Base class for System objects.
 
@@ -193,6 +184,12 @@ class SystemBase:
         # Cache mechanism for numpy backend.
         self._basic_output_cache: BasicOutputCache = BasicOutputCache(self)
 
+        # Should the system use caching or re-evaluate the output every time?
+        # By default this should be False, but it can be overridden, for instance
+        # during the main simulation loop.  When not in simulation mode, it is
+        # better to have the cache disabled to avoid stale data.
+        self._cache_enabled = False
+
     def __hash__(self) -> Hashable:
         return hash(self.system_id)
 
@@ -210,6 +207,13 @@ class SystemBase:
 
         This is only intended for special blocks that need to clean up
         resources and close files."""
+
+    @property
+    def root(self) -> SystemBase:
+        """Get the root system of the current system."""
+        if self.parent is None:
+            return self
+        return self.parent.root
 
     @property
     def static_parameters(self) -> dict[str, Parameter]:
@@ -230,6 +234,16 @@ class SystemBase:
     #
     # Simulation interface
     #
+    @property
+    def cache_enabled(self) -> bool:
+        if self.parent is None:
+            return self._cache_enabled
+        return self.root._cache_enabled
+
+    @cache_enabled.setter
+    def cache_enabled(self, value: bool):
+        self.root._cache_enabled = value
+
     @abc.abstractproperty
     def has_feedthrough_side_effects(self) -> bool:
         """Check if the system includes any feedthrough calls to `io_callback`."""
@@ -393,7 +407,7 @@ class SystemBase:
         system of equations.  However, since algebraic loops are prohibited, the events
         can be ordered and executed sequentially to ensure that the updates are applied
         in the correct order.  This is implemented in
-        `SystemBase.sorted_event_callbacks`.
+        `SystemBase.sorted_callbacks`.
 
         Multirate systems work in the same way, except that the events are evaluated
         conditionally on whether the current time corresponds to an update time for each
@@ -413,6 +427,7 @@ class SystemBase:
         if events.has_events:
             # Sequentially apply all updates
             for event in events:
+                context = context.refresh_port_cache()
                 system_id = event.system_id
                 state = event.handle(context)
                 local_context = context[system_id].with_state(state)
@@ -445,6 +460,7 @@ class SystemBase:
         )
         if events.num_events > 0:
             # Compute the updated state for all active events
+            context = context.refresh_port_cache()
             state = self.eval_zero_crossing_updates(context, events)
 
             # Apply the updates
@@ -467,7 +483,7 @@ class SystemBase:
         if self._cache_update_events is None:
             # Sort the output update events and store in the private attribute.
             self._cache_update_events = [
-                cb.event for cb in self.sorted_event_callbacks if cb.event is not None
+                cb.event for cb in self.sorted_callbacks if cb.event is not None
             ]
 
         return FlatEventCollection(tuple(self._cache_update_events))
@@ -478,15 +494,28 @@ class SystemBase:
         pass
 
     @property
-    def sorted_event_callbacks(self) -> List[SystemCallback]:
-        """Sort and return the event-related callbacks for this system."""
-        # Collect all of the callbacks associated with cache update events.  These are
+    def sorted_callbacks(self) -> List[SystemCallback]:
+        """Sort and return the callbacks for this system."""
+        # Collect all of the callbacks associated with this system.  These are
         # SystemCallback objects, so they are all associated with trackers in the
         # dependency graph.  We can use these to sort the events in execution order.
         trackers = sort_trackers([cb.tracker for cb in self._flat_callbacks])
 
         # Retrieve the callback associated with each tracker.
         return [tracker.cache_source for tracker in trackers]
+
+    def recompute_port_cache(self, context: ContextBase) -> dict[Hashable, Array]:
+        """Recompute all output ports and return them in a dictionary."""
+        # The callbacks are already sorted in the correct order, so we can just
+        # evaluate them in sequence, assuming all upstream values are correct.
+        for cb in self.sorted_callbacks:
+            if not isinstance(cb, OutputPort):
+                continue
+            # Evaluate the callback and store the result in the cache
+            val = cb.calc(context)
+            context = context.with_port_cache_entry(hash(cb), val)
+
+        return context
 
     # Events that are triggered by a "guard" function and may induce a "reset" map
     @abc.abstractproperty

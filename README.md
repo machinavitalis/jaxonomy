@@ -36,11 +36,7 @@ for a more complete example.
 Head over to [https://py.collimator.ai](https://py.collimator.ai) for
 the API reference documentation as well as examples and tutorials.
 
-## Licensed under AGPLv3
+## MIT Licensed
 
-This package is released and licensed under the
-[AGPLv3](https://www.gnu.org/licenses/agpl-3.0.en.html) license.
-
-Collimator, Inc reserves all rights to release
-under a different license under a different license at any time, as well as all
-rights to use the code in any way in their own commercial offerings.
+This package is released and licensed under the [MIT](https://mit-license.org/)
+license starting from version 2.2.0.

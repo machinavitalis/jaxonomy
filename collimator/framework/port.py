@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 """Classes for input/output ports of systems.
 
@@ -92,6 +83,15 @@ class OutputPort(PortBase):
     @property
     def direction(self) -> str:
         return "out"
+
+    def eval(self, root_context: ContextBase) -> Array:
+        key = hash(self)
+        # Exported subsystem ports don't appear in the cache, but these
+        # are trivial anyway (just routing to the subsystem callback), so we can
+        # just skip the cache in these cases.
+        if self.system.cache_enabled and key in root_context.port_cache:
+            return root_context.port_cache[key]
+        return super().eval(root_context=root_context)
 
 
 class FixedPortManager:

@@ -1,14 +1,5 @@
-# Copyright (C) 2024 Collimator, Inc.
-# SPDX-License-Identifier: AGPL-3.0-only
-#
-# This program is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the Free
-# Software Foundation, version 3. This program is distributed in the hope that it
-# will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
-# Public License for more details.  You should have received a copy of the GNU
-# Affero General Public License along with this program. If not, see
-# <https://www.gnu.org/licenses/>.
+# Copyright (C) 2025 Collimator, Inc
+# SPDX-License-Identifier: MIT
 
 import jax
 import jax.numpy as jnp
@@ -165,9 +156,7 @@ def test_initialize_static_data_node_order():
 
     diagram = builder.build()
     diagram.create_context()  # calls initialize_static_data
-    sorted_events = [
-        f"{cb.system.name}.{cb.name}" for cb in diagram.sorted_event_callbacks
-    ]
+    sorted_events = [f"{cb.system.name}.{cb.name}" for cb in diagram.sorted_callbacks]
 
     # Note that p2.in_1 (connected to a constant) comes before any p1 events,
     # which is a valid topological order but we can't initialize static data for
