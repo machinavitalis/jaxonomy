@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test functions for Kalman filter and variants"""
@@ -6,16 +5,17 @@
 from math import ceil
 import pytest
 
-import control as pycontrol
-import matplotlib.pyplot as plt
-import jax.numpy as jnp
-import jax.scipy as jsp
+pycontrol = pytest.importorskip("control")
 
-import collimator
+import matplotlib.pyplot as plt  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import jax.scipy as jsp  # noqa: E402
 
-from collimator.framework import LeafSystem
-from collimator.simulation import SimulatorOptions
-from collimator.library import (
+import jaxonomy
+
+from jaxonomy.framework import LeafSystem
+from jaxonomy.simulation import SimulatorOptions
+from jaxonomy.library import (
     Constant,
     Adder,
     IOPort,
@@ -29,7 +29,7 @@ from collimator.library import (
     ExtendedKalmanFilter,
     UnscentedKalmanFilter,
 )
-from collimator.testing import requires_jax
+from jaxonomy.testing import requires_jax
 
 
 class Pendulum(LeafSystem):
@@ -74,7 +74,7 @@ class Pendulum(LeafSystem):
 def make_disturbance_from_noise_covariance(covariance, name=None):
     n = covariance.shape[0]
     chol_cov = jnp.linalg.cholesky(covariance)
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     fs = 10.0
     unit_noise = builder.add(
         WhiteNoise(
@@ -102,7 +102,7 @@ def make_pendulum_with_disturbances(
     Measurement noise R is added to the angle theta of the pendulum to generate
     the measurement.
     """
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     if config is None:
         pendulum = builder.add(Pendulum(x0=x0, name="pendulum"))
     else:
@@ -162,7 +162,7 @@ def test_kalman_filter(discretization_method, discrete_time_plant, plot=False):
 
     dt = 0.01
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     pendulum = builder.add(make_pendulum_with_disturbances(x0, Q, R))
 
@@ -217,7 +217,7 @@ def test_kalman_filter(discretization_method, discrete_time_plant, plot=False):
         max_major_step_length=dt,
     )
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -252,14 +252,9 @@ def test_kalman_filter(discretization_method, discrete_time_plant, plot=False):
 
     eq_context = base_context.with_continuous_state(x_eq)
 
-    linear_pendulum = linearize(pendulum, eq_context)
+    lin = linearize(pendulum, eq_context)
 
-    A, B, C, D = (
-        linear_pendulum.A,
-        linear_pendulum.B,
-        linear_pendulum.C,
-        linear_pendulum.D,
-    )
+    A, B, C, D = (lin.A, lin.B, lin.C, lin.D)
 
     G = B
 
@@ -319,8 +314,8 @@ def test_kalman_filter(discretization_method, discrete_time_plant, plot=False):
         x_hat_minus = jnp.dot(Ad, x_hat_plus) + jnp.dot(Bd, u)  # k+1|k
         P_hat_minus = jnp.matmul(Ad, jnp.matmul(P_hat_plus, Ad.T)) + GdQGdT  # k+1|k
 
-    # Compare KF solution with wildcat solution
-    # FIXME: https://collimator.atlassian.net/browse/WC-387
+    # Compare KF solution with jaxonomy solution
+    # NOTE: https://jaxonomy.atlassian.net/browse/WC-387
     # assert jnp.allclose(jnp.array(kf_sol), jnp.array(wc_sol))
 
 
@@ -353,7 +348,7 @@ def test_infinite_horizon_kalman_filter(
 
     dt = 0.01
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     pendulum = builder.add(make_pendulum_with_disturbances(x0, Q, R))
 
@@ -410,7 +405,7 @@ def test_infinite_horizon_kalman_filter(
         max_major_step_length=dt,
     )
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -445,14 +440,9 @@ def test_infinite_horizon_kalman_filter(
 
     eq_context = base_context.with_continuous_state(x_eq)
 
-    linear_pendulum = linearize(pendulum, eq_context)
+    lin = linearize(pendulum, eq_context)
 
-    A, B, C, D = (
-        linear_pendulum.A,
-        linear_pendulum.B,
-        linear_pendulum.C,
-        linear_pendulum.D,
-    )
+    A, B, C, D = (lin.A, lin.B, lin.C, lin.D)
 
     G = B
 
@@ -508,7 +498,7 @@ def test_infinite_horizon_kalman_filter(
         )  # k|k
 
         # print(f"{x_hat_plus=}")
-        # print("wildcat kf sol =", sol.outputs["x_hat"][idx])
+        # print("jaxonomy kf sol =", sol.outputs["x_hat"][idx])
 
         kf_sol.append(x_hat_plus)
         wc_sol.append(sol.outputs["x_hat"][idx])
@@ -518,8 +508,8 @@ def test_infinite_horizon_kalman_filter(
             jnp.dot(A_minus_LC, x_hat_plus) + jnp.dot(B_minus_LD, u) + jnp.dot(L, y)
         )
 
-    # Compare KF solution with wildcat solution
-    # FIXME: https://collimator.atlassian.net/browse/WC-387
+    # Compare KF solution with jaxonomy solution
+    # NOTE: https://jaxonomy.atlassian.net/browse/WC-387
     # assert jnp.allclose(jnp.array(kf_sol), jnp.array(wc_sol))
 
 
@@ -537,7 +527,7 @@ def test_continuous_time_infinite_horizon_kalman_filter(plot=False):
     x0 = jnp.array([jnp.pi / 20, 0.0])
     x_hat_bar_0 = jnp.array([jnp.pi / 15.0, 0.1])
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     pendulum = builder.add(make_pendulum_with_disturbances(x0, Q, R))
 
@@ -578,7 +568,7 @@ def test_continuous_time_infinite_horizon_kalman_filter(plot=False):
         max_major_step_length=dt,
     )
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -630,7 +620,7 @@ def test_extended_kalman_filter_discretization_methods(
 
     dt = 0.01
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     pendulum = builder.add(make_pendulum_with_disturbances(x0, Q, R, config))
 
@@ -673,7 +663,7 @@ def test_extended_kalman_filter_discretization_methods(
         max_major_step_length=dt,
     )
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -725,7 +715,7 @@ def test_unscented_kalman_filter_discretization_methods(
 
     dt = 0.01
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     pendulum = builder.add(make_pendulum_with_disturbances(x0, Q, R, config))
 
@@ -768,7 +758,7 @@ def test_unscented_kalman_filter_discretization_methods(
         max_major_step_length=dt,
     )
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pickle
@@ -9,9 +8,9 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
-from collimator.optimization import Trainer
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.optimization import Trainer
 
 from controllers import make_mlp_controller
 
@@ -20,7 +19,7 @@ ATOL = 1e-8
 
 
 def make_cost_system(Q, R, name="cost"):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     lqr_cost = library.QuadraticCost(Q, R, name="lqr_cost")
     running_cost = library.Integrator(initial_state=0.0, name="running_cost")
     builder.add(lqr_cost, running_cost)
@@ -46,7 +45,7 @@ def make_cl_system(
     delay=0.0,
     name="cl_system",
 ):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     plant = builder.add(plant)
 
@@ -168,7 +167,7 @@ def run_rollout(nn_config, sys_config, p_opt, plant=None, x0=None, tf=10.0, plot
         plant_context = context[plant_id].with_continuous_state(x0)
         context = context.with_subcontext(plant_id, plant_context)
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         max_major_steps=1000,
         save_time_series=True,
         max_major_step_length=1.0,
@@ -185,7 +184,7 @@ def run_rollout(nn_config, sys_config, p_opt, plant=None, x0=None, tf=10.0, plot
         "w": system["controller"]["noisy_ctrl"].output_ports[0],
     }
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system, context, (0.0, tf), options=options, recorded_signals=recorded_signals
     )
 
@@ -231,13 +230,13 @@ def run_experiment(
 
     training_data = (x0,)
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         max_major_steps=200,
         enable_autodiff=True,
         rtol=1e-6,
         atol=1e-8,
     )
-    sim = collimator.Simulator(system, options=options)
+    sim = jaxonomy.Simulator(system, options=options)
     trainer = QubeTrainer(
         sim,
         context,

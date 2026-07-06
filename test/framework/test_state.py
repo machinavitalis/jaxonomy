@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -6,7 +5,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-from collimator.framework import LeafState
+from jaxonomy.framework import LeafState
 
 pytest.mark.minimal
 

@@ -1,12 +1,11 @@
 #!env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
+import jaxonomy.testing as test
 import time
 
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 pytestmark = pytest.mark.app

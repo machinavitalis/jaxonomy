@@ -1,12 +1,11 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 
-import collimator
-from collimator.library.quanser import QubeServoModel
+import jaxonomy
+from jaxonomy.library.quanser import QubeServoModel
 
-from collimator.testing.markers import requires_jax
+from jaxonomy.testing.markers import requires_jax
 
 
 def test_qube_simulation(show_plots=False):
@@ -15,7 +14,7 @@ def test_qube_simulation(show_plots=False):
     context = system.create_context()
 
     recorded_signals = {"y": system.output_ports[0]}
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, 5.0),
@@ -51,7 +50,7 @@ def test_qube_linearization():
     xdot = system.eval_time_derivatives(context)
     assert np.allclose(xdot, 0.0)
 
-    lin_sys = collimator.library.linearize(system, context)
+    lin_sys = jaxonomy.library.linearize(system, context).to_lti()
     evals = np.linalg.eigvals(lin_sys.A)
 
     # One zero eigenvalue for the rotor degree of freedom
@@ -65,7 +64,7 @@ def test_qube_linearization():
     xdot = system.eval_time_derivatives(context)
     assert np.allclose(xdot, 0.0)
 
-    lin_sys = collimator.library.linearize(system, context)
+    lin_sys = jaxonomy.library.linearize(system, context).to_lti()
     evals = np.linalg.eigvals(lin_sys.A)
 
     # Expect one positive eigenvalue for the unstable "falling" mode
@@ -76,6 +75,54 @@ def test_qube_linearization():
 
     # Two stable modes
     assert sum(e.real < 0 for e in evals) == 2
+
+
+import sys
+from unittest.mock import MagicMock
+
+def test_quanser_hal():
+    # Setup the mock for pal.products.qube to bypass missing hardware constraints
+    mock_pal = MagicMock()
+    mock_qube_module = MagicMock()
+    mock_qube2_class = MagicMock()
+    mock_qube_instance = MagicMock()
+    
+    # Setup standard attributes expected by the runtime
+    mock_qube_instance.card = "mocked_hardware_card"
+    mock_qube_instance.motorPosition = 1.2
+    mock_qube_instance.pendulumPosition = 3.4
+    mock_qube2_class.return_value = mock_qube_instance
+    mock_qube_module.QubeServo2 = mock_qube2_class
+    
+    mock_pal.products.qube = mock_qube_module
+    
+    # Inject mocks into sys.modules
+    sys.modules["pal"] = mock_pal
+    sys.modules["pal.products"] = mock_pal.products
+    sys.modules["pal.products.qube"] = mock_qube_module
+    
+    from jaxonomy.library.quanser import QuanserHAL
+    
+    # Initialize HAL safely
+    hal = QuanserHAL(dt=0.01)
+    
+    # Check that it instantiated `QubeServo2` correctly
+    mock_qube2_class.assert_called_once_with(hardware=False, pendulum=1, frequency=100.0)
+    mock_qube_instance.write_led.assert_called_with(color=[0, 1, 0])
+    
+    # Test step (writes voltage)
+    hal._impure_step(3.5)
+    mock_qube_instance.write_voltage.assert_called_once_with(3.5)
+    
+    # Test output (reads sensors)
+    outputs = hal._impure_output()
+    assert np.allclose(outputs, [1.2, 3.4])
+    mock_qube_instance.read_outputs.assert_called_once()
+    
+    # Test finalization and cleanup triggers
+    hal.terminate()
+    mock_qube_instance.write_led.assert_called_with(color=[1, 1, 0])
+    mock_qube_instance.terminate.assert_called_once()
 
 
 if __name__ == "__main__":

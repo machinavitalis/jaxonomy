@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
@@ -7,17 +6,18 @@ import pytest
 import os
 
 # acausal imports
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import electrical as elec
-from collimator.experimental import rotational as rot
-from collimator.experimental import thermal as ht
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import electrical as elec
+from jaxonomy.acausal import rotational as rot
+from jaxonomy.acausal import thermal as ht
+from jaxonomy.acausal.component_library.base import SymKind
 
-# collimator imports
-import collimator
-from collimator import library as lib
+# jaxonomy imports
+import jaxonomy
+from jaxonomy import library as lib
 
-import collimator.logging as logging
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy.logging as logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 logging.set_log_level(logging.DEBUG)
 skip_if_not_jax()
@@ -49,11 +49,11 @@ def test_basic_RC(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
     lpf_ctx = context[lpf.system_id]
@@ -68,7 +68,7 @@ def test_basic_RC(show_plot=False):
     recorded_signals = {
         "x": lpf.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -133,11 +133,11 @@ def test_basic_RC_with_outputs(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -148,8 +148,8 @@ def test_basic_RC_with_outputs(show_plot=False):
         "sensV": lpf.output_ports[v_idx],
         "sensI": lpf.output_ports[i_idx],
     }
-    options = collimator.SimulatorOptions(ode_solver_method="bdf")
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(ode_solver_method="bdf")
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -212,13 +212,13 @@ def test_basic_RC_with_voltage_input(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
     Vconst = builder.add(lib.Constant(value=1.0, name="Vconst"))
     builder.connect(Vconst.output_ports[0], lpf.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
     lpf_ctx = context[lpf.system_id]
@@ -231,8 +231,8 @@ def test_basic_RC_with_voltage_input(show_plot=False):
     recorded_signals = {
         "x": lpf.output_ports[0],
     }
-    options = collimator.SimulatorOptions(ode_solver_method="bdf")
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(ode_solver_method="bdf")
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -294,8 +294,8 @@ def test_RLC_circuit(show_plot=False):
     ac = AcausalCompiler(ev, ad)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     A = np.array([[-R / L, -1 / L], [1 / C, 0]])
     B = np.array([1 / L, 0])
@@ -305,7 +305,7 @@ def test_RLC_circuit(show_plot=False):
     volt = builder.add(lib.Constant(value=1.0))
     builder.connect(volt.output_ports[0], ss.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -317,7 +317,7 @@ def test_RLC_circuit(show_plot=False):
         "sensI": acausal_system.output_ports[i_idx],
         "ss": ss.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -345,7 +345,7 @@ def test_RLC_circuit(show_plot=False):
 def test_lowpass_filter(show_plot=False):
     R = 1.0
     C = 1.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     ev = EqnEnv()
     ad = AcausalDiagram()
@@ -387,10 +387,13 @@ def test_lowpass_filter(show_plot=False):
         "sinewave": sinewave.output_ports[0],
         "lpf": lpf.output_ports[0],
     }
-    r = collimator.simulate(
+    r = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
+        # High-frequency forcing over 10 s produces >200 adaptive steps; size the
+        # recording buffer to capture the whole trajectory from t=0.
+        options=jaxonomy.SimulatorOptions(buffer_length=20000),
         recorded_signals=recorded_signals,
     )
 
@@ -456,11 +459,11 @@ def test_parallel_caps(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -471,8 +474,8 @@ def test_parallel_caps(show_plot=False):
         "sensV": lpf.output_ports[v_idx],
         "sensI": lpf.output_ports[i_idx],
     }
-    options = collimator.SimulatorOptions(ode_solver_method="bdf")
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(ode_solver_method="bdf")
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -536,11 +539,11 @@ def test_parallel_caps_and_resistors(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -551,8 +554,8 @@ def test_parallel_caps_and_resistors(show_plot=False):
         "sensV": lpf.output_ports[v_idx],
         "sensI": lpf.output_ports[i_idx],
     }
-    options = collimator.SimulatorOptions(ode_solver_method="bdf")
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(ode_solver_method="bdf")
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -661,11 +664,11 @@ def run_circuit_act(ev, ad, show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     asys = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     asys = builder.add(asys)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
     asys_ctx = context[asys.system_id]
@@ -674,7 +677,7 @@ def run_circuit_act(ev, ad, show_plot=False):
     recorded_signals = {
         "x": asys.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -695,7 +698,7 @@ def run_circuit_act(ev, ad, show_plot=False):
 
 
 def test_simple_circuit_act1(show_plot=False):
-    # this is from doc known at collimator as dae1.pdf. The title is:
+    # this is from doc known at jaxonomy as dae1.pdf. The title is:
     #   Lecture 1 – Simulation of differential-algebraic equations
     #   DAE models and differential index
     # this doc has 3 different electrical circuits act 1,2,3.
@@ -771,7 +774,7 @@ def make_lc_oscillator_damped(ev):
 def test_lc_oscillator(show_plot=False):
     # https://en.wikipedia.org/wiki/LC_circuit
     ev = EqnEnv()
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     lc_ad = make_lc_oscillator(ev)
     lc_ac = AcausalCompiler(ev, lc_ad, verbose=True)
@@ -793,7 +796,7 @@ def test_lc_oscillator(show_plot=False):
         "lc": lc_sys.output_ports[0],
         "lcr": lcr_sys.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -859,7 +862,7 @@ def test_ideal_motor(show_plot=False):
 
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
@@ -873,7 +876,7 @@ def test_ideal_motor(show_plot=False):
         "temp": acausal_system.output_ports[temp_idx],
         "I": acausal_system.output_ports[I_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -951,7 +954,7 @@ def test_ideal_motor_with_circuit(show_plot=False):
 
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     vin = builder.add(lib.Sine(amplitude=50.0, bias=50.0, frequency=60))
     builder.connect(vin.output_ports[0], acausal_system.input_ports[0])
@@ -968,7 +971,7 @@ def test_ideal_motor_with_circuit(show_plot=False):
         "I": acausal_system.output_ports[I_idx],
         "vin": vin.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -1019,15 +1022,15 @@ def test_elec_resistor_thermal_port(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     sinewave = builder.add(
         lib.Sine(name="sw", amplitude=0.5, frequency=10, bias=1, phase=np.pi / 2)
     )
     acausal_system = builder.add(acausal_system)
     builder.connect(sinewave.output_ports[0], acausal_system.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -1035,10 +1038,13 @@ def test_elec_resistor_thermal_port(show_plot=False):
     recorded_signals = {
         "sensT": acausal_system.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
+        # High-frequency forcing over 10 s produces >200 adaptive steps; size the
+        # recording buffer to capture the whole trajectory from t=0.
+        options=jaxonomy.SimulatorOptions(buffer_length=20000),
         recorded_signals=recorded_signals,
     )
     t = results.time
@@ -1090,8 +1096,8 @@ def test_battery_pulse(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     pulse = builder.add(lib.Pulse(period=4.0))
     poffset = builder.add(lib.Offset(offset=-1.0))
@@ -1102,7 +1108,7 @@ def test_battery_pulse(show_plot=False):
     builder.connect(pgain.output_ports[0], curr.input_ports[1])
     builder.connect(curr.output_ports[0], acausal_system.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -1119,7 +1125,7 @@ def test_battery_pulse(show_plot=False):
         "sensV": acausal_system.output_ports[v_idx],
         "sensI": acausal_system.output_ports[i_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -1215,7 +1221,7 @@ def test_integrated_motor(show_plot=False, use_batt=False):
 
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     trq_req_norm = builder.add(lib.Step(start_value=0.5, end_value=-0.2, step_time=2.0))
     builder.connect(trq_req_norm.output_ports[0], acausal_system.input_ports[0])
@@ -1233,7 +1239,7 @@ def test_integrated_motor(show_plot=False, use_batt=False):
         "temp": acausal_system.output_ports[temp_idx],
         "I": acausal_system.output_ports[I_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -1346,12 +1352,12 @@ def test_ideal_diode(ideal=True, show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     asys = ac()
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     asys = builder.add(asys)
     vin = builder.add(lib.Sine(frequency=10.0, amplitude=10.0))
     builder.connect(vin.output_ports[0], asys.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -1368,7 +1374,7 @@ def test_ideal_diode(ideal=True, show_plot=False):
         "rcV": asys.output_ports[rcV_idx],
         "allV": asys.output_ports[allV_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -1412,6 +1418,155 @@ def test_ideal_diode(ideal=True, show_plot=False):
 
     I_rsme = np.mean((I_ - I_sol) ** 2)
     assert I_rsme <= 1e-4
+
+
+def test_shockley_diode_rectifies():
+    """T-134: the Shockley ``Diode`` rectifies an AC source and stays finite.
+
+    The raw exponential diode model used to overflow / hang under an AC drive;
+    with the limited exponential it integrates correctly. This runs only a few
+    cycles with the stiff ``bdf`` solver (the device is stiff — see the Diode
+    docstring), and checks the qualitative rectifier behaviour rather than a
+    fragile golden trace: strong conduction in one half-cycle, near-cut-off in
+    the other, and no NaN/inf.
+    """
+    from jaxonomy.simulation.types import SimulatorOptions
+
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    v1 = elec.VoltageSource(ev, name="v1", enable_voltage_port=True)
+    r1 = elec.Resistor(ev, name="r1", R=1)
+    c1 = elec.Capacitor(ev, name="c1", initial_voltage=0.0, initial_voltage_fixed=True)
+    d1 = elec.Diode(ev, name="d1")
+    sensI = elec.CurrentSensor(ev, name="sensI")
+    ref1 = elec.Ground(ev, name="ref1")
+    ad.connect(v1, "p", d1, "p")
+    ad.connect(d1, "n", sensI, "n")
+    ad.connect(sensI, "p", r1, "n")
+    ad.connect(r1, "p", c1, "p")
+    ad.connect(c1, "n", v1, "n")
+    ad.connect(v1, "n", ref1, "p")
+
+    asys = AcausalCompiler(ev, ad, verbose=False)()
+    builder = jaxonomy.DiagramBuilder()
+    asys = builder.add(asys)
+    vin = builder.add(lib.Sine(frequency=10.0, amplitude=10.0))
+    builder.connect(vin.output_ports[0], asys.input_ports[0])
+    diagram = builder.build()
+    context = diagram.create_context(check_types=True)
+
+    I_idx = asys.outsym_to_portid[sensI.get_sym_by_port_name("i")]
+    rec = {"I": asys.output_ports[I_idx]}
+    opts = SimulatorOptions(ode_solver_method="bdf", buffer_length=8000)
+    results = jaxonomy.simulate(
+        diagram, context, (0.0, 0.3), recorded_signals=rec, options=opts
+    )
+    I = np.asarray(results.outputs["I"])
+
+    assert not np.isnan(I).any() and not np.isinf(I).any()
+    # The diode conducts hard in one half-cycle (|I| of order amps) and is
+    # essentially cut off (|I| ~ saturation current) in the other.
+    assert np.max(np.abs(I)) > 1.0
+    assert np.min(np.abs(I)) < 1e-3
+
+
+def test_ac_voltage_source_with_resistor(show_plot=False):
+    ev = EqnEnv()
+    src = elec.ACVoltageSource(ev, name="src", amplitude=2.0, frequency=2.0, bias=1.0)
+    eqs = [str(eq.e) for eq in src.eqs]
+    assert any("sin(" in e and "src_frequency" in e and "src_amplitude" in e for e in eqs)
+
+
+def test_ideal_transformer_voltage_ratio():
+    ev = EqnEnv()
+    xf = elec.IdealTransformer(ev, name="xf", n=3.0)
+    eqs = [str(eq.e) for eq in xf.eqs]
+    assert any("xf_n*xf_v1" in e and "xf_v2" in e for e in eqs)
+    assert any("xf_p1_I" in e and "xf_p2_I" in e for e in eqs)
+
+
+def test_ideal_switch_equations():
+    ev = EqnEnv()
+    sw = elec.IdealSwitch(
+        ev,
+        name="sw",
+        Ron=1e-3,
+        Roff=1e3,
+        enable_control_port=True,
+    )
+    eqs = [str(eq.e) for eq in sw.eqs]
+    assert any("Piecewise" in e and "sw_control" in e for e in eqs)
+    ctrl = [s for s in sw.syms if s.sym_name == "control"][0]
+    assert ctrl.kind == SymKind.inp
+
+
+def test_dc_motor_simple_equations():
+    ev = EqnEnv()
+    mot = elec.DCMotorSimple(ev, name="mot", R=2.0, Kt=0.5, Ke=0.5, J=0.1, B=0.01)
+    eqs = [str(eq.e) for eq in mot.eqs]
+    assert any("mot_Kt" in e and "mot_pos_I" in e for e in eqs)
+    assert any("mot_Ke" in e and "mot_shaft_w" in e for e in eqs)
+
+
+def test_current_source_rc():
+    """CurrentSource driving a parallel R-C load to a steady DC level.
+
+    Circuit topology (parallel R ∥ C driven by a current source):
+
+        cs.p ──┬── r1.p      r1.n ──┐
+               │                     └── gnd
+        cs.n ──┴── c1.p      c1.n ──┘
+
+    Equivalently: cs.p, r1.p, and c1.p share one node; cs.n, r1.n, c1.n, and
+    gnd share the other.  The current source forces I amps through the node; at
+    steady state dV/dt = 0 so zero current flows through C, all I through R.
+    Steady-state: V_C = I * R.
+    """
+    I_val = 2.0
+    R_val = 3.0
+    C_val = 1.0
+    tau = R_val * C_val
+
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    # In Modelica's passive-sign convention, CurrentSource(i=I) sets
+    # cs.Ip = I (current INTO cs.p from external).  To drive current OUT of
+    # cs.p (into the top node), pass i = -I_val.
+    cs = elec.CurrentSource(ev, name="cs", i=-I_val)
+    r1 = elec.Resistor(ev, name="r1", R=R_val)
+    c1 = elec.Capacitor(
+        ev, name="c1", C=C_val, initial_voltage=0.0, initial_voltage_fixed=True
+    )
+    gnd = elec.Ground(ev, name="gnd")
+
+    # Positive node: cs.p, r1.p, c1.p all connected (3-way junction via chain)
+    # Negative node (gnd): cs.n, r1.n, c1.n
+    ad.connect(cs, "p", r1, "p")    # creates the positive node
+    ad.connect(r1, "p", c1, "p")    # c1.p joins the positive node
+    ad.connect(cs, "n", gnd, "p")   # negative/reference node
+    ad.connect(r1, "n", gnd, "p")
+    ad.connect(c1, "n", gnd, "p")
+
+    system = AcausalCompiler(ev, ad)()
+
+    builder = jaxonomy.DiagramBuilder()
+    system = builder.add(system)
+    diagram = builder.build()
+    context = diagram.create_context(check_types=True)
+
+    results = jaxonomy.simulate(
+        diagram, context, (0.0, 5.0 * tau),
+        recorded_signals={"x": system.output_ports[0]},
+    )
+    t = results.time
+    v_cap = results.outputs["x"][:, 0]
+
+    # Analytic: V_C(t) = I*R * (1 - exp(-t/(RC)))
+    v_analytic = I_val * R_val * (1.0 - np.exp(-t / tau))
+    assert np.allclose(v_cap, v_analytic, atol=1e-2, rtol=0.0), (
+        f"CurrentSource RC steady-state mismatch: final V_C={v_cap[-1]:.4f}, "
+        f"expected {I_val * R_val:.4f}"
+    )
 
 
 if __name__ == "__main__":

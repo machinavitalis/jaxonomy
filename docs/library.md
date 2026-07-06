@@ -1,3 +1,3 @@
 # Block library
 
-## ::: collimator.library
+## ::: jaxonomy.library

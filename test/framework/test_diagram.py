@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 # Test various aspects of Diagram creation on using the Pendulum test model
@@ -9,9 +8,9 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator.models import Pendulum
-from collimator.library import Constant
+import jaxonomy
+from jaxonomy.models import Pendulum
+from jaxonomy.library import Constant
 
 
 @pytest.fixture
@@ -44,7 +43,7 @@ def xdot0(x0, plant, source):
 
 @pytest.fixture
 def diagram(plant, source):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(plant, source)
     builder.connect(source.output_ports[0], plant.input_ports[0])
 
@@ -101,14 +100,14 @@ class TestPendulumDiagram:
 
     def test_diagram_context(self, plant, source, diagram):
         ctx = diagram.create_context()
-        assert isinstance(ctx, collimator.framework.DiagramContext)
+        assert isinstance(ctx, jaxonomy.framework.DiagramContext)
 
         plant_ctx = ctx[plant.system_id]
-        assert isinstance(plant_ctx, collimator.framework.LeafContext)
+        assert isinstance(plant_ctx, jaxonomy.framework.LeafContext)
         assert plant_ctx.system_id == plant.system_id
 
         source_ctx = ctx[source.system_id]
-        assert isinstance(source_ctx, collimator.framework.LeafContext)
+        assert isinstance(source_ctx, jaxonomy.framework.LeafContext)
         assert source_ctx.system_id == source.system_id
 
     def test_diagram_context_continuous_state(self, x0, diagram, plant, source):

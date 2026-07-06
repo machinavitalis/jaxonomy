@@ -1,10 +1,9 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy.testing as test
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 

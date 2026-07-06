@@ -1,16 +1,15 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
-import collimator
-from collimator.models import CompactEV, DummyBlock
-from collimator.simulation import SimulatorOptions
+import jaxonomy.testing as test
+import jaxonomy
+from jaxonomy.models import CompactEV, DummyBlock
+from jaxonomy.simulation import SimulatorOptions
 from matplotlib import pyplot as plt
 
 # import timeit
-from collimator.library import (
+from jaxonomy.library import (
     DataSource,
 )
 import pathlib
@@ -30,7 +29,7 @@ def test_DemoCompactEv(request):
 @pytest.mark.skip(reason="~10 minute JIT compile time")
 def test_DemoCompactEv_no_pytest(stop_time=10):
     # manually build testpaths so we dont need pytest request arg passed in.
-    # FIXME why not use the pytest_request arg?
+    # NOTE why not use the pytest_request arg?
     test_paths = test.get_paths(
         None,
         testdir_=pathlib.Path(__file__).parent,
@@ -43,7 +42,7 @@ def test_DemoCompactEv_no_pytest(stop_time=10):
 
 
 def build_nested(idx, n=2, nest_this=None):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     for i in range(n):
         builder.add(DummyBlock(name=f"dummy{str(i)}"))
     if nest_this is not None:
@@ -55,7 +54,7 @@ def build_nested(idx, n=2, nest_this=None):
 @pytest.mark.skip(reason="development test")
 def test_CompactEvLeaf():
     dt = 0.1
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ds = builder.add(
         DataSource(
             file_name="test/app/DemoCompactEv/ECE.csv",
@@ -94,7 +93,7 @@ def test_CompactEvLeaf():
         "dc": ds.output_ports[0],
         "state": cev.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, end_time),
@@ -152,7 +151,7 @@ def test_TestHarnessAutoXms(request):
 def test_ControllerAutoXms(request):
     # just the controller, but using the old core block implementation
     # this test is interesting because at creation time, it was causing
-    # recursion limit error in wildcat.
+    # recursion limit error in jaxonomy.
     test.run(pytest_request=request, model_json="ControllerAutoXms.json")
 
 
@@ -160,7 +159,7 @@ def test_ControllerAutoXms(request):
 # def test_ControllerAutoXms_flat(request):
 #     # just the controller, but using the old core block implementation
 #     # this test is interesting because at creation time, it was causing
-#     # recursion limit error in wildcat.
+#     # recursion limit error in jaxonomy.
 #     test.run(pytest_request=request, model_json="ControllerAutoXms_flat.json")
 
 #     assert False

@@ -1,22 +1,21 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 import jax.numpy as jnp
 
-import collimator
-from collimator.framework import parameters, Parameter
-from collimator.library import Gain
+import jaxonomy
+from jaxonomy.framework import parameters, Parameter
+from jaxonomy.library import Gain
 
-from collimator.logging import logger
+from jaxonomy.logging import logger
 
 
 pytest.mark.minimal
 
 
 # Define the system.
-class ScalarSystem(collimator.LeafSystem):
+class ScalarSystem(jaxonomy.LeafSystem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -78,7 +77,7 @@ def test_leaf_set_params():
 
 def test_tree_params():
     k = 2.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ode = builder.add(ScalarSystem(name="ode"))
     gain = builder.add(Gain(k, name="gain"))
 
@@ -109,7 +108,7 @@ def test_tree_params():
 
 def test_tree_set_params():
     k = 2.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ode = builder.add(ScalarSystem(name="ode"))
     gain = builder.add(Gain(k, name="gain"))
 
@@ -145,7 +144,7 @@ def test_tree_set_params():
 
 
 def test_system_with_params():
-    class SystemWithParams(collimator.LeafSystem):
+    class SystemWithParams(jaxonomy.LeafSystem):
         @parameters(static=["S"], dynamic=["D"])
         def __init__(self, S, D, *args, **kwargs):
             super().__init__(*args, **kwargs)

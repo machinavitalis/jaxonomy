@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -6,7 +5,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-from collimator.framework.event import (
+from jaxonomy.framework.event import (
     IntegerTime,
     Event,
     PeriodicEventData,
@@ -14,7 +13,7 @@ from collimator.framework.event import (
     DiagramEventCollection,
 )
 
-from collimator.simulation.simulator import _next_update_time, _next_sample_time
+from jaxonomy.simulation.simulator import _next_update_time, _next_sample_time
 
 pytestmark = pytest.mark.minimal
 

@@ -1,15 +1,14 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 import jax
 from scipy.integrate._ivp import bdf as sp_bdf
-from collimator.backend._jax.bdf import R_matrix, _update_D, MAX_ORDER
+from jaxonomy.backend._jax.bdf import R_matrix, _update_D, MAX_ORDER
 
 jax.config.update("jax_enable_x64", True)
 
 
-# test the R and D matrix functions by comparing scipy and collimator on same input
+# test the R and D matrix functions by comparing scipy and jaxonomy on same input
 def test_RD(verify_R=True, verify_D=True):
     orders = [1, 2, 3, 4, 5]
     factors = [0.1, 0.9, 1.0, 1.1, 2.0]
@@ -31,9 +30,9 @@ def test_RD(verify_R=True, verify_D=True):
                 assert np.allclose(D, d2)
 
 
-# the remainder of the bdf codes between collimator and scipy are not
+# the remainder of the bdf codes between jaxonomy and scipy are not
 # easily unit tested.
-# 1] scipy.solve_bdf_system is sort of like collimator.solve_newton_system, but they require so much
+# 1] scipy.solve_bdf_system is sort of like jaxonomy.solve_newton_system, but they require so much
 # inputs that need to be setup from running other parts of bdf that i'm sure there is value in testing
 # these seperately.
 # if it's worth it.

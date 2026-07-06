@@ -1,7 +1,6 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
-"""Test for collimator.framework.parameter."""
+"""Test for jaxonomy.framework.parameter."""
 
 import sys
 import pytest
@@ -10,9 +9,9 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node
 import numpy as np
 
-from collimator.framework import Parameter
-from collimator.framework.error import ParameterError
-from collimator.backend import numpy_api as cnp
+from jaxonomy.framework import Parameter
+from jaxonomy.framework.error import ParameterError
+from jaxonomy.backend import numpy_api as npa
 
 
 pytest.mark.minimal
@@ -86,7 +85,7 @@ expr = {
     "one >= 1": (one >= 1, (True, "one >= 1")),
     "one > 1": (one > 1, (False, "one > 1")),
     "unnamed_param": (unnamed_param, (42, "42")),
-    # FIXME: the string representation is logically correct but inverted
+    # NOTE: the string representation is logically correct but inverted
     # implementing __rlt__, __rle__, __req__, etc. does not fix the issue
     "1 < one": (1 < one, (False, "one > 1")),
     "1 <= one": (1 <= one, (True, "one >= 1")),
@@ -96,7 +95,7 @@ expr = {
     "1 > one": (1 > one, (False, "one < 1")),
     "np.array([one])": (np.array([one]), (np.array([1]), "np.array([one])")),
     "np.float32(2)": (np.float32(2), (np.float32(2), "np.float32(2.0)")),
-    # FIXME: str representation should be "np.float32(one)" - currently
+    # NOTE: str representation should be "np.float32(one)" - currently
     # parameters passed to numpy functions are not optimizable because they
     # are resolved to their values when evaluated in model_interface.py.
     # "np.float32(one)": (np.float32(one), (1.0, "np.float32(one)")),
@@ -109,7 +108,7 @@ expr = {
     ),
 }
 
-# FIXME on windows we have some oddities with int32/int64
+# NOTE on windows we have some oddities with int32/int64
 # We could also try setting np.int_ = np.int64 globally but that may have unwanted side effects
 if sys.platform == "win32":
     expr["np.array([1])"] = (
@@ -152,7 +151,7 @@ def test_parameter_cache_invalidation():
     p1.set(11)
     assert new_param.get() == 13
 
-    # FIXME: again, passing a parameter to a numpy function breaks the
+    # NOTE: again, passing a parameter to a numpy function breaks the
     # traceability of the parameter
     # new_param = Parameter(value=np.array(p2))
     # p2.set(123)
@@ -273,5 +272,79 @@ def test_parameter_string_values():
 
 def test_parameter_list_as_array():
     p = Parameter(value=[1, 2], as_array=True)
-    assert isinstance(p.get(), cnp.ndarray)
+    assert isinstance(p.get(), npa.ndarray)
     np.testing.assert_array_equal(p.get(), np.array([1, 2]))
+
+
+# ---------------------------------------------------------------------------
+# Thread-safety smoke test for ParameterCache
+# ---------------------------------------------------------------------------
+
+def test_parameter_cache_thread_safety():
+    """Concurrent ParameterCache.get() and replace() on independent params must not race."""
+    import threading
+
+    from jaxonomy.framework.parameter import ParameterCache
+
+    N_THREADS = 20
+    N_ITERS = 200
+
+    # Create one Parameter per thread so each thread owns its object.
+    params = [Parameter(name=f"tp_{i}", value=float(i)) for i in range(N_THREADS)]
+    errors: list[Exception] = []
+
+    def worker(param: Parameter, initial: float):
+        try:
+            for _ in range(N_ITERS):
+                v = ParameterCache.get(param)
+                assert v is not None
+                ParameterCache.replace(param, initial + 1.0)
+                ParameterCache.replace(param, initial)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=worker, args=(params[i], float(i)))
+        for i in range(N_THREADS)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == [], f"Thread errors: {errors}"
+
+
+def test_parameter_cache_dependent_invalidation_thread_safe():
+    """add_dependent / get_dependents are safe under concurrent access."""
+    import threading
+
+    from jaxonomy.framework.parameter import ParameterCache
+
+    base = Parameter(name="base_ts", value=1.0)
+    deps = [Parameter(name=f"dep_ts_{i}", value=float(i)) for i in range(10)]
+    errors: list[Exception] = []
+
+    def adder(dep):
+        try:
+            ParameterCache.add_dependent(base, dep)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    def reader():
+        try:
+            _ = ParameterCache.get_dependents(base)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = (
+        [threading.Thread(target=adder, args=(d,)) for d in deps]
+        + [threading.Thread(target=reader) for _ in range(10)]
+    )
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == [], f"Thread errors: {errors}"
+    assert len(ParameterCache.get_dependents(base)) == len(deps)

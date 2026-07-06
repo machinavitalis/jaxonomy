@@ -1,14 +1,13 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator
+import jaxonomy
 
-from collimator.logging import logger
-from collimator.testing import set_backend
+from jaxonomy.logging import logger
+from jaxonomy.testing import set_backend
 
 
-class BlockWithFinalizer(collimator.LeafSystem):
+class BlockWithFinalizer(jaxonomy.LeafSystem):
     def __init__(self, ref: dict, *args, **kwargs):
         super().__init__(*args, **kwargs)
         logger.debug("BlockWithFinalizer.__init__")
@@ -21,14 +20,14 @@ class BlockWithFinalizer(collimator.LeafSystem):
 
 
 def build_diagram_with_finalizer(name):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ref = {"finalized": False}
     builder.add(BlockWithFinalizer(ref))
     return builder.build(name), ref
 
 
 def build_diagram_with_group_and_finalizer():
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     grp1, ref1 = build_diagram_with_finalizer("ref1_grp")
     grp2, ref2 = build_diagram_with_finalizer("ref2_grp")
@@ -52,7 +51,7 @@ def test_finalizer(backend: str):
     assert not ref3["finalized"]
 
     context = diagram.create_context()
-    collimator.simulate(diagram, context, (0.0, 10.0))
+    jaxonomy.simulate(diagram, context, (0.0, 10.0))
 
     assert ref1["finalized"], "Finalizer 1 was not called"
     assert ref2["finalized"], "Finalizer 2 was not called"

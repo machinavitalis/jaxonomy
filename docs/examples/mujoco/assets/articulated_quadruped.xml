@@ -1,0 +1,124 @@
+<mujoco model="articulated_quadruped">
+  <!--
+    Hand-authored 12-DoF articulated quadruped used for the public benchmark
+    (T-019b).  Body plan: cuboid trunk with a freejoint, four legs, each leg
+    has 3 hinge joints (hip-roll, hip-pitch, knee).  Total DoF:
+        free joint (6) + 4 legs * 3 hinges (12) = 18 generalised velocities;
+        free joint (7 = 3 trans + 4 quat) + 12 hinges = 19 qpos.
+
+    Scope: this is the "articulated_quadruped_throughput" public benchmark
+    (multi-body dynamics with floor contact, no controller).  We measure
+    physics throughput, not locomotion.  See docs/benchmarks.md.
+
+    Geometry choices kept deliberately small / unitary (no mesh files) so
+    the model fits in the repo and loads cleanly in any JAX backend without
+    pulling MuJoCo Menagerie meshes.  Joint damping + armature tuned so a
+    passive (zero-control) drop from 0.40 m onto the floor settles within
+    ~1 s and remains numerically stable for ≥5 s without a controller.
+
+    Coordinate convention: trunk frame at body centre, +x forward, +y left,
+    +z up. Legs are indexed FL / FR / HL / HR (front-left / front-right /
+    hind-left / hind-right).
+  -->
+
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+
+  <default>
+    <default class="leg">
+      <joint type="hinge" damping="0.6" armature="0.02" limited="true"/>
+      <geom type="capsule" size="0.025" rgba="0.6 0.4 0.2 1" density="600" friction="0.8 0.01 0.001"/>
+    </default>
+  </default>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" specular="0.2 0.2 0.2"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="2d" name="ground" builtin="checker"
+             rgb1="0.20 0.30 0.40" rgb2="0.10 0.18 0.28"
+             width="256" height="256"/>
+    <material name="ground_mat" texture="ground" texrepeat="6 6" reflectance="0.1"/>
+    <material name="trunk_mat" rgba="0.3 0.5 0.7 1" specular="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light name="key" pos="2 2 4" dir="-0.4 -0.4 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0"
+          material="ground_mat" friction="0.8 0.01 0.001"/>
+
+    <body name="trunk" pos="0 0 0.40">
+      <freejoint name="root"/>
+      <geom name="trunk_geom" type="box" size="0.20 0.10 0.05"
+            mass="6.0" material="trunk_mat" friction="0.8 0.01 0.001"/>
+
+      <!-- Front-left leg.  The thigh body carries both hip-roll and hip-pitch
+           hinges (two joints on one body share the same physical "hip" pivot)
+           so every moving body has inertia (no zero-mass intermediates). -->
+      <body name="FL_thigh" pos="0.18 0.10 0">
+        <joint name="FL_hip_roll" class="leg" axis="1 0 0" range="-0.6 0.6"/>
+        <joint name="FL_hip_pitch" class="leg" axis="0 1 0" range="-1.2 1.2"/>
+        <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        <body name="FL_shin" pos="0 0 -0.18">
+          <joint name="FL_knee" class="leg" axis="0 1 0" range="-2.2 0.0"/>
+          <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        </body>
+      </body>
+
+      <!-- Front-right leg -->
+      <body name="FR_thigh" pos="0.18 -0.10 0">
+        <joint name="FR_hip_roll" class="leg" axis="1 0 0" range="-0.6 0.6"/>
+        <joint name="FR_hip_pitch" class="leg" axis="0 1 0" range="-1.2 1.2"/>
+        <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        <body name="FR_shin" pos="0 0 -0.18">
+          <joint name="FR_knee" class="leg" axis="0 1 0" range="-2.2 0.0"/>
+          <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        </body>
+      </body>
+
+      <!-- Hind-left leg -->
+      <body name="HL_thigh" pos="-0.18 0.10 0">
+        <joint name="HL_hip_roll" class="leg" axis="1 0 0" range="-0.6 0.6"/>
+        <joint name="HL_hip_pitch" class="leg" axis="0 1 0" range="-1.2 1.2"/>
+        <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        <body name="HL_shin" pos="0 0 -0.18">
+          <joint name="HL_knee" class="leg" axis="0 1 0" range="-2.2 0.0"/>
+          <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        </body>
+      </body>
+
+      <!-- Hind-right leg -->
+      <body name="HR_thigh" pos="-0.18 -0.10 0">
+        <joint name="HR_hip_roll" class="leg" axis="1 0 0" range="-0.6 0.6"/>
+        <joint name="HR_hip_pitch" class="leg" axis="0 1 0" range="-1.2 1.2"/>
+        <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        <body name="HR_shin" pos="0 0 -0.18">
+          <joint name="HR_knee" class="leg" axis="0 1 0" range="-2.2 0.0"/>
+          <geom class="leg" fromto="0 0 0  0 0 -0.18"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <!--
+      "stand" keyframe: trunk slightly above standing height, hip-pitch +0.6,
+      knee -1.2 to fold each leg into a near-static stance.  Released from
+      rest the body settles into ground contact within ~0.5 s and remains
+      stable through 5 s without any control torque.
+    -->
+    <key name="stand"
+         qpos="0 0 0.40  1 0 0 0
+               0 0.6 -1.2
+               0 0.6 -1.2
+               0 0.6 -1.2
+               0 0.6 -1.2"
+         qvel="0 0 0  0 0 0
+               0 0 0
+               0 0 0
+               0 0 0
+               0 0 0"/>
+  </keyframe>
+</mujoco>

@@ -1,18 +1,18 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Tests for LQR algorithms"""
 
-import pytest  # noqa
+import pytest
 
-import control as pycontrol
-import jax.numpy as jnp
+pycontrol = pytest.importorskip("control")
 
-import collimator
+import jax.numpy as jnp  # noqa: E402
 
-from collimator.models import PlanarQuadrotor
+import jaxonomy  # noqa: E402
 
-from collimator.library import (
+from jaxonomy.models import PlanarQuadrotor
+
+from jaxonomy.library import (
     linearize,
     Constant,
     Adder,
@@ -21,7 +21,7 @@ from collimator.library import (
     DiscreteTimeLinearQuadraticRegulator,
     FiniteHorizonLinearQuadraticRegulator,
 )
-from collimator.testing import requires_jax
+from jaxonomy.testing import requires_jax
 
 # Define a global variable for absolute tolerance
 ATOL = 1e-4
@@ -46,11 +46,11 @@ def test_lqr_continuous_time():
     planar_quadcopter.input_ports[0].fix_value(u_eq)
     base_context = planar_quadcopter.create_context()
     eq_context = base_context.with_continuous_state(x_eq)
-    linear_planar_quadcopter = linearize(planar_quadcopter, eq_context)
+    lin = linearize(planar_quadcopter, eq_context)
+    A, B = lin.A, lin.B
+    linear_planar_quadcopter = lin.to_lti()
 
-    A, B = linear_planar_quadcopter.A, linear_planar_quadcopter.B
-
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     plant = PlanarQuadrotor(**config, name="planar_quadrotor")
     controller_bar = LinearQuadraticRegulator(A, B, Q, R, name="controller_bar")
@@ -79,7 +79,7 @@ def test_lqr_continuous_time():
 
     Tsolve = 10.0
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -107,7 +107,7 @@ def test_lqr_discrete_time():
     planar_quadcopter.input_ports[0].fix_value(u_eq)
     base_context = planar_quadcopter.create_context()
     eq_context = base_context.with_continuous_state(x_eq)
-    linear_planar_quadcopter = linearize(planar_quadcopter, eq_context)
+    linear_planar_quadcopter = linearize(planar_quadcopter, eq_context).to_lti()
 
     A, B, C, D = (
         linear_planar_quadcopter.A,
@@ -122,7 +122,7 @@ def test_lqr_discrete_time():
     sys = sysc.sample(dt)
     Ad, Bd = sys.A, sys.B
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     plant_continuous = PlanarQuadrotor(**config, name="planar_quadrotor")
     lqr = DiscreteTimeLinearQuadraticRegulator(Ad, Bd, Q, R, dt, name="controller_bar")
@@ -157,7 +157,7 @@ def test_lqr_discrete_time():
 
     Tsolve = 10.0
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, Tsolve),
@@ -187,7 +187,7 @@ def test_lqr_finite_horizon_continuous_time():
     R = jnp.array([[0.1, 0.05], [0.05, 0.1]])
 
     # With make method
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     plant = PlanarQuadrotor(**config, name="planar_quadrotor")
     controller = FiniteHorizonLinearQuadraticRegulator(
@@ -222,7 +222,7 @@ def test_lqr_finite_horizon_continuous_time():
         "u_opt": controller.output_ports[0],
     }
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),

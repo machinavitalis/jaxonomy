@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import jax
@@ -6,9 +5,9 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node
 import numpy as np
 
-from collimator.framework import DiagramBuilder, LeafSystem, Parameter, parameters
-from collimator.framework.error import StaticParameterError
-from collimator.library import Constant, Gain, CustomPythonBlock, ReferenceSubdiagram
+from jaxonomy.framework import DiagramBuilder, LeafSystem, Parameter, parameters
+from jaxonomy.framework.error import StaticParameterError
+from jaxonomy.library import Constant, Gain, CustomPythonBlock, ReferenceSubdiagram
 
 
 class CustomPytree:

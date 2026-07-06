@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import jax
@@ -9,9 +8,9 @@ import pytest
 import shutil
 
 import equinox as eqx
-import collimator
-from collimator.library import Constant, MLP
-from collimator.testing import requires_jax
+import jaxonomy
+from jaxonomy.library import Constant, MLP
+from jaxonomy.testing import requires_jax
 
 
 @pytest.mark.parametrize(
@@ -23,7 +22,7 @@ from collimator.testing import requires_jax
     ],
 )
 def test_mlp_against_native_equinox(seed, in_size, out_size, width_size, depth):
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     key = jax.random.PRNGKey(seed)
     mlp_config = {
         "key": key,
@@ -41,7 +40,7 @@ def test_mlp_against_native_equinox(seed, in_size, out_size, width_size, depth):
     # Equinox model
     model = eqx.nn.MLP(**mlp_config)
 
-    # Collimator model
+    # Jaxonomy model
     col_mlp_config = mlp_config.copy()  # Copy the original equinox config
     col_mlp_config["activation_str"] = col_mlp_config.pop(
         "activation"
@@ -51,7 +50,7 @@ def test_mlp_against_native_equinox(seed, in_size, out_size, width_size, depth):
     col_mlp_config["seed"] = col_mlp_config.pop("key")  # Rename 'key' to 'seed'
     col_mlp_config["seed"] = seed  # Set seed
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     col_mlp_block = builder.add(MLP(**col_mlp_config, name="mlp"))
     input_block = builder.add(Constant(input, name="input"))
     builder.connect(input_block.output_ports[0], col_mlp_block.input_ports[0])
@@ -60,14 +59,14 @@ def test_mlp_against_native_equinox(seed, in_size, out_size, width_size, depth):
 
     result = col_mlp_block.output_ports[0].eval(ctx)
 
-    # Check if the output of the collimator model
+    # Check if the output of the jaxonomy model
     # is the same as the output of the equinox model
     assert jnp.allclose(result, model(input))
 
 
 def test_mlp_static():
-    collimator.set_backend("jax")
-    builder = collimator.DiagramBuilder()
+    jaxonomy.set_backend("jax")
+    builder = jaxonomy.DiagramBuilder()
     mlp_config = {
         "in_size": 3,
         "out_size": 2,
@@ -86,17 +85,16 @@ def test_mlp_static():
     context = diagram.create_context()
 
     recorded_signals = {"mlp.y": mlp.output_ports[0]}
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram, context, (0.0, 1.0), recorded_signals=recorded_signals
     )
     assert jnp.allclose(results.outputs["mlp.y"], diagram["mlp"].mlp(val))
 
 
 @requires_jax()
-@pytest.mark.skip("this test seems broken now 2025/03")
 def test_mlp_serialize():
-    collimator.set_backend("jax")
-    builder = collimator.DiagramBuilder()
+    jaxonomy.set_backend("jax")
+    builder = jaxonomy.DiagramBuilder()
     mlp_config = {
         "in_size": 3,
         "out_size": 2,
@@ -107,6 +105,10 @@ def test_mlp_serialize():
 
     constant = builder.add(Constant(val, name="constant"))
     mlp = builder.add(MLP(**mlp_config, seed=0, name="mlp"))
+    builder.connect(constant.output_ports[0], mlp.input_ports[0])
+
+    diagram = builder.build()
+    context = diagram.create_context()
 
     # make a directory for saving the serialized model
     cwd = os.getcwd()
@@ -119,20 +121,26 @@ def test_mlp_serialize():
     file_name = os.path.join(workdir, "test_mlp_serialize.eqx")
     mlp.serialize(file_name)
 
-    # test whole model serialization
-    mlp2 = builder.add(MLP(**mlp_config, file_name=file_name, name="mlp2"))
+    # test whole model serialization in a new diagram
+    builder2 = jaxonomy.DiagramBuilder()
+    constant2 = builder2.add(Constant(val, name="constant2"))
+    mlp2 = builder2.add(MLP(**mlp_config, file_name=file_name, name="mlp2"))
+    builder2.connect(constant2.output_ports[0], mlp2.input_ports[0])
 
-    builder.connect(constant.output_ports[0], mlp.input_ports[0])
-    builder.connect(constant.output_ports[0], mlp2.input_ports[0])
+    diagram2 = builder2.build()
+    context2 = diagram2.create_context()
 
-    diagram = builder.build()
-    context = diagram.create_context()
-
-    recorded_signals = {"mlp.y": mlp.output_ports[0], "mlp2.y": mlp2.output_ports[0]}
-    results = collimator.simulate(
+    recorded_signals = {"mlp.y": mlp.output_ports[0]}
+    results = jaxonomy.simulate(
         diagram, context, (0.0, 1.0), recorded_signals=recorded_signals
     )
-    assert jnp.allclose(results.outputs["mlp.y"], results.outputs["mlp2.y"])
+    
+    recorded_signals2 = {"mlp2.y": mlp2.output_ports[0]}
+    results2 = jaxonomy.simulate(
+        diagram2, context2, (0.0, 1.0), recorded_signals=recorded_signals2
+    )
+
+    assert jnp.allclose(results.outputs["mlp.y"], results2.outputs["mlp2.y"])
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
@@ -10,8 +9,8 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
 from controllers import *  # noqa: F403
 
@@ -33,7 +32,7 @@ N = 50  # Discretization points
 # Optimize the swing-up trajectory, constraining only the final state
 t_opt = np.linspace(t0, th, N + 1)
 print("Solving for optimal trajectory...")
-x_opt, u_opt = collimator.trajopt(
+x_opt, u_opt = jaxonomy.trajopt(
     plant,
     t0=t0,
     tf=th,
@@ -103,7 +102,7 @@ def make_ffwd_swingup(dt, t0, tf, noise_amplitude=1e2, R=1e0, name="ffwd"):
         name="lqr",
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(ekf, lqr)
     builder.connect(ekf.output_ports[0], lqr.input_ports[0])
 
@@ -126,7 +125,7 @@ def make_diagram(plant, dt, t0, tf, noise_amplitude=1e2, R=1e0):
         swingup_controller, balance_controller, threshold=0.25
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(plant, controller)
     builder.connect(plant.output_ports[0], controller.input_ports[0])
     builder.connect(controller.output_ports[0], plant.input_ports[0])
@@ -150,5 +149,5 @@ context = system.create_context()
 sleep(1.0)
 
 tf = 6.0
-results = collimator.simulate(system, context, (0.0, tf))
+results = jaxonomy.simulate(system, context, (0.0, tf))
 plant_hw.terminate()

@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: MIT
+
+"""
+These funtions are used to classify nodes and signals of a jaxonomy diagram in terms of the
+time_modes that are displayed in the UI.
+Jaxonomy does not rely on time_mode propagation nor assignment per-se to interpret the model,
+so there is not necessray a perfect set of rules here.
+The outcome is merely guidance for the user in the UI, so errors are not critical.
+"""
+
+from jaxonomy.framework.dependency_graph import DependencyTicket
+from .ui_types import TimeMode
+
+
+def time_mode_node(node) -> TimeMode:
+    # FIXME: it would probably be better to distribute this 'time_mode'
+    # attribute to the blocks. e.g. LeafSystem.time_mode='agnostic', then in
+    # each block def, if block not agnostic, explicitly set it to one of:
+    #   'continuous', 'discrete', 'hybrid'
+    # as appropriate for the block. Note, for user defined blocks, it is set from
+    # the UI.
+    discrete_blocks = [
+        "DerivativeDiscrete",
+        "DirectShootingNMPC",
+        "DirectTranscriptionNMPC",
+        "HermiteSimpsonNMPC",
+        "DiscreteInitializer",
+        "DiscreteClock",
+        "DiscreteTimeLinearQuadraticRegulator",
+        "EdgeDetection",
+        "FilterDiscrete",
+        "IntegratorDiscrete",
+        "LinearDiscreteTimeMPC",
+        "LinearDiscreteTimeMPC_OSQP",
+        "LTISystemDiscrete",
+        "ModelicaFMU",
+        "PIDDiscrete",
+        "Pulse",
+        "RateLimiter",
+        "TransferFunctionDiscrete",
+        "ZeroOrderHold",
+        "UnitDelay",
+    ]
+
+    user_defined_blocks = ["CustomJaxBlock", "CustomPythonBlock", "StateMachine"]
+
+    continuous_blocks = [
+        "Integrator",
+        "LTISystem",
+        "TransferFunction",
+        "PID",
+        "Derivative",
+        "ContinuousTimeSindyWithControl",
+    ]
+
+    # node time_mode rules.
+    if node.__class__.__name__ in discrete_blocks:
+        return TimeMode.DISCRETE
+    elif (
+        node.__class__.__name__ in user_defined_blocks and node.time_mode == "discrete"
+    ):
+        return TimeMode.DISCRETE
+    elif node.__class__.__name__ == "StateMachine":
+        # HACK: when StateMachine time_mode==Agnostic, its output still has dependency
+        # on DependencyTicket.xd because that is how output values are held when no
+        # action sets them. So we cannot rely on the dep graph to assign time mode for
+        # the StateMachine agnostic case (not that this would make things any different in jaxonomy).
+        return TimeMode.CONTINUOUS
+    elif node.__class__.__name__ in continuous_blocks:
+        return TimeMode.CONTINUOUS
+
+    return None
+
+
+def time_mode_diagram(children_tm: list[TimeMode]) -> TimeMode:
+    # Group time_mode rules: Hybrid means that the group has both continuous and
+    # discrete children, as defined in https://en.wikipedia.org/wiki/Hybrid_system
+    # FIXME: a hybrid child should probably mark the parent as hybrid too
+    if TimeMode.CONTINUOUS in children_tm and TimeMode.DISCRETE in children_tm:
+        return TimeMode.HYBRID
+    elif TimeMode.CONTINUOUS in children_tm:
+        return TimeMode.CONTINUOUS
+    elif TimeMode.DISCRETE in children_tm:
+        return TimeMode.DISCRETE
+    else:
+        return TimeMode.CONSTANT
+
+
+def time_mode_node_with_ports(ports_tm: list[TimeMode]) -> TimeMode:
+    # node time_mode rules for block which do not have time mode assigned based on their
+    # class.
+    if TimeMode.CONTINUOUS in ports_tm and TimeMode.DISCRETE in ports_tm:
+        # A node carrying both continuous and discrete ports is hybrid. (Not
+        # known to arise in practice today, but handled for completeness.)
+        return TimeMode.HYBRID
+    elif TimeMode.CONTINUOUS in ports_tm:
+        return TimeMode.CONTINUOUS
+    elif TimeMode.DISCRETE in ports_tm:
+        return TimeMode.DISCRETE
+    else:
+        # if nothing, this is the only option left.
+        return TimeMode.CONSTANT
+
+
+def time_mode_port(out_port, node_cls_tm) -> TimeMode:
+    # extract the dependencies we care about for this port.
+    dep_none = out_port.tracker.depends_on([DependencyTicket.nothing])
+    dep_time = out_port.tracker.depends_on([DependencyTicket.time])
+    dep_xc = out_port.tracker.depends_on([DependencyTicket.xc])
+    dep_xd = out_port.tracker.depends_on([DependencyTicket.xd])
+    xd_dep = out_port.tracker.is_prerequisite_of([DependencyTicket.xd])
+    xcdot_dep = out_port.tracker.is_prerequisite_of([DependencyTicket.xcdot])
+
+    # Port time_mode rules.
+    if node_cls_tm is not None:
+        return node_cls_tm
+    elif (dep_time or dep_xc) and xcdot_dep:
+        return TimeMode.CONTINUOUS
+    elif (dep_xd and dep_xc) and not xd_dep:
+        return TimeMode.CONTINUOUS
+    elif dep_xd or xd_dep:
+        return TimeMode.DISCRETE
+    elif dep_none and not dep_time and not dep_xc and not dep_xd:
+        return TimeMode.CONSTANT
+    else:
+        return TimeMode.CONTINUOUS

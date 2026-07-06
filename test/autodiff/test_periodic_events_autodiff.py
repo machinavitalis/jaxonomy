@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -7,8 +6,8 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Integrator,
     Gain,
     Adder,
@@ -17,7 +16,7 @@ from collimator.library import (
 pytestmark = pytest.mark.slow
 
 
-class Staircase(collimator.LeafSystem):
+class Staircase(jaxonomy.LeafSystem):
     """Simple discrete-time system with periodic events
 
     Update rule:
@@ -66,7 +65,7 @@ def test_scalar_linear_hybrid():
     a = -1.5
     tau = 1.0
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     Gain_0 = builder.add(Gain(-a, name="Gain_0"))
     Integrator_0 = builder.add(Integrator(0.0, name="Integrator_0"))
     Adder_0 = builder.add(Adder(2, name="Adder_0", operators="+-"))
@@ -80,7 +79,7 @@ def test_scalar_linear_hybrid():
     diagram = builder.build()
     context = diagram.create_context()
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         math_backend="jax",
         atol=1e-10,
         rtol=1e-8,
@@ -93,7 +92,7 @@ def test_scalar_linear_hybrid():
         # context = context.with_continuous_state(x0)
         int_context = context[Integrator_0.system_id].with_continuous_state(x0)
         context = context.with_subcontext(Integrator_0.system_id, int_context)
-        results = collimator.simulate(diagram, context, (0.0, tf), options=options)
+        results = jaxonomy.simulate(diagram, context, (0.0, tf), options=options)
         return results.context[Integrator_0.system_id].continuous_state
 
     @partial(jax.jit, static_argnums=(1,))

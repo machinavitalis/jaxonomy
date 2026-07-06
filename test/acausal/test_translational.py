@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
@@ -6,16 +5,17 @@ from matplotlib import pyplot as plt
 import pytest
 
 # acausal imports
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import translational as trans
-from collimator.experimental import rotational as rot
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import translational as trans
+from jaxonomy.acausal.component_library.base import SymKind
+from jaxonomy.acausal import rotational as rot
 
-# collimator imports
-import collimator
-from collimator import library as lib
+# jaxonomy imports
+import jaxonomy
+from jaxonomy import library as lib
 
-import collimator.logging as logging
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy.logging as logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 logging.set_log_level(logging.DEBUG)
 skip_if_not_jax()
@@ -60,11 +60,11 @@ def test_mech_oscillator(fixed_ic, show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     mech_oscillator = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     mech_oscillator = builder.add(mech_oscillator)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -85,7 +85,7 @@ def test_mech_oscillator(fixed_ic, show_plot=False):
         "frc": mech_oscillator.output_ports[frc_idx],
     }
     t0, tf = 0.0, 10.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (t0, tf),
@@ -253,8 +253,8 @@ def test_damped_mech_oscillators_with_Finput(show_plot=False):
     acr = AcausalCompiler(ev, adr, verbose=True)
     rot_oscillator = acr(name="rot_oscillator")
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     trans_oscillator = builder.add(trans_oscillator)
     rot_oscillator = builder.add(rot_oscillator)
     sw = builder.add(
@@ -278,7 +278,7 @@ def test_damped_mech_oscillators_with_Finput(show_plot=False):
     builder.connect(sw.output_ports[0], rot_oscillator.input_ports[0])
     builder.connect(sw.output_ports[0], lti.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -296,7 +296,7 @@ def test_damped_mech_oscillators_with_Finput(show_plot=False):
         "lti": lti.output_ports[0],
     }
     t0, tf = 0.0, 10.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (t0, tf),
@@ -408,11 +408,11 @@ def test_many_springs_and_masses(show_plot=False):
     ac = AcausalCompiler(ev, mdl)
     mech_oscillator = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     mech_oscillator = builder.add(mech_oscillator)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
     mech_oscillator_ctx = context[mech_oscillator.system_id]
@@ -420,7 +420,7 @@ def test_many_springs_and_masses(show_plot=False):
     # run simulation
     recorded_signals = {"x": mech_oscillator.output_ports[0]}
     t0, tf = 0.0, 10.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         mech_oscillator,
         context,
         (t0, tf),
@@ -486,8 +486,8 @@ def test_friction(show_plot=False, f_sinusoidal=False):
     coul_sys, css, cfs = make_sys("coul_sys", f_sinusoidal=f_sinusoidal)
     visc_sys, vss, vfs = make_sys("visc_sys", C=1.0, f_sinusoidal=f_sinusoidal)
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     coul_sys = builder.add(coul_sys)
     visc_sys = builder.add(visc_sys)
     if f_sinusoidal:
@@ -495,7 +495,7 @@ def test_friction(show_plot=False, f_sinusoidal=False):
         builder.connect(fin.output_ports[0], coul_sys.input_ports[0])
         builder.connect(fin.output_ports[0], visc_sys.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -519,7 +519,7 @@ def test_friction(show_plot=False, f_sinusoidal=False):
         "frc2": visc_sys.output_ports[frc2_idx],
     }
     t0, tf = 0.0, 10.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (t0, tf),
@@ -573,6 +573,53 @@ def test_friction(show_plot=False, f_sinusoidal=False):
     assert np.allclose(acc2[-1], 0.0, atol=atol, rtol=rtol)
 
 
+def test_speed_source_absolute_velocity(show_plot=False):
+    ev = EqnEnv()
+    src_abs = trans.SpeedSource(
+        ev,
+        name="src_abs",
+        v_ref=1.25,
+        enable_speed_port=False,
+        enable_flange_b=False,
+    )
+    src_rel = trans.SpeedSource(
+        ev,
+        name="src_rel",
+        enable_speed_port=True,
+        enable_flange_b=True,
+    )
+
+    assert src_abs.port_idx_to_name == {-1: "flange_a"}
+    assert src_rel.port_idx_to_name == {-1: "flange_a", 1: "flange_b"}
+
+    vref_abs = [s for s in src_abs.syms if s.sym_name == "v_ref"][0]
+    vref_rel = [s for s in src_rel.syms if s.sym_name == "v_ref"][0]
+    assert vref_abs.kind == SymKind.param
+    assert vref_rel.kind == SymKind.inp
+
+    eqs_abs = [str(eq.e) for eq in src_abs.eqs]
+    eqs_rel = [str(eq.e) for eq in src_rel.eqs]
+    assert any("v_ref" in e for e in eqs_abs)
+    assert any("v_ref" in e for e in eqs_rel)
+
+
+def test_friction_stribeck_term_present():
+    ev = EqnEnv()
+    frc = trans.Friction(ev, name="frc", Fc=1.0, Vbrk=0.1, C=0.2, Fbrk=1.5)
+    eqs = [str(eq.e) for eq in frc.eqs]
+    # With Fbrk provided we should include the smooth Stribeck exponential term.
+    assert any("Fbrk" in e for e in eqs)
+    assert any("exp(" in e for e in eqs)
+
+
+def test_hard_stop_equations():
+    ev = EqnEnv()
+    hs = trans.HardStop(ev, name="hs", gap=0.1, K=1e4, D=10.0)
+    eqs = [str(eq.e) for eq in hs.eqs]
+    assert any("hs_penetration" in e for e in eqs)
+    assert any("hs_f_contact" in e and "Piecewise" in e for e in eqs)
+
+
 if __name__ == "__main__":
     show_plot = True
     # test_mech_oscillator(0.0, show_plot=show_plot)
@@ -582,8 +629,8 @@ if __name__ == "__main__":
     # test_many_springs_and_masses(show_plot=show_plot)
     # test_friction(show_plot=show_plot, f_sinusoidal=True)
 
-    # @am. ill come back to this later.
-    # commented out to please ruff
+    # TODO: re-enable the test below — currently fails (num eqns vs num vars
+    # mismatch, see the FIXME within). Commented out to please ruff.
     # @pytest.mark.xfail(reason="num eqns and num vars mismatch")
     # def test_damped_mech_oscillators_with_Sinput(show_plot=False):
     #     # FIXME: this test fails because we do not correctly handle the case
@@ -632,8 +679,8 @@ if __name__ == "__main__":
     #     ac = AcausalCompiler(ev, ad, verbose=True)
     #     trans_oscillator = ac(name="trans_oscillator")
 
-    #     # make wildcat diagram
-    #     builder = collimator.DiagramBuilder()
+    #     # make jaxonomy diagram
+    #     builder = jaxonomy.DiagramBuilder()
     #     trans_oscillator = builder.add(trans_oscillator)
     #     sw = builder.add(
     #         lib.Sine(name="sw", amplitude=0.5, frequency=10, bias=1, phase=np.pi / 2)
@@ -654,7 +701,7 @@ if __name__ == "__main__":
     #     builder.connect(sw.output_ports[0], trans_oscillator.input_ports[0])
     #     builder.connect(sw.output_ports[0], lti.input_ports[0])
 
-    #     # 'compile' wildcat diagram
+    #     # 'compile' jaxonomy diagram
     #     diagram = builder.build()
     #     context = diagram.create_context(check_types=True)
 
@@ -668,7 +715,7 @@ if __name__ == "__main__":
     #         "lti": lti.output_ports[0],
     #     }
     #     t0, tf = 0.0, 10.0
-    #     results = collimator.simulate(
+    #     results = jaxonomy.simulate(
     #         diagram,
     #         context,
     #         (t0, tf),
@@ -747,15 +794,15 @@ if __name__ == "__main__":
     #     ac = AcausalCompiler(ev, ad, verbose=True)
     #     trans_oscillator = ac(name="trans_oscillator")
 
-    #     # make wildcat diagram
-    #     builder = collimator.DiagramBuilder()
+    #     # make jaxonomy diagram
+    #     builder = jaxonomy.DiagramBuilder()
     #     trans_oscillator = builder.add(trans_oscillator)
     #     sw = builder.add(
     #         lib.Sine(name="sw", amplitude=0.5, frequency=10, bias=1, phase=np.pi / 2)
     #     )
     #     builder.connect(sw.output_ports[0], trans_oscillator.input_ports[0])
 
-    #     # 'compile' wildcat diagram
+    #     # 'compile' jaxonomy diagram
     #     diagram = builder.build()
     #     context = diagram.create_context(check_types=True)
 
@@ -768,7 +815,7 @@ if __name__ == "__main__":
     #         "sw": sw.output_ports[0],
     #     }
     #     t0, tf = 0.0, 10.0
-    #     results = collimator.simulate(
+    #     results = jaxonomy.simulate(
     #         diagram,
     #         context,
     #         (t0, tf),

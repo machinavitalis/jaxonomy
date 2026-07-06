@@ -16,10 +16,10 @@
             ],
         },
         {
-            "name": "collimator_cli run",
+            "name": "jaxonomy_cli run",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/collimator/cli/collimator_cli.py",
+            "program": "${workspaceFolder}/jaxonomy/cli/jaxonomy_cli.py",
             "args": [
                 "run",
                 "--model",
@@ -29,10 +29,10 @@
             "cwd": "${fileDirname}",
         },
         {
-            "name": "collimator_cli optimize",
+            "name": "jaxonomy_cli optimize",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/collimator/cli/collimator_cli.py",
+            "program": "${workspaceFolder}/jaxonomy/cli/jaxonomy_cli.py",
             // You may need to add --model and/or --request here
             "args": ["optimize"],
             "justMyCode": true,

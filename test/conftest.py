@@ -1,18 +1,17 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-from collimator.backend import numpy_api, DEFAULT_BACKEND
+from jaxonomy.backend import set_backend, DEFAULT_BACKEND
 
 import logging
-from collimator import logging as collimator_logging
+from jaxonomy import logging as jaxonomy_logging
 
 
 @pytest.fixture(autouse=True)
 def configure_logging():
     logger = logging.getLogger()
     level = logger.getEffectiveLevel()
-    collimator_logging.set_log_level(level)
+    jaxonomy_logging.set_log_level(level)
     yield
 
 
@@ -21,4 +20,4 @@ def configure_logging():
 @pytest.fixture(autouse=True)
 def reset_backend():
     yield
-    numpy_api.set_backend(DEFAULT_BACKEND)
+    set_backend(DEFAULT_BACKEND)

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 # Test case for autotuning PID (optimization use case)
@@ -9,9 +8,9 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.optimize import minimize
 
-import collimator
-from collimator.optimization import ui_jobs
-from collimator.library import (
+import jaxonomy
+from jaxonomy.optimization import ui_jobs
+from jaxonomy.library import (
     FeedthroughBlock,
     Gain,
     Adder,
@@ -21,14 +20,14 @@ from collimator.library import (
     PIDDiscrete,
     Saturate,
 )
-from collimator.simulation import SimulatorOptions
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.simulation import SimulatorOptions
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 
 
-class ParametricGain(collimator.LeafSystem):
-    # TODO (before merge): Make the normal Gain behave like this
+class ParametricGain(jaxonomy.LeafSystem):
+    # NOTE (before merge): Make the normal Gain behave like this
     def __init__(self, gain, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.declare_input_port()
@@ -48,7 +47,7 @@ class ParametricGain(collimator.LeafSystem):
 
 
 def make_cost(Q=1.0, R=0.01):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     error_squared = builder.add(FeedthroughBlock(lambda x: x**2, name="error_squared"))
     control_squared = builder.add(
@@ -75,7 +74,7 @@ def make_cost(Q=1.0, R=0.01):
 
 
 def make_diagram(R=0.01, kp=1.0, ki=10.0, kd=0.1, dt=0.01, step_time=1.0):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     plant = builder.add(TransferFunction([16.13], [0.00333, 0.201, 1.0], name="plant"))
     reference_signal = builder.add(
         Step(
@@ -104,7 +103,7 @@ def make_diagram(R=0.01, kp=1.0, ki=10.0, kd=0.1, dt=0.01, step_time=1.0):
 
 @pytest.mark.slow
 def test_pid_autotune():
-    collimator.set_backend("jax")  # Need for autodiff
+    jaxonomy.set_backend("jax")  # Need for autodiff
     diagram = make_diagram()
     t_span = (0.0, 2.0)
 
@@ -123,7 +122,7 @@ def test_pid_autotune():
             {"kp": k[0], "ki": k[1], "kd": k[2]}
         )
         context = context.with_subcontext(controller.system_id, controller_context)
-        results = collimator.simulate(diagram, context, t_span, options=options)
+        results = jaxonomy.simulate(diagram, context, t_span, options=options)
         return results.context[cost_integral.system_id].continuous_state
 
     k0 = jnp.array([1.0, 0.0, 0.0])
@@ -147,7 +146,7 @@ def test_pid_autotune_new_api():
     expected_opt_kd = 0.01
     atol = [0.2, 0.5, 0.2]
 
-    collimator.set_backend("jax")  # Need for autodiff
+    jaxonomy.set_backend("jax")  # Need for autodiff
     sim_t_span = (0.0, 2.0)
     job_type = "pid"
 

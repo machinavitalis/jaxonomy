@@ -1,0 +1,179 @@
+{
+  "hardware": {
+    "cpu": {
+      "platform": "macOS-26.4-arm64-arm-64bit",
+      "machine": "arm64",
+      "processor": "arm",
+      "python_version": "3.11.15",
+      "jax_version": "0.9.2",
+      "jaxonomy_version": "2.2.0",
+      "jax_default_backend": "cpu",
+      "ram_gb_total": 68.7
+    },
+    "gpu_t4": {
+      "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+      "machine": "x86_64",
+      "processor": "x86_64",
+      "python_version": "3.11.11",
+      "jax_version": "0.9.2",
+      "jaxonomy_version": "2.2.0",
+      "jax_default_backend": "gpu",
+      "ram_gb_total": 31.5
+    },
+    "gpu_a100": null,
+    "gpu_h100": null
+  },
+  "regression_threshold": 1.5,
+  "cases": {
+    "cartpole_throughput": {
+      "cpu": {
+        "compile_s_median": 0.014517123810946941,
+        "sim_s_median": 0.12542633386328816,
+        "wall_per_simsec_median": 0.012542633386328817,
+        "t_end_s": 10.0,
+        "n_repeat": 3
+      },
+      "gpu_t4": {
+        "compile_s_median": 0.08254302299997107,
+        "sim_s_median": 1.0269391749999954,
+        "wall_per_simsec_median": 0.10269391749999954,
+        "t_end_s": 10.0,
+        "n_repeat": 3
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    },
+    "quadruped_throughput": {
+      "cpu": {
+        "n_env": 1000,
+        "t_end_s": 5.0,
+        "compile_s": 0.1114008747972548,
+        "sim_s": 0.36175120808184147,
+        "env_seconds_per_wall_second": 13821.653911018358
+      },
+      "gpu_t4": {
+        "n_env": 1000,
+        "t_end_s": 5.0,
+        "compile_s": 0.9357639369999333,
+        "sim_s": 49.27412327000002,
+        "env_seconds_per_wall_second": 101.47313981828252
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    },
+    "articulated_quadruped_throughput": {
+      "cpu": {
+        "n_env": 1,
+        "t_end_s": 5.0,
+        "nq": 19,
+        "nv": 18,
+        "nu": 0,
+        "compile_s": 0.17670008353888988,
+        "sim_s": 1.2031648745760322,
+        "wall_per_simsec": 0.24063297491520644,
+        "env_seconds_per_wall_second": 4.155706425324198
+      },
+      "gpu_t4": {
+        "n_env": 1,
+        "t_end_s": 5.0,
+        "nq": 19,
+        "nv": 18,
+        "nu": 0,
+        "compile_s": 0.3255896910000047,
+        "sim_s": 4.839830105000033,
+        "wall_per_simsec": 0.9679660210000065,
+        "env_seconds_per_wall_second": 1.0330941151910469
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    },
+    "articulated_quadruped_batched_throughput": {
+      "cpu": {
+        "n_env": 64,
+        "t_end_s": 1.0,
+        "dt": 0.002,
+        "nq": 19,
+        "nv": 18,
+        "nu": 0,
+        "compile_s": 0.9117454565130174,
+        "sim_s": 4.059268834069371,
+        "env_seconds_per_wall_second": 15.76638616857527
+      },
+      "gpu_t4": {
+        "n_env": 64,
+        "t_end_s": 1.0,
+        "dt": 0.002,
+        "nq": 19,
+        "nv": 18,
+        "nu": 0,
+        "compile_s": 5.596205568999949,
+        "sim_s": 196.351053857,
+        "env_seconds_per_wall_second": 0.32594681180886553
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    },
+    "sysid_convergence": {
+      "cpu": {
+        "n_iter": 12,
+        "n_fev": 45,
+        "wall_s": 5.062649542000145,
+        "final_loss": 9.178945172177054e-05,
+        "param_mse": 5.143057371341147e-06,
+        "fitted_b": 0.49680706001680724,
+        "fitted_k": 2.0003020745047357,
+        "true_b": 0.5,
+        "true_k": 2.0,
+        "converged": true,
+        "target_mse": 0.0001,
+        "method": "L-BFGS-B"
+      },
+      "gpu_t4": {
+        "n_iter": 12,
+        "n_fev": 48,
+        "wall_s": 45.85737633400004,
+        "final_loss": 9.178949715552933e-05,
+        "param_mse": 5.200065294389597e-06,
+        "fitted_b": 0.4967936609078389,
+        "fitted_k": 2.000345716957725,
+        "true_b": 0.5,
+        "true_k": 2.0,
+        "converged": true,
+        "target_mse": 0.0001,
+        "method": "L-BFGS-B"
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    },
+    "linearization_vs_analytic": {
+      "cpu": {
+        "linearize_warm_median_s": 0.026758041232824326,
+        "linearize_warm_samples_s": [
+          0.02681504189968109,
+          0.026758041232824326,
+          0.026673417072743177
+        ],
+        "max_abs_error_vs_analytic": 0.0,
+        "matches_analytic_within_1e_6": true,
+        "n_states": 2,
+        "n_inputs": 1,
+        "n_outputs": 1
+      },
+      "gpu_t4": {
+        "linearize_warm_median_s": 0.16614593899998908,
+        "linearize_warm_samples_s": [
+          0.16862396600004104,
+          0.16614593899998908,
+          0.16348790300003202
+        ],
+        "max_abs_error_vs_analytic": 0.0,
+        "matches_analytic_within_1e_6": true,
+        "n_states": 2,
+        "n_inputs": 1,
+        "n_outputs": 1
+      },
+      "gpu_a100": null,
+      "gpu_h100": null
+    }
+  }
+}

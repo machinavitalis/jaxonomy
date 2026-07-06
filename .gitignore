@@ -127,3 +127,22 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Pytest workdir
+test/workdir/
+.venv/
+
+# Stale pytest captures (per-machine, not load-bearing)
+pytest_output.txt
+.gcloud-sdk/
+.DS_Store
+
+# Claude Code local worktrees/config (never track)
+.claude/
+
+# Internal working docs relocated to private jaxsmith (local symlinks; never track)
+/AGENTS/TODO.md
+/AGENTS/TODO_tutorial.md
+/AGENTS/FOUND_BY_USE.md
+/AGENTS/LESSONS.md
+/DONE.md

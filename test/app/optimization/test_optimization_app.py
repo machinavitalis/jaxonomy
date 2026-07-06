@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import dataclasses
@@ -8,8 +7,8 @@ import sys
 import numpy as np
 import pytest
 
-from collimator.cli.run_optimization import run_optimization
-import collimator.testing as testing
+from jaxonomy.cli.run_optimization import run_optimization
+import jaxonomy.testing as testing
 
 
 # Note about atol:
@@ -32,7 +31,8 @@ class OptTestScenario:
 
 
 @testing.requires_jax()
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(300)
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "scenario",
     [

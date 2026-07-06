@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
@@ -8,10 +7,10 @@ import typing as T
 import numpy as np
 import pytest
 
-import collimator
-import collimator.testing as test
-from collimator.lazy_loader import LazyLoader
-from collimator.library import (
+import jaxonomy
+import jaxonomy.testing as test
+from jaxonomy.lazy_loader import LazyLoader
+from jaxonomy.library import (
     Gain,
     SignalDatatypeConversion,
     VideoSink,
@@ -32,7 +31,7 @@ def test_VideoSink(request):
     file_name = str(test_paths["workdir"] / "test_video.mp4")
 
     def _make_sink_diagram():
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         source = builder.add(WhiteNoise(0.1, 3, shape=(480, 640, 3), name="source"))
         gain = builder.add(Gain(255.0, name="gain"))
@@ -51,7 +50,7 @@ def test_VideoSink(request):
     recorded_signals = {
         "frame_id": diagram["sink"].get_output_port("frame_id"),
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram, context, (0.0, 1.0), recorded_signals=recorded_signals
     )
 
@@ -75,7 +74,7 @@ def test_VideoSource():
     srcdir = Path(os.path.dirname(__file__)).absolute()
 
     def _make_source_diagram(no_repeat: bool):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         _source = builder.add(
             VideoSource(
@@ -95,7 +94,7 @@ def test_VideoSource():
         "stopped": diagram["source"].get_output_port("stopped"),
     }
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
     )
 
@@ -117,7 +116,7 @@ def test_VideoSource():
     with pytest.raises(Exception):
         diagram["source"].get_output_port("stopped")
 
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram, context, (0.0, 2.4), recorded_signals=recorded_signals
     )
 

@@ -1,0 +1,278 @@
+
+<mujoco model="f1_lap">
+  <option gravity="0 0 -9.81" timestep="0.005"/>
+  <visual>
+    <headlight diffuse=".9 .9 .9" ambient=".25 .25 .25" specular="0 0 0"/>
+    <rgba haze="0.30 0.36 0.45 1"/>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.55 0.7 0.92" rgb2="0.15 0.20 0.35"
+             width="800" height="800"/>
+    <texture name="grass_tex" type="2d" builtin="checker"
+             rgb1="0.20 0.35 0.18" rgb2="0.13 0.25 0.13"
+             width="200" height="200"/>
+    <material name="grass" texture="grass_tex" texrepeat="60 60"
+              reflectance="0.0" specular="0.05"/>
+    <material name="asphalt" rgba="0.28 0.28 0.30 1" specular="0.20" shininess="0.20"/>
+    <material name="chassis" rgba="0.85 0.10 0.10 1" specular="0.7" shininess="0.7"/>
+    <material name="halo"    rgba="0.05 0.05 0.05 1" specular="0.4" shininess="0.5"/>
+    <material name="tyre"    rgba="0.05 0.05 0.05 1" specular="0.2" shininess="0.2"/>
+    <material name="wing"    rgba="0.10 0.10 0.12 1" specular="0.4" shininess="0.5"/>
+    <material name="line"    rgba="0.85 0.85 0.85 1"/>
+  </asset>
+  <worldbody>
+    <light name="sun" diffuse="1.0 0.95 0.85" pos="500 -500 600" dir="-0.6 0.6 -0.8"
+           castshadow="true"/>
+    <light name="fill" diffuse="0.30 0.35 0.50" pos="-300 300 400" dir="0.5 -0.5 -0.6"
+           castshadow="false"/>
+    <!-- Big ground plane (grass) -->
+    <geom name="ground" type="plane" pos="-25.0 259.3 0"
+          size="991 991 1" material="grass"/>
+    <!-- Centerline strip (asphalt road) -->
+    <geom type="box" pos="7.76 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="23.29 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="38.81 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="54.34 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="69.87 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="85.39 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="100.92 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="116.44 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="131.97 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="147.50 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="163.02 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="178.55 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="194.07 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="209.60 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="225.13 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="240.65 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="256.18 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="271.70 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="287.23 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="302.75 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="318.28 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="333.81 0.00 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0000" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="349.33 0.01 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0008" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="364.86 0.16 0.02" size="8.26 8.0 0.02" quat="1.0000 0 0 0.0087" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="380.37 0.71 0.02" size="8.26 8.0 0.02" quat="0.9996 0 0 0.0267" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="395.84 1.97 0.02" size="8.26 8.0 0.02" quat="0.9985 0 0 0.0547" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="411.18 4.25 0.02" size="8.26 8.0 0.02" quat="0.9957 0 0 0.0927" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="426.26 7.84 0.02" size="8.26 8.0 0.02" quat="0.9901 0 0 0.1401" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="440.91 12.90 0.02" size="8.26 8.0 0.02" quat="0.9816 0 0 0.1911" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="454.96 19.45 0.02" size="8.26 8.0 0.02" quat="0.9704 0 0 0.2416" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="468.25 27.42 0.02" size="8.26 8.0 0.02" quat="0.9566 0 0 0.2915" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="480.65 36.72 0.02" size="8.26 8.0 0.02" quat="0.9402 0 0 0.3406" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="492.03 47.25 0.02" size="8.26 8.0 0.02" quat="0.9213 0 0 0.3888" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="502.26 58.88 0.02" size="8.26 8.0 0.02" quat="0.9004 0 0 0.4351" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="511.36 71.44 0.02" size="8.26 8.0 0.02" quat="0.8807 0 0 0.4736" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="519.48 84.66 0.02" size="8.26 8.0 0.02" quat="0.8645 0 0 0.5027" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="526.84 98.32 0.02" size="8.26 8.0 0.02" quat="0.8526 0 0 0.5226" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="533.71 112.25 0.02" size="8.26 8.0 0.02" quat="0.8456 0 0 0.5338" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="540.33 126.29 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="546.91 140.35 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="553.49 154.42 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="560.07 168.48 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="566.65 182.54 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="573.22 196.61 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="579.80 210.67 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="586.38 224.73 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="592.96 238.80 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="599.54 252.86 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="606.11 266.92 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="612.69 280.99 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="619.27 295.05 0.02" size="8.26 8.0 0.02" quat="0.8437 0 0 0.5368" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="625.76 309.15 0.02" size="8.26 8.0 0.02" quat="0.8403 0 0 0.5421" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="631.27 323.62 0.02" size="8.25 8.0 0.02" quat="0.8058 0 0 0.5921" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="633.83 338.75 0.02" size="8.23 8.0 0.02" quat="0.7181 0 0 0.6960" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="631.45 353.73 0.02" size="8.22 8.0 0.02" quat="0.5748 0 0 0.8183" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="623.66 366.72 0.02" size="8.22 8.0 0.02" quat="0.4062 0 0 0.9138" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="611.53 375.80 0.02" size="8.22 8.0 0.02" quat="0.2223 0 0 0.9750" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="596.87 379.62 0.02" size="8.22 8.0 0.02" quat="0.0303 0 0 0.9995" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="581.73 377.95 0.02" size="8.24 8.0 0.02" quat="0.1392 0 0 -0.9903" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="567.49 372.08 0.02" size="8.26 8.0 0.02" quat="0.2488 0 0 -0.9685" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="554.32 363.92 0.02" size="8.26 8.0 0.02" quat="0.2984 0 0 -0.9544" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="541.61 355.00 0.02" size="8.26 8.0 0.02" quat="0.3041 0 0 -0.9526" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="528.95 346.00 0.02" size="8.26 8.0 0.02" quat="0.3041 0 0 -0.9526" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="516.05 337.39 0.02" size="8.26 8.0 0.02" quat="0.2762 0 0 -0.9611" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="502.14 330.86 0.02" size="8.23 8.0 0.02" quat="0.1574 0 0 -0.9875" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="487.08 328.93 0.02" size="8.22 8.0 0.02" quat="0.0305 0 0 0.9995" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="472.42 332.75 0.02" size="8.22 8.0 0.02" quat="0.2226 0 0 0.9749" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="459.96 341.55 0.02" size="8.24 8.0 0.02" quat="0.3799 0 0 0.9250" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="450.03 353.37 0.02" size="8.26 8.0 0.02" quat="0.4637 0 0 0.8860" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="441.48 366.31 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="433.21 379.46 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="424.95 392.60 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="416.68 405.74 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="408.42 418.89 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="400.16 432.03 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="391.89 445.18 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="383.63 458.32 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="375.36 471.46 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="367.10 484.61 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="358.84 497.75 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="350.57 510.90 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="342.31 524.04 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="334.05 537.18 0.02" size="8.26 8.0 0.02" quat="0.4836 0 0 0.8753" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="325.81 550.35 0.02" size="8.26 8.0 0.02" quat="0.4857 0 0 0.8741" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="318.28 563.89 0.02" size="8.25 8.0 0.02" quat="0.5279 0 0 0.8493" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="313.30 578.42 0.02" size="8.23 8.0 0.02" quat="0.6326 0 0 0.7745" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="313.42 593.50 0.02" size="8.19 8.0 0.02" quat="0.7795 0 0 0.6264" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="320.49 606.42 0.02" size="8.15 8.0 0.02" quat="0.9240 0 0 0.3823" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="333.45 613.07 0.02" size="8.15 8.0 0.02" quat="0.9967 0 0 0.0817" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="347.87 610.94 0.02" size="8.15 8.0 0.02" quat="0.9740 0 0 -0.2268" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="358.35 600.82 0.02" size="8.15 8.0 0.02" quat="0.8581 0 0 -0.5135" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="360.99 586.48 0.02" size="8.15 8.0 0.02" quat="0.6602 0 0 -0.7511" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="354.81 573.27 0.02" size="8.16 8.0 0.02" quat="0.4011 0 0 -0.9160" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="342.25 565.36 0.02" size="8.21 8.0 0.02" quat="0.1494 0 0 -0.9888" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="327.17 563.60 0.02" size="8.24 8.0 0.02" quat="0.0332 0 0 0.9994" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="311.97 566.20 0.02" size="8.26 8.0 0.02" quat="0.1356 0 0 0.9908" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="297.15 570.77 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="282.44 575.73 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="267.73 580.70 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="250.57 586.50 0.02" size="10.85 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="233.41 592.30 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="218.70 597.27 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="203.99 602.24 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="189.28 607.21 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="174.57 612.18 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="159.86 617.15 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="145.15 622.11 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="130.44 627.08 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="115.73 632.05 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="101.02 637.02 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="86.32 641.99 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="71.61 646.96 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="56.90 651.93 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="42.19 656.90 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="27.48 661.87 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="12.77 666.84 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-1.94 671.81 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-16.65 676.78 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-31.36 681.75 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-46.07 686.71 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-60.78 691.68 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-75.49 696.65 0.02" size="8.26 8.0 0.02" quat="0.1622 0 0 0.9868" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-90.21 701.59 0.02" size="8.26 8.0 0.02" quat="0.1599 0 0 0.9871" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-104.98 706.36 0.02" size="8.26 8.0 0.02" quat="0.1514 0 0 0.9885" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-119.86 710.78 0.02" size="8.26 8.0 0.02" quat="0.1362 0 0 0.9907" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-134.89 714.64 0.02" size="8.26 8.0 0.02" quat="0.1144 0 0 0.9934" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-150.10 717.73 0.02" size="8.26 8.0 0.02" quat="0.0858 0 0 0.9963" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-165.47 719.84 0.02" size="8.26 8.0 0.02" quat="0.0505 0 0 0.9987" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-180.95 720.81 0.02" size="8.26 8.0 0.02" quat="0.0119 0 0 0.9999" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-196.46 720.57 0.02" size="8.26 8.0 0.02" quat="0.0269 0 0 -0.9996" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-211.90 719.14 0.02" size="8.26 8.0 0.02" quat="0.0657 0 0 -0.9978" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-227.19 716.51 0.02" size="8.26 8.0 0.02" quat="0.1044 0 0 -0.9945" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-242.23 712.70 0.02" size="8.26 8.0 0.02" quat="0.1429 0 0 -0.9897" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-256.92 707.74 0.02" size="8.26 8.0 0.02" quat="0.1812 0 0 -0.9834" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-271.19 701.66 0.02" size="8.26 8.0 0.02" quat="0.2192 0 0 -0.9757" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-284.94 694.48 0.02" size="8.26 8.0 0.02" quat="0.2569 0 0 -0.9664" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-298.10 686.26 0.02" size="8.26 8.0 0.02" quat="0.2942 0 0 -0.9557" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-310.57 677.05 0.02" size="8.26 8.0 0.02" quat="0.3311 0 0 -0.9436" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-322.30 666.90 0.02" size="8.26 8.0 0.02" quat="0.3674 0 0 -0.9300" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-333.20 655.86 0.02" size="8.26 8.0 0.02" quat="0.4033 0 0 -0.9151" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-343.21 644.02 0.02" size="8.26 8.0 0.02" quat="0.4385 0 0 -0.8987" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-352.29 631.44 0.02" size="8.26 8.0 0.02" quat="0.4723 0 0 -0.8814" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-360.45 618.25 0.02" size="8.26 8.0 0.02" quat="0.5011 0 0 -0.8654" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-367.81 604.58 0.02" size="8.26 8.0 0.02" quat="0.5242 0 0 -0.8516" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-374.51 590.58 0.02" size="8.26 8.0 0.02" quat="0.5419 0 0 -0.8404" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-380.71 576.35 0.02" size="8.26 8.0 0.02" quat="0.5544 0 0 -0.8322" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-386.56 561.97 0.02" size="8.26 8.0 0.02" quat="0.5618 0 0 -0.8273" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-392.24 547.52 0.02" size="8.26 8.0 0.02" quat="0.5642 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-397.88 533.05 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-403.52 518.59 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-409.16 504.12 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-414.79 489.66 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-420.43 475.19 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-426.07 460.72 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-431.71 446.26 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-437.34 431.79 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-442.98 417.32 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-448.62 402.86 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-454.25 388.39 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-459.89 373.93 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-465.53 359.46 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-471.17 344.99 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-476.80 330.53 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-482.44 316.06 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-488.08 301.59 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-493.72 287.13 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-499.35 272.66 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-504.99 258.20 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-510.63 243.73 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-516.27 229.26 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-521.90 214.80 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-527.54 200.33 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-533.18 185.86 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-538.82 171.40 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-544.45 156.93 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-550.09 142.47 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-555.73 128.00 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-561.37 113.53 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-567.00 99.07 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-572.64 84.60 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-578.28 70.13 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-583.91 55.67 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-589.55 41.20 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-595.19 26.74 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-600.83 12.27 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-606.46 -2.20 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-612.10 -16.66 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-617.74 -31.13 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-623.38 -45.60 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-629.01 -60.06 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-634.65 -74.53 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-640.29 -88.99 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-645.93 -103.46 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-651.56 -117.93 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-657.20 -132.39 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-662.84 -146.86 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-668.48 -161.33 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-674.11 -175.79 0.02" size="8.26 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+      <geom type="box" pos="-680.69 -192.67 0.02" size="10.85 8.0 0.02" quat="0.5643 0 0 -0.8256" material="asphalt" contype="0" conaffinity="0"/>
+
+    <!-- The car as a free body. Chassis box + 4 wheels + a token rear wing. -->
+    <body name="car" pos="0 0 0.36000000000000004">
+      <joint name="free" type="free"/>
+      <inertial pos="0 0 0" mass="830" diaginertia="200 1350 1500"/>
+      <!-- Chassis box: -->
+      <geom name="chassis" type="box"
+            size="2.750 0.900 0.300"
+            pos="0 0 0.35"
+            material="chassis"/>
+      <!-- Halo arch -->
+      <geom name="halo_main" type="capsule"
+            fromto="0 -0.8 0.7
+                    0 0.8 0.7"
+            size="0.05" material="halo"/>
+      <!-- Rear wing -->
+      <geom name="rear_wing" type="box"
+            size="0.1 1.200 0.04"
+            pos="-2.550 0 1.05"
+            material="wing"/>
+      <geom name="rear_wing_endL" type="box" size="0.1 0.04 0.30"
+            pos="-2.550 1.200 0.8"
+            material="wing"/>
+      <geom name="rear_wing_endR" type="box" size="0.1 0.04 0.30"
+            pos="-2.550 -1.200 0.8"
+            material="wing"/>
+      <!-- Front wing -->
+      <geom name="front_wing" type="box"
+            size="0.08 1.200 0.04"
+            pos="2.700 0 0.10"
+            material="wing"/>
+      <!-- 4 wheels at the corners -->
+      <geom name="wheel_FL" type="cylinder" size="0.340 0.180"
+            pos="1.625  0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_FR" type="cylinder" size="0.340 0.180"
+            pos="1.625 -0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_RL" type="cylinder" size="0.340 0.180"
+            pos="-1.625  0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_RR" type="cylinder" size="0.340 0.180"
+            pos="-1.625 -0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+    </body>
+  </worldbody>
+</mujoco>

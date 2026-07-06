@@ -1,18 +1,17 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
-import collimator
-from collimator import DiagramBuilder, Simulator, SimulatorOptions
-from collimator.library import Sine
+import jaxonomy
+from jaxonomy import DiagramBuilder, Simulator, SimulatorOptions
+from jaxonomy.library import Sine
 
 import jax
 
 
 @pytest.mark.parametrize("backend", ["numpy", "jax"])
 def test_jax_dump_buffer(backend):
-    collimator.set_backend(backend)
+    jaxonomy.set_backend(backend)
 
     builder = DiagramBuilder()
     sine = builder.add(Sine(name="SineWave_0"))

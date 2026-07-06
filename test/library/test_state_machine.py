@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import sys
@@ -7,10 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-import collimator
-from collimator.backend import numpy_api as cnp
-from collimator.framework.error import BlockInitializationError, StaticError
-from collimator.library import (
+import jaxonomy
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy.framework.error import BlockInitializationError, StaticError
+from jaxonomy.simulation.errors import SimulationError
+from jaxonomy.library import (
     Adder,
     Clock,
     Comparator,
@@ -20,19 +20,19 @@ from collimator.library import (
     Sine,
     StateMachine,
 )
-from collimator.library.state_machine import (
+from jaxonomy.library.state_machine import (
     StateMachineData,
     StateMachineRegistry,
     StateMachineState,
 )
-from collimator.optimization import ui_jobs
-from collimator.optimization.framework.base.optimizable import (
+from jaxonomy.optimization import ui_jobs
+from jaxonomy.optimization.framework.base.optimizable import (
     DesignParameter,
 )
-from collimator.simulation import SimulatorOptions
-from collimator.testing import requires_jax
+from jaxonomy.simulation import SimulatorOptions
+from jaxonomy.testing import requires_jax
 
-# from collimator import logging
+# from jaxonomy import logging
 
 
 # logging.set_log_handlers(to_file="test.log")
@@ -43,7 +43,7 @@ pytestmark = pytest.mark.minimal
 def _build_sm_all_ops():
     # 3 states: off=0, a2=2, a3=3
     # this state machine does not do anything, its
-    # only purpose is to ensure wildcat does fail due to
+    # only purpose is to ensure jaxonomy does fail due to
     # any of the guard/action strings
 
     registry = StateMachineRegistry()
@@ -105,7 +105,7 @@ def _build_sm_all_ops():
 def _build_sm_all_ops_jax():
     # 3 states: off=0, a2=2, a3=3
     # this state machine does not do anything, its
-    # only purpose is to ensure wildcat does fail due to
+    # only purpose is to ensure jaxonomy does fail due to
     # any of the guard/action strings
     registry = StateMachineRegistry()
     off_t0 = registry.make_transition(
@@ -166,10 +166,10 @@ def test_state_machine_all_ops(use_jax):
     if sys.platform == "win32":
         # I could not find the "obvious" fix, so xfailing here
         pytest.xfail("int32/int64 errors happen on windows: needs investigation")
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
     sw = builder.add(Sine(name="sw"))
@@ -199,14 +199,14 @@ def test_state_machine_all_ops(use_jax):
 
     diagram = builder.build()
     context = diagram.create_context()
-    collimator.simulate(diagram, context, (0.0, 0.2))
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))
 
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_state_machine_unguarded_exit(use_jax, show_plot=False):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     # 3 states: off=0, on=1, wait=2
     # off guarded to on, on not guarded wait, wait not guarded back to off
@@ -244,7 +244,7 @@ def test_state_machine_unguarded_exit(use_jax, show_plot=False):
     sm_inputs = ["in_0"]
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
     sw = builder.add(Sine(name="sw"))
@@ -263,7 +263,7 @@ def test_state_machine_unguarded_exit(use_jax, show_plot=False):
     recorded_signals = {"sw": sw.output_ports[0], "sm": sm.output_ports[0]}
     diagram = builder.build()
     context = diagram.create_context()
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram, context, (0.0, 1.0), recorded_signals=recorded_signals
     )
 
@@ -314,7 +314,7 @@ def test_state_machine_unguarded_exit(use_jax, show_plot=False):
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_state_machine_entry_point_action(use_jax, show_plot=False):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     # states: off=0
     # ep[out=99.] -> off[do nothing]
@@ -331,7 +331,7 @@ def test_state_machine_entry_point_action(use_jax, show_plot=False):
 
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     sm = builder.add(
         StateMachine(
             registry=registry,
@@ -346,7 +346,7 @@ def test_state_machine_entry_point_action(use_jax, show_plot=False):
     recorded_signals = {"sm": sm.output_ports[0]}
     diagram = builder.build()
     context = diagram.create_context()
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram, context, (0.0, 1.0), recorded_signals=recorded_signals
     )
 
@@ -396,7 +396,7 @@ def test_state_machine_too_many_unguarded_exit():
     sm_inputs = []
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
 
@@ -421,7 +421,7 @@ def test_state_machine_no_states():
     sm_inputs = []
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
 
@@ -437,7 +437,7 @@ def test_state_machine_no_states():
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_state_machine_continuous(use_jax, show_plot=False):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     # states: off=0, on=1
     # sine -> state_machine -> integrator
@@ -470,7 +470,7 @@ def test_state_machine_continuous(use_jax, show_plot=False):
     sm_inputs = ["in_0"]
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     sw = builder.add(Sine(name="sw"))
     sm = builder.add(
         StateMachine(
@@ -497,7 +497,7 @@ def test_state_machine_continuous(use_jax, show_plot=False):
     diagram = builder.build()
     context = diagram.create_context()
     options = SimulatorOptions(max_major_step_length=0.1)
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 6.0),
@@ -580,7 +580,7 @@ def test_state_machine_output_mismatch_dtype():
     sm_inputs = ["in_0", "in_1"]
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     clk = builder.add(Clock(name="clk"))
     k = builder.add(Constant(name="k", value=np.array([1.0, 2.0])))
     sm = builder.add(
@@ -601,10 +601,12 @@ def test_state_machine_output_mismatch_dtype():
     diagram = builder.build()
     context = diagram.create_context()
 
-    error_type = TypeError
+    # The int/float output-type mismatch across switch branches is caught and
+    # re-raised as a descriptive SimulationError (wrapping JAX's TypeError).
+    error_type = SimulationError
 
     with pytest.raises(error_type) as e:
-        collimator.simulate(
+        jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
     # Success! The test failed as expected.
@@ -614,7 +616,7 @@ def test_state_machine_output_mismatch_dtype():
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_state_machine_uninit_output(use_jax):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     registry = StateMachineRegistry()
 
@@ -630,7 +632,7 @@ def test_state_machine_uninit_output(use_jax):
     )
     sm_outputs = ["out_0"]
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     with pytest.raises(BlockInitializationError) as e:
         builder.add(
@@ -656,7 +658,7 @@ def test_state_machine_guarded_counter(use_jax, show_plot=False):
     if sys.platform == "win32":
         # I could not find the "obvious" fix, so xfailing here
         pytest.xfail("int32/int64 errors happen on windows: needs investigation")
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
 
     registry = StateMachineRegistry()
@@ -688,7 +690,7 @@ def test_state_machine_guarded_counter(use_jax, show_plot=False):
         initial_actions=[initial_action_id],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
     sm = builder.add(
@@ -705,7 +707,7 @@ def test_state_machine_guarded_counter(use_jax, show_plot=False):
     recorded_signals = {"sm": sm.output_ports[0]}
     diagram = builder.build()
     context = diagram.create_context()
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram, context, (0.0, 0.8), recorded_signals=recorded_signals
     )
 
@@ -739,7 +741,7 @@ def test_state_machine_guarded_counter(use_jax, show_plot=False):
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_transition_priority(use_jax):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     registry = StateMachineRegistry()
 
@@ -768,7 +770,7 @@ def test_transition_priority(use_jax):
         initial_actions=[initial_action_id],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
     clock = builder.add(Clock(name="clk"))
@@ -788,7 +790,7 @@ def test_transition_priority(use_jax):
     recorded_signals = {"sm": sm.output_ports[0]}
     diagram = builder.build()
     context = diagram.create_context()
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram, context, (0.0, 0.8), recorded_signals=recorded_signals
     )
 
@@ -801,9 +803,9 @@ def test_transition_priority(use_jax):
 @requires_jax()
 def test_discrete_state_machine_optimization():
     """Check that optimization through a discrete state machine works."""
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
-    c = collimator.Parameter(name="c", value=0.0)
+    c = jaxonomy.Parameter(name="c", value=0.0)
     registry = StateMachineRegistry()
 
     # state machine with two inputs: clock and constant block
@@ -881,7 +883,7 @@ def test_discrete_state_machine_optimization():
 
 @pytest.mark.parametrize("use_jax", [False, True])
 def test_multiple_init_actions(use_jax):
-    if use_jax and cnp.active_backend == "numpy":
+    if use_jax and npa.active_backend == "numpy":
         pytest.xfail("JAX backend is not available.")
     registry = StateMachineRegistry()
 
@@ -904,7 +906,7 @@ def test_multiple_init_actions(use_jax):
         initial_actions=[initial_action_1, initial_action_2, initial_action_3],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     dt = 0.1
     clock = builder.add(Clock(name="clk"))
@@ -924,7 +926,7 @@ def test_multiple_init_actions(use_jax):
     recorded_signals = {"out_0": sm.output_ports[0], "out_1": sm.output_ports[1]}
     diagram = builder.build()
     context = diagram.create_context()
-    res = collimator.simulate(
+    res = jaxonomy.simulate(
         diagram, context, (0.0, 0.8), recorded_signals=recorded_signals
     )
 

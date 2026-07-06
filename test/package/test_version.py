@@ -1,10 +1,9 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
 import toml
 
-from collimator import __version__
+from jaxonomy import __version__
 
 
 def _get_version() -> str:

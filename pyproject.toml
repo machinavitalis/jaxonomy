@@ -3,16 +3,16 @@ requires = ["setuptools >= 65", "wheel >= 0.38"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pycollimator"
+name = "jaxonomy"
 readme = "README.md"
-description = "Collimator.ai core simulation engine and API client"
+description = "Jaxonomy core simulation engine and API client"
 requires-python = ">=3.10"
-authors = [{ name = "Collimator", email = "support@collimator.ai" }]
+authors = [{ name = "Jaxonomy", email = "support@jaxonomy.com" }]
 dynamic = ["dependencies"]
 license = { text = "MIT" }
 
 # Keep in sync with version.py
-version = "2.2.0"
+version = "3.0.0"
 
 # See https://pypi.org/classifiers/
 classifiers = [
@@ -21,28 +21,83 @@ classifiers = [
   "Operating System :: OS Independent",
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering",
-  # These will have to be updated:
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: MIT License",
 ]
 
 [project.urls]
-"Homepage" = "https://www.collimator.ai"
-"Documentation" = "https://py.collimator.ai"
+"Homepage" = "https://www.jaxonomy.com"
+"Documentation" = "https://py.jaxonomy.com"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["*"]
-exclude = ["collimator.testing*", "test*", "examples*"]
+exclude = ["jaxonomy.testing*", "test*", "examples*"]
 namespaces = false
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.in"] }
 
 [project.scripts]
-collimator_cli = "collimator.cli.collimator_cli:cli"
+jaxonomy_cli = "jaxonomy.cli.jaxonomy_cli:cli"
+jaxonomy-mcp = "jaxonomy.mcp.server:main"
 
 [project.optional-dependencies]
+
+mcp = ["mcp>=1.0.0"]
+
+# Optional: pint-backed string parser for jaxonomy.framework.units.parse_unit
+# (T-104-followup-pint-bridge). When this extra is installed,
+# parse_unit("m/s²") routes through pint's UnitRegistry; otherwise a
+# built-in fallback parser handles the curated SI subset.
+units = ["pint>=0.20"]
+
+# Optional: streaming export to HDF5 / zarr for LazyResults
+# (T-108-followup-streaming-export). ``LazyResults.to_hdf5`` needs
+# ``h5py``; ``LazyResults.to_zarr`` needs ``zarr``. Without either, the
+# parquet writer / ``collect()`` / ``to_pandas()`` paths continue to
+# work unchanged.
+streaming-export = ["h5py>=3.0", "zarr>=2.10"]
+
+# Optional: quasi-Monte-Carlo sampling via Sobol low-discrepancy
+# sequences (T-126-followup-quasi-mc). ``jaxonomy.uq.quasi_monte_carlo``
+# and ``jaxonomy.uq.sobol_sequence`` route through
+# ``scipy.stats.qmc.Sobol``. scipy is already a hard runtime dep of the
+# core simulator, so this extra mostly exists for documentation /
+# discoverability rather than gating an install.
+uq-qmc = ["scipy>=1.7"]
+
+# Minimum dependencies to run the pytest suite. Install with `pip install -e .[test]`.
+# CI's PR-time job uses this.
+test = [
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "pytest-xdist",
+  "pytest-mock",
+  "pytest-retry",  # for pytest.mark.flaky
+  "pytest-timeout",
+  "hypothesis",
+  "toml",
+  "matplotlib ~= 3.9",
+]
+
+# Full test matrix — adds every optional runtime extra that has test coverage
+# (control, pysindy, pytwin, pandas, tensorflow, torch, mujoco, ...) plus the
+# notebook-testing and media-I/O libraries that are test-only. Install with
+# `pip install -e .[test-full]`. CI's nightly job uses this.
+test-full = [
+  "jaxonomy[test,all,recommended]",
+  "nbval",
+  "gplearn",
+  "onnx",
+  "onnxruntime",
+  "jaxonnxruntime",
+  "lightning",
+  "mediapy",
+  "ipywidgets",
+  "ipympl",
+]
 
 # NMPC requires IPOPT to be preinstalled and maybe cmake on macOS
 nmpc = ["cyipopt ~= 1.3.0", "osqp ~= 0.6.5"]
@@ -63,7 +118,7 @@ safe = [
   "matplotlib ~= 3.9",
 ]
 
-# all dependencies used by collimator, including NMPC
+# all dependencies used by jaxonomy, including NMPC
 all = [
   "control ~= 0.9.4",
   "cyipopt ~= 1.3.0",

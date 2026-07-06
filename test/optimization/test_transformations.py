@@ -1,9 +1,8 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import jax.numpy as jnp
 
-from collimator.optimization.framework.base import transformations
+from jaxonomy.optimization.framework.base import transformations
 
 
 def assert_dicts_equal(dict1, dict2):

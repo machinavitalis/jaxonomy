@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test coordinate rotations blocks
@@ -14,10 +13,10 @@ import numpy as np
 
 from scipy.spatial.transform import Rotation
 
-import collimator
-from collimator import library
-from collimator.framework import ShapeMismatchError
-from collimator.library.rotations import EULER_SEQ
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.framework import ShapeMismatchError
+from jaxonomy.library.rotations import EULER_SEQ
 
 
 @pytest.fixture
@@ -62,7 +61,7 @@ class TestCoordinateRotation:
         assert np.allclose(v2_test, [0.0, 0.0, 1.0])
 
     def test_quat(self, v1_test, q_test, v2_test, rpy_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v_in = builder.add(library.Constant(v1_test, name="v_in"))
         crot = builder.add(
@@ -81,7 +80,7 @@ class TestCoordinateRotation:
         assert np.allclose(v_out, v2_test)
 
     def test_dcm(self, v1_test, dcm_test, v2_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v_in = builder.add(library.Constant(v1_test, name="v_in"))
         crot = builder.add(
@@ -101,7 +100,7 @@ class TestCoordinateRotation:
         assert np.allclose(v_out, v2_test)
 
     def test_euler(self, v1_test, rpy_test, v2_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v_in = builder.add(library.Constant(v1_test, name="v_in"))
         crot = builder.add(
@@ -121,7 +120,7 @@ class TestCoordinateRotation:
         assert np.allclose(v_out, v2_test)
 
     def test_input_shape_mismatch(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v_in = builder.add(library.Constant(np.zeros((4,)), name="v_in"))
         crot = builder.add(
@@ -142,7 +141,7 @@ class TestCoordinateRotation:
 
 class TestCoordinateRotationConversion:
     def test_euler_to_quat(self, rpy_test, q_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         euler = builder.add(library.Constant(rpy_test, name="euler"))
         quat = builder.add(
@@ -160,7 +159,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(q_out, q_test)
 
     def test_quat_to_euler(self, rpy_test, q_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         quat = builder.add(library.Constant(q_test, name="quat"))
         euler = builder.add(
@@ -178,7 +177,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(euler_out, rpy_test)
 
     def test_euler_to_dcm(self, rpy_test, dcm_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         euler = builder.add(library.Constant(rpy_test, name="euler"))
         dcm = builder.add(
@@ -196,7 +195,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(dcm_out, dcm_test)
 
     def test_dcm_to_euler(self, rpy_test, dcm_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dcm = builder.add(library.Constant(dcm_test, name="dcm"))
         euler = builder.add(
@@ -214,7 +213,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(euler_out, rpy_test)
 
     def test_quat_to_dcm(self, q_test, dcm_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         quat = builder.add(library.Constant(q_test, name="quat"))
         dcm = builder.add(
@@ -232,7 +231,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(dcm_out, dcm_test)
 
     def test_dcm_to_quat(self, q_test, dcm_test):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dcm = builder.add(library.Constant(dcm_test, name="dcm"))
         quat = builder.add(
@@ -250,7 +249,7 @@ class TestCoordinateRotationConversion:
         assert np.allclose(quat_out, q_test)
 
     def test_input_shape_mismatch(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v_in = builder.add(library.Constant(np.zeros((2,)), name="q_in"))
         crc = builder.add(
@@ -273,7 +272,7 @@ class TestRigidBody:
         a_B = library.Constant(np.zeros(3), name="a_B")
         tau_B = library.Constant(np.zeros(3), name="tau_B")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(a_B, tau_B, rb)
 
         builder.connect(a_B.output_ports[0], rb.force_input)
@@ -308,7 +307,7 @@ class TestRigidBody:
             "orientation": rb.orientation_output,
             "angular_velocity": rb.angular_velocity_output,
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, 1.0),
@@ -364,7 +363,7 @@ class TestRigidBody:
             "angular_velocity": rb.angular_velocity_output,
         }
         tf = 1.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -434,11 +433,11 @@ class TestRigidBody:
             "orientation": rb.orientation_output,
             "angular_velocity": rb.angular_velocity_output,
         }
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_minor_step_size=1e-2,
         )
         tf = 4.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),

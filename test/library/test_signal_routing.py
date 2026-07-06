@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test blocks that combine and separate signals.
@@ -14,8 +13,8 @@ In the future, this is also where buses should be tested.
 import pytest
 import numpy as np
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
 pytest.mark.minimal
 
@@ -45,7 +44,7 @@ class TestIfTheElse:
         ones = library.Constant(np.ones(3))
         zeros = library.Constant(np.zeros(3))
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(step, ud, ite, one, zero, ite_vec, ones, zeros)
 
         builder.connect(one.output_ports[0], ud.input_ports[0])
@@ -65,7 +64,7 @@ class TestIfTheElse:
             "ite": ite.output_ports[0],
             "ite_vec": ite_vec.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         ts, ite_, ite_vec_ = (
@@ -94,7 +93,7 @@ class TestMux:
         Constant_1 = library.Constant(1.5, name="const2")
         Constant_2 = library.Constant([2.5, 3.5], name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Mux_0, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], Mux_0.input_ports[0])
@@ -122,7 +121,7 @@ class TestMux:
         Constant_1 = library.Constant(np.array([2], dtype=dtype), name="const2")
         Constant_2 = library.Constant(np.array([3, 4], dtype=dtype), name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Mux_0, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], Mux_0.input_ports[0])
@@ -151,7 +150,7 @@ class TestDemux:
         u = np.array([1, 2, 3], dtype=dtype)
         Constant_0 = library.Constant(u)
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Demux_0, Constant_0)
         builder.connect(Constant_0.output_ports[0], Demux_0.input_ports[0])
 

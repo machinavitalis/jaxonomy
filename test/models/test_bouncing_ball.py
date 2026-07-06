@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 # Idealized hybrid dynamics of a ball dropping from a height and bouncing on a
@@ -11,9 +10,9 @@ import pytest
 import numpy as np
 import matplotlib.pyplot as plt
 
-import collimator
+import jaxonomy
 
-from collimator.library import (
+from jaxonomy.library import (
     Integrator,
     Demultiplexer,
     Multiplexer,
@@ -22,7 +21,7 @@ from collimator.library import (
     Gain,
 )
 
-from collimator.models import BouncingBall
+from jaxonomy.models import BouncingBall
 
 
 def test_leaf_simulate_to_contact():
@@ -38,8 +37,8 @@ def test_leaf_simulate_to_contact():
     context = context.with_continuous_state(x0)
 
     # Simulate to contact with the ground
-    options = collimator.SimulatorOptions(rtol=1e-8)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=1e-8)
+    results = jaxonomy.simulate(
         model,
         context,
         (0.0, t1),
@@ -67,8 +66,8 @@ def test_leaf_simulate_through_contact():
 
     # Simulate just beyond contact with the ground
     rtol = 1e-10
-    options = collimator.SimulatorOptions(rtol=rtol)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=rtol)
+    results = jaxonomy.simulate(
         model,
         context,
         (0.0, t1 * (1 + rtol)),
@@ -93,8 +92,8 @@ def test_leaf_simulate_full_period():
     #  return the ball to its initial condition
     context = context.with_continuous_state(x0)
 
-    options = collimator.SimulatorOptions(rtol=1e-10, atol=1e-12)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=1e-10, atol=1e-12)
+    results = jaxonomy.simulate(
         model,
         context,
         (0.0, 2 * t1),
@@ -119,11 +118,11 @@ def test_leaf_simulate_multiple_periods(show_plot=False):
 
     context = context.with_continuous_state(x0)
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         rtol=1e-10, atol=1e-12, max_major_step_length=1.0
     )
     recorded_signals = {"y": model.output_ports[0]}
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         model,
         context,
         (0.0, 4 * t1),
@@ -162,8 +161,8 @@ def test_leaf_simulate_with_restitution():
     context = context.with_continuous_state(x0)
 
     rtol = 1e-10
-    options = collimator.SimulatorOptions(rtol=rtol)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=rtol)
+    results = jaxonomy.simulate(
         model,
         context,
         (0.0, t1 * (1 + rtol)),
@@ -182,7 +181,7 @@ def test_diagram_simulate():
     t1 = np.sqrt(2 * y0 / g)
     x0 = np.array([y0, 0.0])
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ball = builder.add(BouncingBall(g=g, e=e))
     dummy_gain = builder.add(Gain(1.0, name="dummy_gain"))
     builder.connect(ball.output_ports[0], dummy_gain.input_ports[0])
@@ -197,8 +196,8 @@ def test_diagram_simulate():
     context = context.with_subcontext(ball.system_id, ball_context)
     context = context.with_time(0.0)
 
-    options = collimator.SimulatorOptions(rtol=1e-10, atol=1e-12)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=1e-10, atol=1e-12)
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 2 * t1),
@@ -217,7 +216,7 @@ def test_from_primitives():
 
     t1 = np.sqrt(2 * y0 / g)  # Contact time
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     # Dynamics blocks
     integrator = builder.add(
@@ -261,8 +260,8 @@ def test_from_primitives():
     int_context = context[integrator.system_id].with_continuous_state(x0)
     context = context.with_subcontext(integrator.system_id, int_context)
 
-    options = collimator.SimulatorOptions(rtol=1e-10, atol=1e-8)
-    results = collimator.simulate(
+    options = jaxonomy.SimulatorOptions(rtol=1e-10, atol=1e-8)
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4 * t1),

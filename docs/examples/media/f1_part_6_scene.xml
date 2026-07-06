@@ -1,0 +1,83 @@
+
+<mujoco model="f1_part6_hero">
+  <option gravity="0 0 -9.81" timestep="0.005"/>
+  <visual>
+    <headlight diffuse=".9 .9 .9" ambient=".30 .30 .30" specular="0.05 0.05 0.05"/>
+    <rgba haze="0.30 0.36 0.45 1"/>
+    <quality shadowsize="4096"/>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient"
+             rgb1="0.55 0.70 0.92" rgb2="0.15 0.20 0.35"
+             width="800" height="800"/>
+    <texture name="floor_tex" type="2d" builtin="checker"
+             rgb1="0.30 0.30 0.32" rgb2="0.18 0.18 0.20"
+             width="300" height="300"/>
+    <material name="floor" texture="floor_tex" texrepeat="40 40"
+              reflectance="0.10" specular="0.20" shininess="0.20"/>
+    <material name="chassis" rgba="0.80 0.10 0.10 1" specular="0.7" shininess="0.7"/>
+    <material name="halo"    rgba="0.05 0.05 0.05 1" specular="0.4" shininess="0.5"/>
+    <material name="tyre"    rgba="0.05 0.05 0.05 1" specular="0.2" shininess="0.2"/>
+    <material name="wing_dark"  rgba="0.10 0.10 0.12 1" specular="0.4" shininess="0.5"/>
+    <material name="endplate" rgba="0.18 0.18 0.20 1" specular="0.5" shininess="0.6"/>
+    <material name="gurney"   rgba="0.95 0.80 0.10 1" specular="0.7" shininess="0.8"/>
+  </asset>
+  <worldbody>
+    <light name="sun"  diffuse="1.0 0.95 0.85" pos="20 -20 25" dir="-0.6 0.6 -0.8"
+           castshadow="true"/>
+    <light name="fill" diffuse="0.35 0.40 0.55" pos="-15 15 18" dir="0.5 -0.5 -0.6"
+           castshadow="false"/>
+    <geom name="ground" type="plane" pos="0 0 0" size="30 30 1" material="floor"/>
+
+    <body name="car" pos="0 0 0.36000000000000004">
+      <joint name="free" type="free"/>
+      <inertial pos="0 0 0" mass="830" diaginertia="200 1350 1500"/>
+      <geom name="chassis" type="box"
+            size="2.750 0.900 0.300"
+            pos="0 0 0.35"
+            material="chassis"/>
+      <geom name="halo" type="capsule"
+            fromto="0 -0.8 0.7
+                    0 0.8 0.7"
+            size="0.05" material="halo"/>
+      <!-- Rear-wing segments coloured by synthetic Cp -->
+      <geom name="wing_seg_0" type="box" size="0.025 1.200 0.03" pos="-2.650 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.96 0.85 1"/>
+      <geom name="wing_seg_1" type="box" size="0.025 1.200 0.03" pos="-2.580 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.83 0.82 1"/>
+      <geom name="wing_seg_2" type="box" size="0.025 1.200 0.03" pos="-2.510 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.76 0.72 1"/>
+      <geom name="wing_seg_3" type="box" size="0.025 1.200 0.03" pos="-2.440 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.68 0.60 1"/>
+      <geom name="wing_seg_4" type="box" size="0.025 1.200 0.03" pos="-2.370 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.58 0.45 1"/>
+      <geom name="wing_seg_5" type="box" size="0.025 1.200 0.03" pos="-2.300 0 1.050" quat="0.9990 0 0.0436 0" rgba="0.95 0.62 0.52 1"/>
+      <!-- Wing endplates -->
+      <geom name="rear_wing_endL" type="box" size="0.18 0.04 0.30"
+            pos="-2.475 1.200 0.8"
+            material="endplate"/>
+      <geom name="rear_wing_endR" type="box" size="0.18 0.04 0.30"
+            pos="-2.475 -1.200 0.8"
+            material="endplate"/>
+      <!-- Gurney flap on the trailing edge (visible bright strip) -->
+      <geom name="gurney_strip" type="box"
+            size="0.012 1.180 0.0080"
+            pos="-2.650 0 1.0880"
+            material="gurney"/>
+      <!-- Front wing -->
+      <geom name="front_wing" type="box"
+            size="0.08 1.200 0.04"
+            pos="2.700 0 0.10"
+            material="wing_dark"/>
+      <!-- Four wheels -->
+      <geom name="wheel_FL" type="cylinder" size="0.340 0.180"
+            pos="1.625  0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_FR" type="cylinder" size="0.340 0.180"
+            pos="1.625 -0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_RL" type="cylinder" size="0.340 0.180"
+            pos="-1.625  0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+      <geom name="wheel_RR" type="cylinder" size="0.340 0.180"
+            pos="-1.625 -0.800 0.340"
+            quat="0.7071 0.7071 0 0" material="tyre"/>
+    </body>
+  </worldbody>
+</mujoco>

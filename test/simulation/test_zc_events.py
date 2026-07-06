@@ -1,13 +1,12 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
-import collimator
-from collimator.framework import LeafSystem, IntegerTime
-from collimator.backend import jit
-from collimator.library import (
+import jaxonomy
+from jaxonomy.framework import LeafSystem, IntegerTime
+from jaxonomy.backend import jit
+from jaxonomy.library import (
     Adder,
     Gain,
     Clock,
@@ -25,7 +24,7 @@ from collimator.library import (
     MinMax,
 )
 
-from collimator.simulation.simulator import (
+from jaxonomy.simulation.simulator import (
     ContinuousIntervalData,
     StepEndReason,
     _determine_step_end_reason,
@@ -42,8 +41,8 @@ def run_test(
     triggered_times, triggered_names = evt_data
     context = model.create_context()
 
-    options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-    sim = collimator.Simulator(model, options=options)
+    options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+    sim = jaxonomy.Simulator(model, options=options)
 
     # JIT-compile the advance function for speed (if using JAX backend)
     guarded_integrate = jit(sim._advance_continuous_time)
@@ -104,7 +103,7 @@ def test_events_abs():
     ]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_abs_up = builder.add(
         Ramp(name="ramp_abs_up", start_time=0.0, start_value=-0.45)
     )
@@ -141,7 +140,7 @@ def test_events_sat():
     ]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_up = builder.add(Ramp(name="ramp_up", start_time=0.0))
     ramp_down = builder.add(Ramp(name="ramp_down", start_time=0.0, slope=-1.0))
     sat_upr = builder.add(
@@ -180,7 +179,7 @@ def test_events_cmp():
     ]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     sinewave = builder.add(Sine(name="sinwave"))
     coswave = builder.add(Sine(name="coswave", phase=np.pi / 2.0))
     int0 = builder.add(Integrator(name="int0", initial_state=0.0))
@@ -231,7 +230,7 @@ def test_events_dz():
     ]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_dz_up = builder.add(Ramp(name="ramp_dz_up", start_time=0.0))
     ramp_dz_down = builder.add(Ramp(name="ramp_dz_down", start_time=0.0, slope=-1.0))
     dz_up = builder.add(DeadZone(name="dz_up", half_range=hr_up))
@@ -261,7 +260,7 @@ def test_events_IfThenElse():
     ]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_up = builder.add(Ramp(name="ramp_up", start_time=0.0))
     point3 = builder.add(Constant(name="point3", value=0.3))
     cmp_greq = builder.add(Comparator(name="cmp_greq", operator=">="))
@@ -291,7 +290,7 @@ def test_events_logicalOp():
     triggered_names = ["lo_or", "lo_and"]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_up = builder.add(Ramp(name="ramp_up", start_time=0.0))
     point3 = builder.add(Constant(name="point3", value=0.3))
     point5 = builder.add(Constant(name="point5", value=0.5))
@@ -336,7 +335,7 @@ def test_events_minmax():
     triggered_names = ["min", "max"]
     evt_data = (triggered_times, triggered_names)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     ramp_up = builder.add(Ramp(name="ramp_up", start_time=0.0))
     point3 = builder.add(Constant(name="point3", value=0.3))
     point5 = builder.add(Constant(name="point5", value=0.5))
@@ -388,7 +387,7 @@ class TestTerminalEvents:
         terminal_time = 1.5 * dt
         t_final = 2 * dt  # Expected actual end time
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         terminator = builder.add(Terminator(terminal_value=terminal_time))
         clock = builder.add(Clock())
         builder.connect(clock.output_ports[0], terminator.input_ports[0])
@@ -396,8 +395,8 @@ class TestTerminalEvents:
 
         context = system.create_context()
 
-        options = collimator.simulation.SimulatorOptions(max_major_step_length=dt)
-        results = collimator.simulate(system, context, (0.0, 5 * dt), options=options)
+        options = jaxonomy.simulation.SimulatorOptions(max_major_step_length=dt)
+        results = jaxonomy.simulate(system, context, (0.0, 5 * dt), options=options)
 
         assert np.allclose(results.context.time, t_final)
 
@@ -416,7 +415,7 @@ class TestTerminalEvents:
         dt = 0.1  # Effective discrete step length
         terminal_value = 0.15
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         terminator = builder.add(Terminator(terminal_value=terminal_value))
         clock = builder.add(DiscreteClock(dt))
         const = builder.add(Constant(1.0))
@@ -426,7 +425,7 @@ class TestTerminalEvents:
         system = builder.build()
 
         context = system.create_context()
-        results = collimator.simulate(system, context, (0.0, 5 * dt))
+        results = jaxonomy.simulate(system, context, (0.0, 5 * dt))
 
         # Expected results
         t_final = 0.2
@@ -447,7 +446,7 @@ class TestTerminalEvents:
         dt = 0.1  # Effective discrete step length
         terminal_value = 0.15
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         terminator = builder.add(Terminator(terminal_value=terminal_value))
         builder.add(DiscreteClock(dt))
         const = builder.add(Constant(1.0))
@@ -458,8 +457,8 @@ class TestTerminalEvents:
 
         context = system.create_context()
 
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(system, context, (0.0, 5 * dt), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(system, context, (0.0, 5 * dt), options=options)
 
         # Expected results
         t_final = 0.15
@@ -473,7 +472,7 @@ def test_result_event_detection(show_plot=False):
     # a bouncing ball model.
     # this test ensures that the comparator block output has some 'True' samples.
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     accel = builder.add(Constant(-9.81, name="accel"))
     floor = builder.add(Constant(0.0, name="floor"))
     vel = builder.add(
@@ -508,12 +507,12 @@ def test_result_event_detection(show_plot=False):
     diagram = builder.build()
     context = diagram.create_context()
 
-    options = collimator.SimulatorOptions(rtol=1e-10, atol=1e-8)
+    options = jaxonomy.SimulatorOptions(rtol=1e-10, atol=1e-8)
     recorded_signals = {
         "pos": pos.output_ports[0],
         "impact": impact.output_ports[0],
     }
-    r = collimator.simulate(
+    r = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 1.0),

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import sys
@@ -8,8 +7,8 @@ from time import sleep
 import numpy as np
 import control
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
 from controllers import *  # noqa: F403
 
@@ -28,7 +27,7 @@ def make_diagram(
 ):
     y_eq = np.array([0.0, np.pi])
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     swingup_controller = make_energy_shaping(dt, kE=kE)  # noqa: F405
     pid_controller = make_pid(dt, rotor_gains, pendulum_gains)  # noqa: F405
@@ -95,7 +94,7 @@ print("Sleeping for 1 second to allow the interface to start...")
 sleep(1)
 
 tf = 10.0
-results = collimator.simulate(
+results = jaxonomy.simulate(
     system,
     context,
     (0.0, tf),

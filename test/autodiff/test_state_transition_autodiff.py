@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -8,18 +7,18 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-import collimator
+import jaxonomy
 
-from collimator.library import Integrator
-from collimator.logging import logger
-from collimator import logging
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.library import Integrator
+from jaxonomy.logging import logger
+from jaxonomy import logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 pytestmark = pytest.mark.slow
 
 
-class ModeSwitchingIntegrator(collimator.LeafSystem):
+class ModeSwitchingIntegrator(jaxonomy.LeafSystem):
     # Simple piecewise constant dynamics with a reset map
     #
     #  xdot = -a,  mode 0
@@ -62,7 +61,7 @@ class ModeSwitchingIntegrator(collimator.LeafSystem):
 
 
 def test_mode_switching_forward():
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
 
     a = 1.0
     x0 = 1.0
@@ -76,12 +75,12 @@ def test_mode_switching_forward():
     # Have to speciy max_major_steps here because we're calling `advance_to`
     # directly rather than using the `simulate` interface, which would estimate
     # it automatically.
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         max_major_steps=100,
         atol=1e-8,
         rtol=1e-6,
     )
-    sim = collimator.Simulator(model, options=options)
+    sim = jaxonomy.Simulator(model, options=options)
 
     advance_to = jax.jit(sim.advance_to)
 
@@ -107,7 +106,7 @@ def test_mode_switching_adjoint():
     # dxf/dx0 = 1.0 if tf <= x0/a, else -1.0
     # dxf/dtf = -a if tf <= x0/a, else a
     # dxf/da = -tf if tf <= x0/a, else tf
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
 
     a = 1.0
     x0 = 1.0
@@ -118,13 +117,13 @@ def test_mode_switching_adjoint():
     # Have to speciy max_major_steps here because we're calling `advance_to`
     # directly rather than using the `simulate` interface, which would estimate
     # it automatically.
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         enable_autodiff=True,
         max_major_steps=100,
         atol=1e-8,
         rtol=1e-6,
     )
-    sim = collimator.Simulator(model, options=options)
+    sim = jaxonomy.Simulator(model, options=options)
 
     def forward(context, x0, tf, a):
         context = context.with_continuous_state(x0)
@@ -171,17 +170,17 @@ def test_mode_switching_adjoint():
 
 def test_diagram_adjoint():
     # Repeat the above test, but where the model is nested in a diagram
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
 
     a = 1.0
     x0 = 1.0
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     plant = builder.add(ModeSwitchingIntegrator(name="plant"))
     builder.export_output(plant.output_ports[0])
     submodel = builder.build(name="submodel")
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     submodel = builder.add(submodel)
     integrator = builder.add(Integrator(0.0, name="integrator"))
     builder.connect(submodel.output_ports[0], integrator.input_ports[0])
@@ -192,13 +191,13 @@ def test_diagram_adjoint():
     # Have to speciy max_major_steps here because we're calling `advance_to`
     # directly rather than using the `simulate` interface, which would estimate
     # it automatically.
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         enable_autodiff=True,
         max_major_steps=100,
         atol=1e-8,
         rtol=1e-6,
     )
-    sim = collimator.Simulator(diagram, options=options)
+    sim = jaxonomy.Simulator(diagram, options=options)
 
     def forward(context, x0, tf, a):
         plant_context = context[plant.system_id].with_continuous_state(x0)

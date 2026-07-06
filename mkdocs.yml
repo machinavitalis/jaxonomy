@@ -1,7 +1,9 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
-site_name: collimator
+site_name: jaxonomy
+site_description: >-
+  Jaxonomy — block-diagram simulation for hybrid dynamical systems (JAX, NumPy API,
+  tutorials, examples, and API reference).
 
 theme:
   name: material
@@ -14,14 +16,14 @@ theme:
 
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
-      scheme: collimator
+      scheme: jaxonomy
       toggle:
         icon: material/lightbulb
         name: Switch to dark mode
 
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: collimator-dark
+      scheme: jaxonomy-dark
       toggle:
         icon: material/lightbulb-outline
         name: Switch to light mode
@@ -87,7 +89,6 @@ nav:
       - library.md
       - simulation.md
       - optimization.md
-      - api.md
   - Tutorials:
       - tutorials/index.md
       - Getting started: tutorials/01-getting-started.ipynb
@@ -99,21 +100,55 @@ nav:
       - examples/index.md
       - Introductory:
           - Primitive blocks: examples/primitives.ipynb
+          - Block diagram visualization: examples/diagram_visualization.ipynb
           - Bouncing ball: examples/bouncing_ball.ipynb
           - LQR control: examples/lqr.ipynb
           - Energy shaping: examples/energy_shaping_and_lqr.ipynb
           - Linear MPC: examples/linear_mpc.ipynb
           - Multi-layer perceptron: examples/MLP_training.ipynb
-          - Using the API: examples/interacting_with_the_dashboard.ipynb
+          - Custom block authoring: examples/custom_block_authoring.ipynb
       - Advanced:
           - Trajectory optimization: examples/trajectory_optimization_and_stabilization.ipynb
           - Robotic Arm Control: examples/mujoco/pick_and_place.ipynb
-          - PID tuning: examples/pid_tuning.ipynb
+          - PID tuning (autodiff): examples/pid_tuning.ipynb
           - PID tuning with constraints: examples/pid_autotuning_interactive.ipynb
+          - PID 2-DOF + classical tuners: examples/pid_2dof_classical_tuning.ipynb
           - Limit cycles: examples/limit_cycles.ipynb
           - Kalman Filters: examples/state_estimation_with_Kalman_filters.ipynb
           - UDEs and SR: examples/ude_and_sr_lotka_volterra.ipynb
-          - Submodels: examples/dashboard_submodel.ipynb
+          - Differentiable predictive control (two-tank): examples/dpc_two_tank_reference_tracking.ipynb
+          - Vehicle handling (autodiff): examples/vehicle_handling_autodiff.ipynb
+          - HL-20 glide autopilot: examples/hl20_glide_autopilot.ipynb
+          - Differentiable audio DSP: examples/differentiable_audio_dsp.ipynb
+          - RL environment from a diagram: examples/rl_environment_from_diagram.ipynb
+          - Artificial pancreas (MPC): examples/artificial_pancreas_mpc.ipynb
+          - Satellite ADCS + EKF: examples/aerospace_adcs_ekf_wheels.ipynb
+          - Grid-forming microgrid: examples/grid_forming_microgrid.ipynb
+          - Wind turbine control (DFIG): examples/dfig_wind_turbine.ipynb
+      - Solvers and DAEs:
+          - Stiff chemistry (Robertson, BDF): examples/stiff_robertson_bdf.ipynb
+          - DAE constraint projection: examples/dae_projection_pendulum.ipynb
+          - Differentiable acausal DAEs: examples/neural_dae_pendulum_drag.ipynb
+          - Conservation laws as CI: examples/conservation_laws_as_ci.ipynb
+      - Workflows (T-1XX shipped):
+          - Unit-safe wiring: examples/unit_safe_wiring.ipynb
+          - Linearization workflow: examples/linearization_workflow.ipynb
+          - Engine map fitting → MPC: examples/engine_map_fitting_to_mpc.ipynb
+          - Actuator delay identification: examples/actuator_delay_identification.ipynb
+          - Multirate controller (1k/100/10 Hz): examples/multirate_controller.ipynb
+          - Real-time fixed-step controller: examples/realtime_fixed_step_controller.ipynb
+          - Container blocks tour: examples/container_blocks_tour.ipynb
+          - Truth tables + state machines: examples/truth_table_gear_logic.ipynb
+          - Product-family variants: examples/product_family_variants.ipynb
+          - Fast restart and batched sweeps: examples/fast_restart_and_batched_sweeps.ipynb
+          - Aleatoric vs epistemic UQ (Sobol): examples/aleatoric_vs_epistemic_uq.ipynb
+          - Reproducibility manifest: examples/reproducibility_manifest.ipynb
+          - Hybrid trajopt through events: examples/hybrid_trajopt_through_events.ipynb
+          - Multi-domain HVAC: examples/multi_domain_hvac.ipynb
+      - Interoperability (FMI / co-simulation):
+          - FMI export round-trip: examples/fmi_export_roundtrip.ipynb
+          - Modelica plant FMU co-sim: examples/openmodelica_plant_fmu_cosim.ipynb
+          - Hybrid ML + physics predictor: examples/hybrid_ml_physics_predictor.ipynb
       - Battery series:
           - 01 - Battery ECM: examples/part_1_battery_ecm_model.ipynb
           - 02 - Using synthetic data: examples/part_2_parameter_estimation_synthetic_data.ipynb
@@ -122,16 +157,45 @@ nav:
           - 05 - Extended DMD: examples/part_5_data_driven_battery_models_eDMDc.ipynb
           - 06 - SINDy with control: examples/part_6_data_driven_battery_models_SINDyc.ipynb
           - 07 - Neural networks: examples/part_7_data_driven_battery_models_Neural_Networks.ipynb
+          - 08 - Pack-level thermal: examples/battery_pack_thermal.ipynb
+          - 09 - Scaling to 100k cells: examples/battery_pack_10k_scaling.ipynb
+      - Electric drives series:
+          - 01 - PMSM modeling: examples/motor_part_1_pmsm_modeling.ipynb
+          - 02 - Field-oriented control: examples/motor_part_2_field_oriented_control.ipynb
+          - 03 - Thermal and derating: examples/motor_part_3_thermal_and_derating.ipynb
+          - 04 - System identification: examples/motor_part_4_system_identification.ipynb
+          - 05 - Design margins: examples/motor_part_5_design_margins.ipynb
+          - 06 - Embedded deployment: examples/motor_part_6_embedded_deployment.ipynb
       - Quadcopter series:
           - 01 - Quadcopter model: examples/01_quadcopter_modelling.ipynb
           - 02 - Trajectory generation: examples/02_quadcopter_trajectory_generation.ipynb
           - 03 - Nonlinear MPC: examples/03_quadcopter_nonlinear_mpc.ipynb
+          - 04 - Flip trajectory optimization: examples/04_flip_trajectory_optimization.ipynb
       - Quanser Qube Servo hardware control:
           - 01 - Qube Servo modeling: examples/quanser/01-plant-model.ipynb
           - 02 - Linear control: examples/quanser/02-lqg.ipynb
           - 03 - Nonlinear swing-up control: examples/quanser/03-energy-shaping.ipynb
           - 04 - Trajectory optimization: examples/quanser/04-trajopt.ipynb
           - 05 - Neural network control: examples/quanser/05-nn-control.ipynb
+      - Returning booster (Falcon-9 class):
+          - 01 - 6-DOF modelling + trajopt: examples/part_1_returning_booster_modeling.ipynb
+          - 02 - Closed-loop MPC + MuJoCo render: examples/part_2_returning_booster_mpc_and_render.ipynb
+          - 03 - Atmosphere + multi-phase guidance: examples/part_3_returning_booster_atmosphere_and_phases.ipynb
+          - 04 - High-fidelity propulsion: examples/part_4_returning_booster_high_fidelity_propulsion.ipynb
+          - 05 - Sensing and EKF: examples/part_5_returning_booster_sensing_and_estimation.ipynb
+          - 06 - GNC validation + autodiff advantage: examples/part_6_returning_booster_gnc_validation_and_analysis.ipynb
+      - F1 race car:
+          - 01 - Lap-time simulator: examples/f1_part_1_lap_time_simulator.ipynb
+          - 02 - Setup optimisation via jax.grad: examples/f1_part_2_setup_optimization.ipynb
+          - 03 - Aero map fitting from sparse CFD: examples/f1_part_3_aero_map_fitting.ipynb
+          - 04 - Sobol-driven CFD budget: examples/f1_part_4_sobol_cfd_budget.ipynb
+          - 05 - NACA airfoil SU2 co-sim: examples/f1_part_5_naca_su2_cosim.ipynb
+          - 06 - DrivAerML hero shape optimisation: examples/f1_part_6_drivaerml_hero.ipynb
+  - Performance and operations:
+      - Persistent JIT cache: jit_cache.md
+      - Memory footprint: memory.md
+      - Distributed ensemble: distributed.md
+      - Public benchmarks: benchmarks.md
   - about.md
 
 extra:

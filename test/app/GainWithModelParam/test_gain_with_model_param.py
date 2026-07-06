@@ -1,8 +1,7 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
+import jaxonomy.testing as test
 
 pytestmark = pytest.mark.app
 

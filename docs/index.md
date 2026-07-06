@@ -1,45 +1,57 @@
-# Home
+# Jaxonomy documentation
 
-`collimator` is the Python package for [Collimator](https://www.collimator.ai)'s
-Python- and cloud-native simulation platform. It contains both a local
-high-performance simulation engine and a client API to run simulations in the
-cloud.
+**Jaxonomy** is a Python package for simulating **hybrid dynamical systems** described as **block diagrams**: wired blocks (integrators, gains, custom subsystems, acausal networks, and more), continuous and discrete states, and event/zero-crossing logic. The runtime is built around **JAX**, so you get JIT-friendly execution and **automatic differentiation** where the model allows it, while keeping a NumPy-style API for numerics.
 
-## Installation
+The library runs **entirely locally** and emits the Collimator-format JSON for serialised models. There is no hosted cloud service — see the [About](about.md) page for the project's scope.
 
-Install `collimator` in your Python environment with: `pip install pycollimator`.
+---
 
-More details in the [installation guide](./installation.md).
+## Install
 
-## Tutorials
+```bash
+pip install jaxonomy
+```
 
-Not sure what to do first? Check out [our tutorials](tutorials/index.md)
-beginning with [Getting started](tutorials/01-getting-started.ipynb).
+Use a virtual environment when possible. Platform notes, optional extras (`[safe]`, `[nmpc]`, `[all]`), and **development installs from a git clone** are covered in the **[installation guide](installation.md)**.
 
-### Examples
+---
 
-More advanced examples can be found in [examples](examples/index.md).
+## Where to go next
 
-## API Reference
+| Goal | Link |
+|------|------|
+| First simulation walkthrough | [Tutorials → Getting started](tutorials/01-getting-started.ipynb) |
+| Shorter topical guides | [Tutorials index](tutorials/index.md) |
+| Applied notebooks (control, MPC, ML, …) | [Examples](examples/index.md) |
+| `DiagramBuilder`, `LeafSystem`, ports | [Framework](framework.md) |
+| Built-in blocks | [Block library](library.md) |
+| `simulate`, solvers, options | [Simulation](simulation.md) |
+| Training / optimization helpers | [Optimization](optimization.md) |
 
-The core documentation, grouped as follows:
+---
 
-### [Framework](./framework.md)
+## Minimal pattern
 
-Base classes and functions for building models
+1. Add blocks with `DiagramBuilder`, `connect` outputs to inputs, then `build()`.
+2. Call `jaxonomy.simulate(diagram, start_time, end_time, ...)` (see [Simulation](simulation.md) for `SimulatorOptions` and results handling).
 
-### [Block library](./library.md)
+The [Getting started](tutorials/01-getting-started.ipynb) tutorial builds a simple mass–spring–damper-style diagram step by step.
 
-Core blocks that you can use to build larger models
+---
 
-### [Simulation](./simulation.md)
+## Build this site locally
 
-Classes and functions for running simulations
+```bash
+pip install -r requirements.docs.txt
+mkdocs serve
+```
 
-### [Optimization](./optimization.md)
+Source for this page: `docs/index.md` (repository root).
 
-The `Trainer` class and associated functions for optimizing your models
+---
 
-### [API](./api.md)
+## License and attribution
 
-Functions for interacting with Collimator cloud application.
+This project is released under the [MIT License](https://mit-license.org/). See the `LICENSE.md` file in the repository for the full text.
+
+**Provenance:** This library is derived from the MIT-licensed open-source Python package **pycollimator**, developed by **Collimator, Inc.**

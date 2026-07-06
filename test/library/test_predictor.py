@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -9,13 +8,23 @@ Contains tests for:
 - TensorFlow
 """
 
+import importlib.util
 import os
 import sys
 
 import jax.numpy as jnp
 import pytest
 
-from collimator.library import PyTorch, TensorFlow
+from jaxonomy.library import PyTorch, TensorFlow
+
+# These suites exercise real Torch / TensorFlow interop; skip cleanly when the
+# optional dependency isn't installed rather than failing on ImportError.
+_requires_torch = pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="PyTorch not installed"
+)
+_requires_tensorflow = pytest.mark.skipif(
+    importlib.util.find_spec("tensorflow") is None, reason="TensorFlow not installed"
+)
 
 # Prevent tests from running indefinitely. It should not happen.
 pytestmark = pytest.mark.timeout(20)
@@ -43,6 +52,7 @@ def manage_models():
 
 
 @pytest.mark.usefixtures("manage_models")
+@_requires_torch
 class TestPyTorch:
     @pytest.mark.parametrize(
         "x, y, dtype, expected_result",
@@ -113,7 +123,7 @@ class TestPyTorch:
         ],
     )
     def test_torch_model_1_no_cast(self, manage_models, x, y, expected_result):
-        # FIXME: not sure what would be the right behavior here, even?
+        # NOTE: not sure what would be the right behavior here, even?
         if sys.platform == "win32":
             pytest.xfail(reason="On windows, pytorch defaults to int32")
 
@@ -208,7 +218,7 @@ class TestPyTorch:
         ],
     )
     def test_torch_model_2_no_cast(self, manage_models, x, y, expected_result):
-        # FIXME: not sure what would be the right behavior here, even?
+        # NOTE: not sure what would be the right behavior here, even?
         if sys.platform == "win32":
             pytest.xfail(reason="On windows, pytorch defaults to int32")
 
@@ -235,6 +245,7 @@ class TestPyTorch:
         assert result_1.dtype == expected_result.dtype
 
 
+@_requires_tensorflow
 class TestTensorFlow:
     @pytest.mark.parametrize(
         "x, y, dtype, expected_result",

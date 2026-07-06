@@ -1,0 +1,104 @@
+{
+  "hardware": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.11.9",
+    "jax_version": "0.9.1",
+    "jaxonomy_version": "2.2.0",
+    "jax_default_backend": "cpu"
+  },
+  "regression_threshold": 1.5,
+  "cases": {
+    "scalar_exponential_decay": {
+      "compile_time_median_s": 0.03335187496850267,
+      "sim_time_median_s": 1.0041985660791397e-05,
+      "compile_times_s": [
+        0.03335187496850267,
+        0.031927915988489985,
+        0.045684998971410096
+      ],
+      "n_repeat": 3
+    },
+    "harmonic_oscillator": {
+      "compile_time_median_s": 0.03209629200864583,
+      "sim_time_median_s": 8.70897201821208e-06,
+      "compile_times_s": [
+        0.03209629200864583,
+        0.033426125010009855,
+        0.03164537495467812
+      ],
+      "n_repeat": 3
+    },
+    "pid_first_order_plant": {
+      "compile_time_median_s": 0.05039241595659405,
+      "sim_time_median_s": 9.583018254488707e-06,
+      "compile_times_s": [
+        0.05146200000308454,
+        0.05009233299642801,
+        0.05039241595659405
+      ],
+      "n_repeat": 3
+    },
+    "rc_acausal_dae": {
+      "compile_time_median_s": 0.07739470701199025,
+      "sim_time_median_s": 1.029198756441474e-05,
+      "compile_times_s": [
+        0.07739470701199025,
+        0.09488762501860037,
+        0.07504437502939254
+      ],
+      "n_repeat": 3
+    },
+    "bouncing_ball_zc": {
+      "compile_time_median_s": 0.049364208010956645,
+      "sim_time_median_s": 1.1458992958068848e-05,
+      "compile_times_s": [
+        0.047930290980730206,
+        0.05438695795601234,
+        0.049364208010956645
+      ],
+      "n_repeat": 3
+    },
+    "state_machine_three_state": {
+      "compile_time_median_s": 0.022102416958659887,
+      "sim_time_median_s": 9.750016033649445e-06,
+      "compile_times_s": [
+        0.024692167004104704,
+        0.022102416958659887,
+        0.021858249965589494
+      ],
+      "n_repeat": 3
+    },
+    "simulate_batch_decay_n10": {
+      "compile_time_median_s": 0.0587973750079982,
+      "sim_time_median_s": 0.17045974999200553,
+      "compile_times_s": [
+        0.008347333990968764,
+        0.06372820801334456,
+        0.0587973750079982
+      ],
+      "n_repeat": 3
+    },
+    "simulate_batch_decay_n100": {
+      "compile_time_median_s": 0.06835829099873081,
+      "sim_time_median_s": 0.1824319579754956,
+      "compile_times_s": [
+        0.06835829099873081,
+        0.05966479203198105,
+        0.1197423740522936
+      ],
+      "n_repeat": 3
+    },
+    "simulate_batch_decay_n1000": {
+      "compile_time_median_s": 0.09670904203085229,
+      "sim_time_median_s": 0.33642783301183954,
+      "compile_times_s": [
+        0.09670904203085229,
+        0.0547945000580512,
+        0.22343241702765226
+      ],
+      "n_repeat": 3
+    }
+  }
+}

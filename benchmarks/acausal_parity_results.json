@@ -1,0 +1,63 @@
+{
+  "rc_ladder": {
+    "r1": 1.0,
+    "c1": 0.5,
+    "r2": 2.0,
+    "c2": 1.5,
+    "v_in": 5.0,
+    "max_abs_err_node1": 1.2177148178693642e-09,
+    "max_abs_err_node2": 1.4562295813647097e-10
+  },
+  "dc_motor": {
+    "v_in": 24.0,
+    "r": 2.0,
+    "kt": 0.5,
+    "ke": 0.5,
+    "j": 0.1,
+    "b": 0.01,
+    "max_abs_err_speed": 1.4445866725054657e-08,
+    "max_abs_err_angle": 1.0700638597427314e-08,
+    "max_abs_err_current": 3.6114666812636642e-09
+  },
+  "battery_cell": {
+    "r0": 0.02,
+    "r1": 0.01,
+    "c1": 1000.0,
+    "capacity_Ah": 2.0,
+    "i_discharge": 10.0,
+    "casing_c": 80.0,
+    "insulator_r": 2.0,
+    "max_abs_err_soc": 9.992007221626409e-16,
+    "max_abs_err_v_rc": 1.4029469252996307e-10,
+    "max_abs_err_temp": 2.7284841053187847e-12
+  },
+  "differentiability": {
+    "motor_grad_jax": [
+      -1.5012625628163838,
+      -75.33013284979205,
+      -325.3407324042304
+    ],
+    "motor_grad_fd": [
+      -1.5012625581789505,
+      -75.33013296345814,
+      -325.3407337499681
+    ],
+    "motor_max_grad_diff": 1.3457377008307958e-06,
+    "battery_grad_jax": [
+      12.117387437363075,
+      -0.004403498731939133,
+      0.0056208622828807795
+    ],
+    "battery_grad_fd": [
+      12.117387228443022,
+      -0.004403509024086816,
+      0.00562085972433124
+    ],
+    "battery_max_grad_diff": 2.089200528132551e-07
+  },
+  "modelica": {
+    "rc_ladder": "\nmodel RCLadder\n  Modelica.Electrical.Analog.Basic.Ground ground;\n  Modelica.Electrical.Analog.Sources.ConstantVoltage voltageSource(V=5.0);\n  Modelica.Electrical.Analog.Basic.Resistor resistor1(R=1.0);\n  Modelica.Electrical.Analog.Basic.Capacitor capacitor1(C=0.5, v(start=0.0, fixed=true));\n  Modelica.Electrical.Analog.Basic.Resistor resistor2(R=2.0);\n  Modelica.Electrical.Analog.Basic.Capacitor capacitor2(C=1.5, v(start=0.0, fixed=true));\nequation\n  connect(voltageSource.p, resistor1.p);\n  connect(resistor1.n, capacitor1.p);\n  connect(capacitor1.p, resistor2.p);\n  connect(resistor2.n, capacitor2.p);\n  connect(voltageSource.n, ground.p);\n  connect(capacitor1.n, ground.p);\n  connect(capacitor2.n, ground.p);\nend RCLadder;\n",
+    "dc_motor": "\nmodel DCMotorLoad\n  Modelica.Electrical.Analog.Sources.ConstantVoltage voltageSource(V=24.0);\n  Modelica.Electrical.Analog.Basic.Ground electricalGround;\n  Modelica.Electrical.Analog.Basic.Resistor resistor(R=2.0);\n  Modelica.Electrical.Analog.Basic.Inductor inductor(L=1e-6); // Small parasitic L to match DCMotorSimple\n  Modelica.Electrical.Analog.Basic.RotationalEMF motor(k=0.5);\n  Modelica.Mechanics.Rotational.Components.Inertia inertia(J=0.1, phi(start=0.0, fixed=true), w(start=0.0, fixed=true));\n  Modelica.Mechanics.Rotational.Components.Damper damper(d=0.01);\n  Modelica.Mechanics.Rotational.Components.Fixed fixedAngle;\nequation\n  connect(voltageSource.p, resistor.p);\n  connect(resistor.n, inductor.p);\n  connect(inductor.n, motor.p);\n  connect(voltageSource.n, motor.n);\n  connect(voltageSource.n, electricalGround.p);\n  connect(motor.flange, inertia.flange_a);\n  connect(inertia.flange_b, damper.flange_a);\n  connect(damper.flange_b, fixedAngle.flange);\nend DCMotorLoad;\n",
+    "battery_cell": "\nmodel ElectroThermalBattery\n  Modelica.Electrical.Analog.Basic.Ground ground;\n  Modelica.Electrical.Analog.Sources.ConstantCurrent currentSource(I=10.0);\n  Jaxonomy.Acausal.Battery.BatteryCellECM batteryCell(\n    R0=0.02, R1=0.01, C1=1000.0, capacity_Ah=2.0,\n    enable_heat_port=true, initial_soc=1.0, fixed_soc=true\n  );\n  Modelica.Thermal.HeatTransfer.Components.HeatCapacitor casing(C=80.0, T(start=298.15, fixed=true));\n  Modelica.Thermal.HeatTransfer.Components.ThermalConductor insulator(G=0.5); // G = 1/R = 0.5 W/K\n  Modelica.Thermal.HeatTransfer.Sources.FixedTemperature ambient(T=298.15);\nequation\n  connect(currentSource.p, batteryCell.p);\n  connect(currentSource.n, batteryCell.n);\n  connect(batteryCell.n, ground.p);\n  connect(batteryCell.heat, casing.port);\n  connect(casing.port, insulator.port_a);\n  connect(insulator.port_b, ambient.port);\nend ElectroThermalBattery;\n"
+  }
+}

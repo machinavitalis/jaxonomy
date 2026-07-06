@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -9,16 +8,16 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator.library import Integrator, Demultiplexer
-from collimator.framework.event import IntegerTime
-from collimator.simulation.types import ContinuousIntervalData
+import jaxonomy
+from jaxonomy.library import Integrator, Demultiplexer
+from jaxonomy.framework.event import IntegerTime
+from jaxonomy.simulation.types import ContinuousIntervalData
 
-from collimator.logging import logger
-from collimator import logging
-from collimator.testing import fd_grad
-from collimator.models import BouncingBall as BouncingBall1d
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.logging import logger
+from jaxonomy import logging
+from jaxonomy.testing import fd_grad
+from jaxonomy.models import BouncingBall as BouncingBall1d
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 logging.set_file_handler("test.log")
@@ -26,7 +25,7 @@ logging.set_file_handler("test.log")
 pytestmark = pytest.mark.slow
 
 
-class ConstantIntegrator(collimator.LeafSystem):
+class ConstantIntegrator(jaxonomy.LeafSystem):
     def __init__(
         self,
         a=1.0,
@@ -69,7 +68,7 @@ class ConstantIntegrator(collimator.LeafSystem):
         return state.with_continuous_state(0.0)
 
 
-class ScalarLinear(collimator.LeafSystem):
+class ScalarLinear(jaxonomy.LeafSystem):
     def __init__(self, *args, a=1.0, xr=1.0, xt=1.5, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -96,7 +95,7 @@ class ScalarLinear(collimator.LeafSystem):
         return state.with_continuous_state(xr)
 
 
-class BouncingBall2d(collimator.LeafSystem):
+class BouncingBall2d(jaxonomy.LeafSystem):
     def __init__(self, *args, g=9.81, e=1.0, **kwargs):
         super().__init__(*args, name="ball", **kwargs)
 
@@ -154,15 +153,15 @@ class TestGuardLocalization:
         # calls to sim.solve no longer exist inside that function.
         # calls to sim.solve have been moved to guarded_integrate, so the
         # previous way of testing would no longer work.
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         model = ConstantIntegrator()
         context = model.create_context()
 
         trigger_time = context.parameters["trigger_time"]
 
-        simulator_options = collimator.SimulatorOptions(rtol=1e-3)
-        sim = collimator.Simulator(model, options=simulator_options)
+        simulator_options = jaxonomy.SimulatorOptions(rtol=1e-3)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
         solver_state = sim.ode_solver.initialize(context)
 
         guarded_integrate = sim._advance_continuous_time
@@ -194,7 +193,7 @@ class TestGuardLocalization:
         assert triggered, "Should have triggered a guard"
 
     def test_constant_dynamics_adjoint(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
         # Integrate to the final time and compare the autodiff results to
         # the analytic solution.  For trigger time tt, if tf > tt, then the
         # final state will be:
@@ -214,12 +213,12 @@ class TestGuardLocalization:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             rtol=rtol,
             enable_autodiff=True,
             max_major_steps=100,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         x0 = context.continuous_state
 
@@ -258,15 +257,15 @@ class TestGuardLocalization:
         assert jnp.allclose(da, tf - tt, rtol=rtol)
 
     def test_constant_dynamics_terminal(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
         model = ConstantIntegrator(time_is_terminal=True)
         context = model.create_context()
 
         trigger_time = context.parameters["trigger_time"]
 
         rtol = 1e-3
-        options = collimator.SimulatorOptions(rtol=rtol, max_major_steps=100)
-        sim = collimator.Simulator(model, options=options)
+        options = jaxonomy.SimulatorOptions(rtol=rtol, max_major_steps=100)
+        sim = jaxonomy.Simulator(model, options=options)
         advance_to = jax.jit(sim.advance_to)
 
         # Check that the simulation stops short at the triggered time
@@ -275,7 +274,7 @@ class TestGuardLocalization:
         assert jnp.allclose(results.context.time, trigger_time, rtol=rtol)
 
     def test_constant_dynamics_terminal_adjoint(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         # This tests parametric dependency in the guard function for a
         # terminal event.
@@ -297,13 +296,13 @@ class TestGuardLocalization:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             math_backend="jax",
             max_major_steps=100,
             rtol=rtol,
         )
-        sim = collimator.Simulator(model, options=options)
+        sim = jaxonomy.Simulator(model, options=options)
 
         def forward(context, x0, tf, tt, a):
             context = context.with_continuous_state(x0)
@@ -349,7 +348,7 @@ class TestGuardLocalization:
         assert jnp.allclose(da, tt, rtol=rtol)
 
     def test_linear_dynamics(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         # this test no longer tests _localize_zero_crossings() directly because
         # calls to sim.solve no longer exist inside that function.
@@ -363,11 +362,11 @@ class TestGuardLocalization:
         context = model.create_context()
         context = context.with_continuous_state(x0)
 
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             rtol=1e-6,
             max_major_steps=100,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         advance_to = sim.advance_to
         if sim.enable_tracing:
@@ -390,7 +389,7 @@ class TestGuardLocalization:
 
     # @pytest.mark.xfail(reason="cant get the vjp_fun to work")
     def test_linear_dynamics_adjoint(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         # At first the solution will be:
         #   xf = x0 * exp(a * tf)
@@ -417,13 +416,13 @@ class TestGuardLocalization:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             rtol=rtol,
             atol=atol,
             enable_autodiff=True,
             max_major_steps=100,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         x0 = context.continuous_state
 
@@ -487,7 +486,7 @@ class TestGuardLocalization:
 
 class TestResetAdjointLeafSystem:
     def test_linear_single_reset(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         g0 = 10.0
         model = BouncingBall1d(g=g0)
@@ -498,13 +497,13 @@ class TestResetAdjointLeafSystem:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=100,
             atol=1e-10,
             rtol=1e-8,
         )
-        sim = collimator.Simulator(model, options=options)
+        sim = jaxonomy.Simulator(model, options=options)
 
         def forward(context, y0, e, h, tf):
             context = context.with_continuous_state(jnp.array([y0, 0.0]))
@@ -567,7 +566,7 @@ class TestResetAdjointLeafSystem:
         assert jnp.allclose(dtf, dtf_exact)
 
     def test_linear_multiple_reset(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         model = BouncingBall1d()
         context = model.create_context()
@@ -577,14 +576,14 @@ class TestResetAdjointLeafSystem:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=100,
             atol=1e-12,
             rtol=1e-10,
             max_major_step_length=0.1,  # required to localize events with sufficient precision
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         def forward(context, y0, g, e, tf):
             context = context.with_continuous_state(jnp.array([y0, 0.0]))
@@ -627,7 +626,7 @@ class TestResetAdjointLeafSystem:
         assert jnp.allclose(de, de_fd, atol=test_atol)
 
     def test_nonlinear_multiple_reset(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         model = BouncingBall1d()
         context = model.create_context()
@@ -637,13 +636,13 @@ class TestResetAdjointLeafSystem:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=100,
             atol=1e-12,
             rtol=1e-10,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         def forward(context, y0, g, b, e, tf):
             context = context.with_continuous_state(jnp.array([y0, 0.0]))
@@ -688,7 +687,7 @@ class TestResetAdjointLeafSystem:
         assert jnp.allclose(de, de_fd, atol=test_atol)
 
     def test_multiple_guards_multiple_resets(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         model = BouncingBall2d()
         context = model.create_context()
@@ -698,14 +697,14 @@ class TestResetAdjointLeafSystem:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=400,
             atol=1e-12,
             rtol=1e-10,
             max_major_step_length=0.1,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         def forward(context, x0, g, e, tf, out_index=0):
             context = context.with_continuous_state(x0)
@@ -747,7 +746,7 @@ class TestResetAdjointLeafSystem:
             assert jnp.allclose(de, de_fd, atol=test_atol)
 
     def test_time_varying_guard_reset(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
         model = BouncingBall1d()
         context = model.create_context()
@@ -757,13 +756,13 @@ class TestResetAdjointLeafSystem:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=100,
             atol=1e-12,
             rtol=1e-10,
         )
-        sim = collimator.Simulator(model, options=simulator_options)
+        sim = jaxonomy.Simulator(model, options=simulator_options)
 
         def forward(context, x0, g, hdot, e, tf, out_index=0):
             context = context.with_continuous_state(x0)
@@ -814,9 +813,9 @@ class TestResetAdjointLeafSystem:
 
 class TestResetAdjointDiagram:
     def test_nonlinear_multiple_reset(self):
-        collimator.set_backend("jax")
+        jaxonomy.set_backend("jax")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         ball = builder.add(BouncingBall1d(name="ball"))
         demux = builder.add(Demultiplexer(2, name="demux"))
@@ -832,13 +831,13 @@ class TestResetAdjointDiagram:
         # it automatically. Also we're differentiating with respect to the end
         # time, so the automatic estimation of max_major_steps won't work because
         # the final time is a JAX tracer and not a concrete float value.
-        simulator_options = collimator.SimulatorOptions(
+        simulator_options = jaxonomy.SimulatorOptions(
             enable_autodiff=True,
             max_major_steps=100,
             atol=1e-12,
             rtol=1e-10,
         )
-        sim = collimator.Simulator(system, options=simulator_options)
+        sim = jaxonomy.Simulator(system, options=simulator_options)
 
         def forward(context, x0, g, b, e, tf):
             # Update the leaf contexts

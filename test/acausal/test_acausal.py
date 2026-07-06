@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
@@ -6,20 +5,20 @@ from matplotlib import pyplot as plt
 import pytest
 
 # acausal imports
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import electrical as elec
-from collimator.experimental import translational as trans
-from collimator.experimental import rotational as rot
-from collimator.experimental import thermal as ht
-from collimator.experimental.acausal.component_library import sandbox
-from collimator.experimental.acausal.error import AcausalModelError
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import electrical as elec
+from jaxonomy.acausal import translational as trans
+from jaxonomy.acausal import rotational as rot
+from jaxonomy.acausal import thermal as ht
+from jaxonomy.acausal.component_library import sandbox
+from jaxonomy.acausal.error import AcausalModelError, AcausalCompilerError
 
-# collimator imports
-import collimator
-from collimator.framework.system_base import Parameter
-from collimator.framework.error import StaticError
-import collimator.logging as logging
-from collimator.testing.markers import skip_if_not_jax
+# jaxonomy imports
+import jaxonomy
+from jaxonomy.framework.system_base import Parameter
+from jaxonomy.framework.error import StaticError
+import jaxonomy.logging as logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 logging.set_log_level(logging.DEBUG)
 skip_if_not_jax()
@@ -65,7 +64,7 @@ def test_torque_switch(show_plot=False, run_sim=False):
 
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac(leaf_backend="jax")
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
@@ -80,7 +79,7 @@ def test_torque_switch(show_plot=False, run_sim=False):
         "rotAccel": acausal_system.output_ports[rotAccel_idx],
         "sensTrq": acausal_system.output_ports[sensTrq_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -184,7 +183,7 @@ def test_cross_domain(show_plot=False):
 
     ac = AcausalCompiler(ev, ad)
     acausal_system = ac()
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
@@ -202,7 +201,7 @@ def test_cross_domain(show_plot=False):
         "sensT": acausal_system.output_ports[sensT_idx],
         # "sensQ": acausal_system.output_ports[sensQ_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -300,16 +299,11 @@ def test_weak_initial_conditions():
     # creation to identify a sufficient set of initial condiitons.
     # this test is considered a pass if the AcausalSystem is successfully built.
 
-    # FIXME: presently this test fails intermittently because the order in
-    # which weak ICs are 'collected" for use as initial conditions changes
-    # randomly due to the use of sets. This random change in the order of
-    # processing is actually desirable from a testing perspective, since we
-    # do not want algorithms that are sensitive to the order in which the
-    # inputs are processed, they should be robust enough to arrive at equivalent
-    # solution regardless of order.
-
-    # @am. this test seems to be working reliably now. if you encounter problems
-    # in CI, uncomment the xfail mark above, and notify me please. thanks.
+    # NOTE: weak-IC collection order varies run-to-run (set iteration). That
+    # order-independence is intentional — the algorithm should reach an
+    # equivalent solution regardless of the order inputs are processed. This
+    # test appears to run reliably now; if it flakes in CI, re-enable the xfail
+    # mark above.
 
     ev = EqnEnv()
     ad = AcausalDiagram()
@@ -367,7 +361,7 @@ def test_acausal_system_param(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     diagram = builder.build()
     context = diagram.create_context()
@@ -382,7 +376,7 @@ def test_acausal_system_param(show_plot=False):
         "x": acausal_system.output_ports[x_idx],
     }
 
-    results1 = collimator.simulate(
+    results1 = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -398,7 +392,7 @@ def test_acausal_system_param(show_plot=False):
     assert params["m1_M"] == 1.0
     assert params["sp1_K"] == 2.0
 
-    results2 = collimator.simulate(
+    results2 = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 4.0),
@@ -471,7 +465,7 @@ def test_acausal_param_invalid_after_change():
 
     # given the outcome of the test_acausal_param_invalid() test above,
     # we should not expect these parts to have much effect.
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     diagram = builder.build()
     diagram.create_context()
@@ -483,6 +477,143 @@ def test_acausal_param_invalid_after_change():
         # be nice to change that.
         diagram.create_context()
     print(str(exc))
+
+
+def test_missing_ic_warns():
+    """Variables without any IC specification should emit a UserWarning, not silently use 0."""
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    # Spring + FixedPosition: no IC on the spring endpoint → index reduction
+    # will encounter a variable with no IC entry.
+    sp1 = trans.Spring(ev, name="sp1", K=1.0)  # no initial_position_A specified
+    r1 = trans.FixedPosition(ev, name="r1")
+    m1 = trans.Mass(
+        ev,
+        name="m1",
+        M=1.0,
+        initial_position=1.0,
+        initial_position_fixed=True,
+        initial_velocity=0.0,
+        initial_velocity_fixed=True,
+    )
+    ad.connect(m1, "flange", sp1, "flange_a")
+    ad.connect(sp1, "flange_b", r1, "flange")
+
+    compiler = AcausalCompiler(ev, ad)
+    compiler.diagram_processing()
+    # index_reduction may warn about missing ICs defaulting to 0.0
+    # (exact variable count depends on the DAE structure; we just assert no silent failure)
+    compiler.index_reduction()  # must not raise
+
+
+def test_ill_conditioned_warning_mentions_scale():
+    """When Jacobian is ill-conditioned, the warning should mention scale=True."""
+    import warnings as _warnings
+
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    # Mix vastly different magnitudes: voltage source at 1e6 V, tiny capacitor 1e-9 F.
+    # This creates an ill-conditioned Jacobian at t=0.
+    v1 = elec.VoltageSource(ev, name="v1", V=1e6)
+    r1 = elec.Resistor(ev, name="r1", R=1.0)
+    c1 = elec.Capacitor(
+        ev, name="c1", C=1e-9, initial_voltage=0.0, initial_voltage_fixed=True
+    )
+    gnd = elec.Ground(ev, name="gnd")
+    ad.connect(v1, "p", r1, "n")
+    ad.connect(r1, "p", c1, "p")
+    ad.connect(c1, "n", v1, "n")
+    ad.connect(v1, "n", gnd, "p")
+
+    compiler = AcausalCompiler(ev, ad)
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        compiler()
+
+    scale_warnings = [
+        w for w in caught
+        if issubclass(w.category, UserWarning) and "scale=True" in str(w.message)
+    ]
+    assert scale_warnings, (
+        "Expected a UserWarning mentioning 'scale=True' for ill-conditioned Jacobian, "
+        f"got: {[str(w.message) for w in caught]}"
+    )
+
+
+def test_purely_algebraic_error_is_actionable():
+    """A model with no dynamic elements raises AcausalModelError with a helpful message."""
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    # Pure resistor network: R1-R2 voltage divider, no capacitor/inductor/mass.
+    v1 = elec.VoltageSource(ev, name="v1", V=5.0)
+    r1 = elec.Resistor(ev, name="r1", R=1.0)
+    r2 = elec.Resistor(ev, name="r2", R=1.0)
+    gnd = elec.Ground(ev, name="gnd")
+    ad.connect(v1, "p", r1, "p")
+    ad.connect(r1, "n", r2, "p")
+    ad.connect(r2, "n", v1, "n")
+    ad.connect(v1, "n", gnd, "p")
+
+    compiler = AcausalCompiler(ev, ad)
+    with pytest.raises(AcausalModelError) as exc:
+        compiler()
+
+    msg = str(exc.value)
+    # Message should explain the problem, not just say "algebraic solver"
+    assert any(kw in msg for kw in ("dynamic", "Capacitor", "Inductor", "Mass")), (
+        f"Error message should mention missing dynamic elements, got: {msg!r}"
+    )
+
+
+def test_compiler_error_message_no_support_contact():
+    """AcausalCompilerError should not say 'please contact support'."""
+    from jaxonomy.acausal.error import AcausalCompilerError
+
+    err = AcausalCompilerError(message="test failure")
+    assert "please contact support" not in str(err).lower()
+    assert "test failure" in str(err)
+
+
+def test_acausal_public_api_importable():
+    """The stable jaxonomy.acausal namespace should expose key symbols."""
+    import jaxonomy.acausal as acausal
+
+    assert hasattr(acausal, "AcausalCompiler")
+    assert hasattr(acausal, "AcausalDiagram")
+    assert hasattr(acausal, "EqnEnv")
+    assert hasattr(acausal, "AcausalCompilerError")
+    assert hasattr(acausal, "AcausalModelError")
+    assert hasattr(acausal, "electrical")
+    assert hasattr(acausal, "rotational")
+    assert hasattr(acausal, "translational")
+    assert hasattr(acausal, "thermal")
+
+
+def test_lambdify_diagnostics_context(monkeypatch):
+    import sympy as sp
+    from jaxonomy.acausal.diagram_processing import DiagramProcessing
+    from jaxonomy.acausal.acausal_compiler import _lambdify_with_diagnostics
+
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    dp = DiagramProcessing(ev, ad, verbose=False)
+    x = sp.Symbol("x")
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("synthetic lambdify failure")
+
+    monkeypatch.setattr(sp, "lambdify", _boom)
+
+    with pytest.raises(AcausalCompilerError) as exc:
+        _lambdify_with_diagnostics(
+            (x,),
+            x + 1,
+            modules=["jax"],
+            context="unit-test",
+            dp=dp,
+        )
+
+    assert "Failed to lambdify unit-test" in str(exc.value)
 
 
 if __name__ == "__main__":

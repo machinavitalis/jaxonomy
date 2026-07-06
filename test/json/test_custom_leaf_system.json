@@ -48,7 +48,7 @@
               "is_string": true
             },
             "source_code": {
-              "value": "from collimator import LeafSystem, parameters, ports\nfrom collimator.logging import logger\n\ndef _callback(time, state, u, dyn_param):\n    logger.info(\"hello world\")\n    return u\n\n@ports(inputs=[\"in_0\"], outputs=1)\n@parameters(dynamic=[\"dyn_param\"], static=[\"static_param\"])\nclass MySystem(LeafSystem):\n    \n    def __init__(self, dyn_param, static_param, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n\n    def initialize(self, dyn_param, static_param):\n        \n        self.configure_output_port(\n            0,\n            _callback,\n            prerequisites_of_calc=[self.input_ports[0].ticket],\n            requires_inputs=True,\n        )",
+              "value": "from jaxonomy import LeafSystem, parameters, ports\nfrom jaxonomy.logging import logger\n\ndef _callback(time, state, u, dyn_param):\n    logger.info(\"hello world\")\n    return u\n\n@ports(inputs=[\"in_0\"], outputs=1)\n@parameters(dynamic=[\"dyn_param\"], static=[\"static_param\"])\nclass MySystem(LeafSystem):\n    \n    def __init__(self, dyn_param, static_param, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n\n    def initialize(self, dyn_param, static_param):\n        \n        self.configure_output_port(\n            0,\n            _callback,\n            prerequisites_of_calc=[self.input_ports[0].ticket],\n            requires_inputs=True,\n        )",
               "is_string": true
             },
             "dyn_param": {

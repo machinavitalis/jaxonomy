@@ -1,15 +1,14 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
 
 def make_pulse(amplitude, start_time, width, name="Pulse"):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     # Construct the input signal as the difference of two
     # unit step functions spaced `width` seconds apart
@@ -59,7 +58,7 @@ def make_energy_shaping(dt, kE=0.01, name="EnergyShaping"):
     # Input port: alpha
     # Output port: voltage
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     demux = builder.add(library.Demultiplexer(2, name="y"))
 
@@ -115,7 +114,7 @@ def make_pid(
     if y_eq is None:
         y_eq = np.array([0.0, 0.0])
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     demux = builder.add(library.Demultiplexer(2, name="y"))
 
@@ -187,7 +186,7 @@ def make_switched_controller(
     if y_eq is None:
         y_eq = np.zeros(2)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(swingup_controller, balance_controller)
 
     y_in = builder.add(library.IOPort(name="y"))
@@ -258,7 +257,7 @@ def make_lqg(dt_sys, dt, Q, R, QN, RN, name="LQG", x0=None):
     )
 
     # Construct the closed-loop block diagram
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(kf, lqr)
 
     # One input port: y
@@ -284,7 +283,7 @@ def make_mlp_controller(
     invert_input=False,
     name="controller",
 ):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     net = builder.add(library.MLP(name="net", **nn_config))
 

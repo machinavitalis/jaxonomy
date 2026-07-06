@@ -1,12 +1,11 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
 import sys
 import pandas as pd
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Constant,
     ModelicaFMU,
 )
@@ -14,7 +13,7 @@ from matplotlib import pyplot as plt
 
 import pytest
 
-from collimator import logging
+from jaxonomy import logging
 import numpy as np
 
 
@@ -29,7 +28,7 @@ def test_FMU_Thermal(show_plot=False):
     """
     this test was for development reasons. later improved with ref from fmusim
     load <filename>.fmu
-    create wildcat ModelicaFMU block object
+    create jaxonomy ModelicaFMU block object
     connect to some inputs
     attempt simulation
     """
@@ -42,7 +41,7 @@ def test_FMU_Thermal(show_plot=False):
     print(f"fmu_file={fmu_file}")
 
     # system builder
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     # blocks
     ctrl = builder.add(Constant(8e4, name="ctrl"))
@@ -59,14 +58,14 @@ def test_FMU_Thermal(show_plot=False):
         "ctrl": ctrl.output_ports[0],
         "fmu_block_o": fmu_block.output_ports[0],
     }
-    r = collimator.simulate(
+    r = jaxonomy.simulate(
         diagram, context, (0.0, 100.0), recorded_signals=recorded_signals
     )
 
     # Generate reference fmusim.csv with:
     # fmusim --stop-time 100 --output-interval 1 --output-file fmusim.csv \
     #   --input-file input.csv thermal_1.fmu
-    # @am. I think fmusim reference is misleading us here. if we make our FMU block
+    # NOTE: the fmusim reference appears misleading here. If we make our FMU block
     # pass this test exactly, then FMU block clock output values do not match simulation
     # clock values. As such, I have 'fixed' the FMU block implementation, and 'tweaked'
     # the expected results here.
@@ -111,7 +110,7 @@ def test_FMU_StartTime(start_time, show_plot=False):
     print(f"fmu_file={fmu_file}")
 
     # system builder
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     # blocks
     input_val = 2.0
@@ -133,7 +132,7 @@ def test_FMU_StartTime(start_time, show_plot=False):
         "in_mult_ramp": fmu_block.output_ports[2],
         "fmu_ramp": fmu_block.output_ports[3],
     }
-    r = collimator.simulate(
+    r = jaxonomy.simulate(
         diagram, context, (start_time, 10.0), recorded_signals=recorded_signals
     )
 

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
@@ -47,7 +46,7 @@ def create_pysindy_model_and_save_csv():
     model = ps.SINDy(optimizer=optimizer)
     model.fit(x_train, u=u_train, t=dt)
 
-    # Save data as csv for wildcat
+    # Save data as csv for jaxonomy
     datadict = {
         "x_0": x_train[:, 0],
         "x_1": x_train[:, 1],

@@ -1,21 +1,23 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import logging
 import pytest
 
-from jaxlib.xla_extension import XlaRuntimeError
+try:
+    from jaxlib.xla_extension import XlaRuntimeError
+except ImportError:
+    from jax.errors import JaxRuntimeError as XlaRuntimeError
 
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import collimator
-from collimator import library
-from collimator.library.custom import PythonScriptError
-from collimator.backend import numpy_api
-from collimator.testing.markers import requires_jax
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.library.custom import PythonScriptError
+from jaxonomy.backend import numpy_api, set_backend
+from jaxonomy.testing.markers import requires_jax
 
-# from collimator import logging
+# from jaxonomy import logging
 # logging.set_file_handler("test.log")
 
 sin_init_code_np = "import numpy as np"
@@ -81,7 +83,7 @@ def _test_relay(diagram, tf, dt):
         "sin.out_0": diagram["sin_psb"].output_ports[0],
         "relay.out_0": diagram["relay_psb"].output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),
@@ -147,7 +149,7 @@ def _make_jax_relay_diagram(dt, reverse_psb_order=False, implicit=False):
         outputs=["out_0"],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(ramp)
 
     if reverse_psb_order:
@@ -166,14 +168,14 @@ def _make_jax_relay_diagram(dt, reverse_psb_order=False, implicit=False):
 @requires_jax()
 @pytest.mark.minimal
 def test_custom_relay_traceable():
-    numpy_api.set_backend("jax")
+    set_backend("jax")
     dt = 0.1
 
     diagram = _make_jax_relay_diagram(dt=dt, reverse_psb_order=False)
     t1, sol1 = _test_relay(diagram, tf=2.0, dt=dt)
 
     # Test adding the blocks in the reverse order
-    # see https://collimator.atlassian.net/browse/WC-66 for a description
+    # see https://jaxonomy.atlassian.net/browse/WC-66 for a description
     # of the bug this tests
 
     diagram = _make_jax_relay_diagram(dt=dt, reverse_psb_order=True)
@@ -197,7 +199,7 @@ def test_custom_agnostic(use_jax):
     dt = 0.1
 
     backend = "jax" if use_jax else "numpy"
-    numpy_api.set_backend(backend)
+    set_backend(backend)
     CustomBlock = library.CustomJaxBlock if use_jax else library.CustomPythonBlock
 
     agnostic_psb = CustomBlock(
@@ -209,7 +211,7 @@ def test_custom_agnostic(use_jax):
         outputs=["out_0"],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(agnostic_psb)
     source = builder.add(library.DiscreteClock(dt=dt))
     builder.connect(source.output_ports[0], agnostic_psb.input_ports[0])
@@ -221,7 +223,7 @@ def test_custom_agnostic(use_jax):
     recorded_signals = {
         "psb.out_0": agnostic_psb.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 2.0),
@@ -336,7 +338,7 @@ out_0 = 0.0
             ui_id=ui_id,
         )
         ctx = block.create_context()
-        collimator.simulate(
+        jaxonomy.simulate(
             block, ctx, (0.0, 1.0), recorded_signals={"x": block.output_ports[0]}
         )
 
@@ -386,7 +388,7 @@ def _make_python_relay_diagram(dt, reverse_psb_order=False, implicit=False):
         outputs=["out_0"],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     builder.add(ramp)
 
@@ -407,7 +409,7 @@ def _make_python_relay_diagram(dt, reverse_psb_order=False, implicit=False):
 # Repeat using untraceable Python (standard control flow)
 @pytest.mark.slow
 def test_custom_relay_untraceable():
-    numpy_api.set_backend("numpy")
+    set_backend("numpy")
     dt = 0.1
 
     diagram = _make_python_relay_diagram(dt=dt, reverse_psb_order=False)
@@ -416,7 +418,7 @@ def test_custom_relay_untraceable():
     t1, sol1 = _test_relay(diagram, tf=2.0, dt=dt)
 
     # Test adding the blocks in the reverse order
-    # see https://collimator.atlassian.net/browse/WC-66 for a description
+    # see https://jaxonomy.atlassian.net/browse/WC-66 for a description
     # of the bug this tests
     diagram = _make_python_relay_diagram(dt=dt, reverse_psb_order=True)
     diagram.create_context()
@@ -460,7 +462,7 @@ def _make_jax_counter_diagram(dt, implicit=False):
         time_mode="agnostic",
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(counter_psb)
     builder.add(gain_by_2)
 
@@ -475,7 +477,7 @@ def _test_counter(diagram, tf, show_plot=False):
         "counter": diagram["counter_psb"].output_ports[0],
         "gain_by_2": diagram["gain_by_2"].output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),
@@ -508,7 +510,7 @@ def _test_counter(diagram, tf, show_plot=False):
 @requires_jax()
 @pytest.mark.minimal
 def test_custom_counter(show_plot=False):
-    numpy_api.set_backend("jax")
+    set_backend("jax")
 
     dt = 0.1
 
@@ -534,7 +536,7 @@ out_1 = jnp.zeros(2)
 
 @pytest.mark.minimal
 def test_custom_output_shape(show_plot=False):
-    numpy_api.set_backend("jax")
+    set_backend("jax")
     dt = 0.1
 
     sclr = library.Constant(value=1.0)
@@ -549,7 +551,7 @@ def test_custom_output_shape(show_plot=False):
         outputs=["out_0", "out_1"],
     )
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(sclr)
     builder.add(vec)
     builder.add(my_blk)
@@ -565,7 +567,7 @@ def test_custom_output_shape(show_plot=False):
         "my_blk.out_0": my_blk.output_ports[0],
         "my_blk.out_1": my_blk.output_ports[1],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 0.3),
@@ -607,7 +609,7 @@ def test_wc159(use_jax):
     recorded_signals = {
         "system.out_0": system.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, 0.3),
@@ -631,8 +633,8 @@ def test_wc230():
     # when passing `result_shape_dtype` to the jax pure callback. To trigger
     # this, need to use an agnostic-mode PythonScript block fed to an Integrator,
     # with another continuous state elsewhere in the system.
-    # See https://collimator.atlassian.net/browse/WC-230 for details.
-    builder = collimator.DiagramBuilder()
+    # See https://jaxonomy.atlassian.net/browse/WC-230 for details.
+    builder = jaxonomy.DiagramBuilder()
 
     Clock_0 = builder.add(library.Clock(name="Clock_0"))
     PythonScript_0 = builder.add(
@@ -661,10 +663,10 @@ def test_wc230():
         "PythonScript_0.out_0": PythonScript_0.output_ports[0],
     }
 
-    options = collimator.SimulatorOptions(enable_tracing=True)
+    options = jaxonomy.SimulatorOptions(enable_tracing=True)
 
     tf = 10.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -680,9 +682,9 @@ def test_wc230():
 
 def test_wc235():
     # Test a bug where the type inference calls were not sorted according to callback
-    # ordering.  See https://collimator.atlassian.net/browse/WC-235
+    # ordering.  See https://jaxonomy.atlassian.net/browse/WC-235
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     # First add the downstream block (Agnostic mode)
     psb_0 = builder.add(
@@ -724,7 +726,7 @@ def test_custom_reuse_outport_state(use_jax):
     # port name in the step code.
     dt = 0.1
     backend = "jax" if use_jax else "numpy"
-    numpy_api.set_backend(backend)
+    set_backend(backend)
 
     PythonScript = library.CustomJaxBlock if use_jax else library.CustomPythonBlock
 
@@ -744,7 +746,7 @@ def test_custom_reuse_outport_state(use_jax):
     recorded_signals = {
         "system.out_0": system.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, 10.0),
@@ -766,7 +768,7 @@ function_def_step = "out_0 = my_func(in_0)"
 @pytest.mark.parametrize("use_jax", [True, False])
 def test_custom_function_def(use_jax):
     PythonScript = library.CustomJaxBlock if use_jax else library.CustomPythonBlock
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     clock = library.Clock(name="clock")
     psb = PythonScript(
         name="my_blk",
@@ -805,7 +807,7 @@ out_0 = np.array([x_dot, y_dot])
 
 @pytest.fixture
 def van_der_pol():
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     rhs_fun = library.CustomPythonBlock(
         name="rhs",
@@ -842,7 +844,7 @@ class TestFeedthroughSideEffects:
             "integrator.out_0": integrator.output_ports[0],
         }
         tf = 10.0
-        result = collimator.simulate(
+        result = jaxonomy.simulate(
             van_der_pol,
             context,
             (0.0, tf),
@@ -856,7 +858,7 @@ class TestFeedthroughSideEffects:
         # If we have both a zero-crossing and ODE side effects, the
         # solver should still work by falling back to untraced execution.
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(van_der_pol)
 
         demux = builder.add(library.Demultiplexer(2, name="demux"))
@@ -886,7 +888,7 @@ class TestFeedthroughSideEffects:
             "integrator.out_0": van_der_pol.output_ports[0],
         }
         tf = 10.0
-        result = collimator.simulate(
+        result = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -900,3 +902,248 @@ if __name__ == "__main__":
     # test_custom_counter(show_plot=True)
     # test_custom_relay_traceable()
     test_custom_output_shape()
+
+
+# ============================================================================
+# Environment isolation tests for CustomPythonBlock
+# ============================================================================
+
+class TestCustomPythonBlockIsolation:
+    """Verify that multiple CustomPythonBlock instances do not contaminate each
+    other's numpy error state or module-level mutable globals."""
+
+    def _make_cpb(self, name, init_code, step_code, outputs):
+        return library.CustomPythonBlock(
+            dt=0.1,
+            init_script=init_code,
+            user_statements=step_code,
+            inputs=[],
+            outputs=outputs,
+            name=name,
+        )
+
+    def _simulate_two_blocks(self, cpb_a, cpb_b, t_span=(0.0, 0.3)):
+        builder = jaxonomy.DiagramBuilder()
+        builder.add(cpb_a)
+        builder.add(cpb_b)
+        diag = builder.build()
+        ctx = diag.create_context()
+        res = jaxonomy.simulate(
+            diag,
+            ctx,
+            t_span,
+            options=jaxonomy.SimulatorOptions(
+                math_backend="jax", max_major_steps=10
+            ),
+            recorded_signals={
+                "a": diag["a"].output_ports[0],
+                "b": diag["b"].output_ports[0],
+            },
+        )
+        return res
+
+    def test_numpy_errstate_isolation(self):
+        """Block A's np.seterr() must not contaminate block B's numeric policy."""
+        cpb_a = self._make_cpb(
+            "a",
+            "import numpy as np\ny = 1.0",
+            'np.seterr(divide="ignore"); y = 1.0',
+            ["y"],
+        )
+        cpb_b = self._make_cpb(
+            "b",
+            "import numpy as np\ny = 1.0",
+            'state = np.geterr(); y = 1.0 if state["divide"] == "warn" else 0.0',
+            ["y"],
+        )
+        res = self._simulate_two_blocks(cpb_a, cpb_b)
+        # If isolated: b.y == 1.0 (divide is still "warn" for block B)
+        # If contaminated: b.y == 0.0
+        final_b = float(res.outputs["b"][-1])
+        assert final_b == pytest.approx(1.0), (
+            f"Block B was contaminated by block A's np.seterr(). "
+            f"Expected 1.0 (isolated), got {final_b}"
+        )
+
+    def test_numpy_errstate_independent_per_block(self):
+        """Each block can maintain its own independent numpy error policy."""
+        cpb_a = self._make_cpb(
+            "a",
+            "import numpy as np\ny = 0.0",
+            # A sets divide=ignore and verifies it persists
+            'np.seterr(divide="ignore"); state = np.geterr(); y = 1.0 if state["divide"] == "ignore" else 0.0',
+            ["y"],
+        )
+        cpb_b = self._make_cpb(
+            "b",
+            "import numpy as np\ny = 0.0",
+            # B keeps default (divide=warn) and verifies it
+            'state = np.geterr(); y = 1.0 if state["divide"] == "warn" else 0.0',
+            ["y"],
+        )
+        res = self._simulate_two_blocks(cpb_a, cpb_b)
+        # Both should be 1.0: A maintains its "ignore" setting, B maintains "warn"
+        assert float(res.outputs["a"][-1]) == pytest.approx(1.0), \
+            "Block A did not maintain its own divide='ignore' setting"
+        assert float(res.outputs["b"][-1]) == pytest.approx(1.0), \
+            "Block B should see divide='warn' (not contaminated by A)"
+
+    def test_global_numpy_errstate_restored_after_sim(self):
+        """The global numpy error state is restored after simulation."""
+        import numpy as np
+
+        before = np.geterr()
+        cpb_a = self._make_cpb(
+            "a",
+            "import numpy as np\ny = 1.0",
+            'np.seterr(divide="ignore", over="ignore"); y = 1.0',
+            ["y"],
+        )
+        cpb_b = self._make_cpb(
+            "b",
+            "import numpy as np\ny = 1.0",
+            "y = 1.0",
+            ["y"],
+        )
+        self._simulate_two_blocks(cpb_a, cpb_b)
+        after = np.geterr()
+        assert after == before, (
+            f"Global numpy errstate leaked after simulation. "
+            f"Before: {before}, After: {after}"
+        )
+
+    def test_numpy_random_state_isolation(self):
+        """Block A seeding numpy.random must not advance block B's random stream."""
+        import numpy as np
+
+        # Block A: seeds numpy.random with 42 every step
+        cpb_a = self._make_cpb(
+            "a",
+            "import numpy as np\ny = 0.0",
+            "np.random.seed(42); y = np.random.rand()",
+            ["y"],
+        )
+        # Block B: draws a random number WITHOUT seeding — should NOT be affected by A
+        # We record 3 consecutive values to verify the stream is not reset each step
+        # (if A's seed contaminated B, all draws in B would always be the same)
+        cpb_b = self._make_cpb(
+            "b",
+            "import numpy as np\ny = 0.0",
+            "y = np.random.rand()",
+            ["y"],
+        )
+
+        builder = jaxonomy.DiagramBuilder()
+        builder.add(cpb_a)
+        builder.add(cpb_b)
+        diag = builder.build()
+        ctx = diag.create_context()
+        res = jaxonomy.simulate(
+            diag,
+            ctx,
+            (0.0, 0.5),
+            options=jaxonomy.SimulatorOptions(
+                math_backend="jax", max_major_steps=20
+            ),
+            recorded_signals={"b": diag["b"].output_ports[0]},
+        )
+
+        b_values = res.outputs["b"]
+        # If A's seed contaminated B, consecutive b values would all be the same
+        # (reset to the value right after seed(42)). They should vary.
+        assert b_values.shape[0] > 1
+        # Not all values are identical
+        assert not all(
+            abs(float(b_values[i]) - float(b_values[0])) < 1e-6
+            for i in range(1, len(b_values))
+        ), "Block B's random stream appears to be reset each step (contamination from A)"
+
+    def test_module_proxy_attribute_isolation(self):
+        """_PerBlockModuleProxy captures attribute writes per-instance."""
+        from jaxonomy.library.custom import _PerBlockModuleProxy
+        import types
+
+        # Create a simple module with a mutable attribute
+        mod = types.ModuleType("test_mod")
+        mod.value = 10
+
+        proxy_a = _PerBlockModuleProxy(mod)
+        proxy_b = _PerBlockModuleProxy(mod)
+
+        # Write to proxy_a
+        proxy_a.value = 99
+
+        # proxy_b and real module should be unaffected
+        assert proxy_b.value == 10, "proxy_a write leaked to proxy_b"
+        assert mod.value == 10, "proxy_a write mutated real module"
+
+        # proxy_a sees its own write
+        assert proxy_a.value == 99
+
+    def test_module_proxy_read_fallthrough(self):
+        """_PerBlockModuleProxy reads fall through to the real module."""
+        from jaxonomy.library.custom import _PerBlockModuleProxy
+        import types
+
+        mod = types.ModuleType("test_mod")
+        mod.foo = "bar"
+        mod.num = 42
+
+        proxy = _PerBlockModuleProxy(mod)
+        assert proxy.foo == "bar"
+        assert proxy.num == 42
+
+    def test_save_restore_module_state(self):
+        """_save_module_state / _restore_module_state correctly checkpoint numpy."""
+        from jaxonomy.library.custom import _save_module_state, _restore_module_state
+        import numpy as np
+
+        original = np.geterr()
+        env = {}  # save uses sys.modules["numpy"]
+
+        snapshot = _save_module_state(env)
+        assert "numpy_errstate" in snapshot
+
+        # Mutate numpy state
+        np.seterr(divide="ignore", over="ignore")
+        assert np.geterr()["divide"] == "ignore"
+
+        # Restore
+        _restore_module_state(snapshot)
+        restored = np.geterr()
+        assert restored == original, f"Restore failed: {restored} != {original}"
+
+    def test_single_cpb_errstate_persistence(self):
+        """A single CPB's self-set errstate persists across time steps."""
+        # Block sets divide='ignore' at t=0.1, reads it at t=0.2 — must still be 'ignore'
+        cpb = library.CustomPythonBlock(
+            dt=0.1,
+            init_script="import numpy as np\nstep_count = 0\ny = 1.0",
+            user_statements="""
+step_count = step_count + 1
+if step_count == 1:
+    np.seterr(divide='ignore')
+state = np.geterr()
+# 1.0 if state correctly persists, 0.0 if reset each step
+y = 1.0 if state['divide'] == 'ignore' else 0.0
+""",
+            inputs=[],
+            outputs=["y"],
+            name="a",
+        )
+        builder = jaxonomy.DiagramBuilder()
+        builder.add(cpb)
+        diag = builder.build()
+        ctx = diag.create_context()
+        res = jaxonomy.simulate(
+            diag,
+            ctx,
+            (0.0, 0.5),
+            options=jaxonomy.SimulatorOptions(
+                math_backend="jax", max_major_steps=20
+            ),
+            recorded_signals={"y": diag["a"].output_ports[0]},
+        )
+        # After the first step sets divide='ignore', all subsequent steps should see it
+        assert float(res.outputs["y"][-1]) == pytest.approx(1.0), \
+            "CPB's own errstate was reset between steps"

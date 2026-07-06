@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
@@ -7,8 +6,8 @@ from time import sleep
 
 import numpy as np
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
 from controllers import *  # noqa: F403
 
@@ -52,7 +51,7 @@ def make_lqg_diagram(plant, controller, pulse_amplitude=1.0, name="root"):
     pulse = make_pulse(amplitude=pulse_amplitude, start_time=2.0, width=0.1)  # noqa: F405
     adder = library.Adder(2, name="adder")
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(plant, controller, pulse, adder)
 
     # Connect the plant to the LQG controller
@@ -76,7 +75,7 @@ tf = 10.0
 print("Sleeping for 1 second to allow the interface to start...")
 sleep(1)
 
-results = collimator.simulate(
+results = jaxonomy.simulate(
     system,
     context,
     (0.0, tf),

@@ -1,15 +1,14 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 import matplotlib.pyplot as plt
-import collimator.testing as test
+import jaxonomy.testing as test
 import numpy as np
 import os
 import json
 
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 
@@ -357,7 +356,12 @@ def test_wc415(request):
     test.run(request, model_json="wc415_error_in_in.json", stop_time=1.0)
 
 
-@pytest.mark.skip(reason="Maybe hangs in CI, see WC-434")
+@pytest.mark.skip(
+    reason="bldc.json references acausal.electrical.BLDC, which is not "
+    "implemented in jaxonomy (no class, not registered in block_interface). "
+    "Loading raises KeyError, not a hang. Blocked on T-135 (port the BLDC "
+    "acausal component). The original 'hangs in CI / WC-434' reason was stale."
+)
 def test_bldc(request):
     # just the fact that they dont raise any errors is a pass :)
     test.run(request, model_json="bldc.json", stop_time=1.0)
@@ -368,9 +372,14 @@ def test_friction(request):
     test.run(request, model_json="friction.json", stop_time=1.0)
 
 
-@pytest.mark.skip(reason="casuses CI to hang")
+@pytest.mark.skip(
+    reason="hybrid.json references acausal.electrical.BLDC, which is not "
+    "implemented in jaxonomy (no class, not registered in block_interface). "
+    "Loading raises KeyError on the BLDC node, not a hang. Blocked on T-135 "
+    "(port the BLDC acausal component). The original 'causes CI to hang' "
+    "reason was stale — verified 2026-05-31 that load fails before any sim."
+)
 def test_hybrid(request):
-    # FIXME: this test casues wildcat to hang.
     # just the fact that they dont raise any errors is a pass :)
     test.run(request, model_json="hybrid.json", stop_time=1.0)
 

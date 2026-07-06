@@ -1,14 +1,13 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 
-from collimator import DiagramBuilder, Parameter, library, simulate
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import translational as trans
-from collimator.experimental import electrical
-from collimator.framework import build_recorder
-import collimator.testing as testing
+from jaxonomy import DiagramBuilder, Parameter, library, simulate
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import translational as trans
+from jaxonomy.acausal import electrical
+from jaxonomy.framework import build_recorder
+import jaxonomy.testing as testing
 
 
 def test_build_recorder_simple():
@@ -114,7 +113,7 @@ def test_build_recorder_groups():
 
 
 def test_build_recorder_submodels():
-    # FIXME: reference submodels are generated as groups.
+    # NOTE: reference submodels are generated as groups.
     build_recorder.start()
     builder = DiagramBuilder()
     c = Parameter(name="c", value=np.array([1.0, 2.0]))

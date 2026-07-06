@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test continuous-time systems
@@ -15,26 +14,28 @@ import pytest
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
 import numpy as np
-import control
-from jax.scipy.linalg import expm
-from collimator.framework.error import StaticError
-import collimator
-from collimator import library
-from collimator.backend import numpy_api as cnp
-from collimator.framework import Parameter
-from collimator.testing import set_backend
+
+control = pytest.importorskip("control")
+
+from jax.scipy.linalg import expm  # noqa: E402
+from jaxonomy.framework.error import StaticError
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy.framework import Parameter
+from jaxonomy.testing import set_backend
 
 
 float_dtypes = [
-    cnp.float64,
-    cnp.float32,
-    cnp.float16,
+    npa.float64,
+    npa.float32,
+    npa.float16,
 ]
 
 int_dtypes = [
-    cnp.int64,
-    cnp.int32,
-    cnp.int16,
+    npa.int64,
+    npa.int32,
+    npa.int16,
 ]
 
 
@@ -127,7 +128,7 @@ class CurrentDraw(library.SourceBlock):
 @pytest.mark.minimal
 class TestBatteryCell:
     def test_battery_cell(self, plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         current = builder.add(CurrentDraw())
         battery_cell = builder.add(library.BatteryCell())
         builder.connect(current.output_ports[0], battery_cell.input_ports[0])
@@ -143,10 +144,14 @@ class TestBatteryCell:
             "voltage": battery_cell.output_ports[0],
             "soc": battery_cell.output_ports[1],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
+            # 500 s of adaptive stepping records >200 samples; size the buffer to
+            # capture the whole trajectory (else only the tail survives and the
+            # mean-error comparison below is computed on a truncated signal).
+            options=jaxonomy.SimulatorOptions(buffer_length=20000),
             recorded_signals=recorded_signals,
         )
 
@@ -184,7 +189,7 @@ class TestBatteryCell:
         if plot:
             plt.figure()
             plt.plot(time, b_volts_sol, label="Discrete-time model")
-            plt.plot(time, b_volts_sim, label="Collimator model")
+            plt.plot(time, b_volts_sim, label="Jaxonomy model")
             plt.show()
 
         # CMLC tested mean error with a limit of 0.004
@@ -206,9 +211,9 @@ class TestIntegrator:
         assert x_eval == x0
 
         # Integrator converts things to jax arrays internally
-        assert isinstance(x_eval, cnp.ndarray)
+        assert isinstance(x_eval, npa.ndarray)
         assert x_eval.shape == ()
-        assert x_eval.dtype == cnp.float64
+        assert x_eval.dtype == npa.float64
 
     @pytest.mark.parametrize("dtype", [*float_dtypes, *int_dtypes])
     def test_port_eval_array(self, dtype):
@@ -219,13 +224,13 @@ class TestIntegrator:
 
         x_eval = integrator.output_ports[0].eval(ctx)  # x0
         assert np.allclose(x_eval, x0)
-        assert isinstance(x_eval, cnp.ndarray)
+        assert isinstance(x_eval, npa.ndarray)
         assert x_eval.shape == x0.shape
         assert x_eval.dtype == dtype
 
     def _make_sin_integrator(self, Integrator_0):
         Sin_0 = library.Sine(name="Sin_0")
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Integrator_0, Sin_0)
         builder.connect(Sin_0.output_ports[0], Integrator_0.input_ports[0])
         diagram = builder.build()
@@ -251,7 +256,7 @@ class TestIntegrator:
         diagram, ctx = self._make_sin_integrator(Integrator_0)
 
         t0, tf = 0.0, 10.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             ctx,
             (t0, tf),
@@ -265,7 +270,7 @@ class TestIntegrator:
     def _make_sawtooth(self):
         x_reset = 0.5
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         integrator = builder.add(
             library.Integrator(0.0, enable_reset=True, name="integrator")
         )
@@ -285,8 +290,8 @@ class TestIntegrator:
         ctx = diagram.create_context()
 
         tf = 0.75
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         integrator = diagram["integrator"]
         assert np.allclose(ctx[integrator.system_id].continuous_state, 0.25)
@@ -296,8 +301,8 @@ class TestIntegrator:
         ctx = diagram.create_context()
 
         tf = 2.75
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         integrator = diagram["integrator"]
         assert np.allclose(ctx[integrator.system_id].continuous_state, 0.25, atol=1e-4)
@@ -305,7 +310,7 @@ class TestIntegrator:
     x_reset = 1.5
 
     def _make_sin_sawtooth(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         integrator = builder.add(
             library.Integrator(
                 0.0,
@@ -341,8 +346,8 @@ class TestIntegrator:
         x1 = np.sin(t1)  # Should reset to this value at t1
         xf = x1 + (tf - t1)
 
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         assert np.allclose(ctx[integrator.system_id].continuous_state, xf, atol=1e-3)
 
@@ -359,14 +364,14 @@ class TestIntegrator:
         x2 = np.sin(t2)  # Should reset to this value at t2
 
         xf = x2 + (tf - t2)
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         integrator = diagram["integrator"]
         assert np.allclose(ctx[integrator.system_id].continuous_state, xf, atol=1e-3)
 
     def _make_limits_test_model(self, const=1.0, lower_limit=None, upper_limit=None):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         integrator = builder.add(
             library.Integrator(
                 0.0,
@@ -389,8 +394,8 @@ class TestIntegrator:
         recorded_signals = {
             "int_": int_.output_ports[0],
         }
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        res = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals, options=options
         )
 
@@ -421,8 +426,8 @@ class TestIntegrator:
         recorded_signals = {
             "int_": int_.output_ports[0],
         }
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        res = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals, options=options
         )
 
@@ -445,7 +450,7 @@ class TestIntegrator:
     def test_hold(self, show_plot=False):
         t1 = 1.0
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         int_ = builder.add(
             library.Integrator(
                 0.0,
@@ -470,11 +475,11 @@ class TestIntegrator:
             "ramp_": ramp.output_ports[0],
             "cmp_": cmp.output_ports[0],
         }
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             atol=1e-10,
             rtol=1e-8,
         )
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals, options=options
         )
 
@@ -503,15 +508,15 @@ class TestIntegrator:
         st_shape = (dim0, dim1)
         dim2 = dim0 * dim1
         set_backend(backend)
-        x0 = cnp.arange(dim2, dtype=np.float64).reshape(st_shape)
-        builder = collimator.DiagramBuilder()
+        x0 = npa.arange(dim2, dtype=np.float64).reshape(st_shape)
+        builder = jaxonomy.DiagramBuilder()
         int_ = builder.add(library.Integrator(x0, name="int_"))
         builder.connect(int_.output_ports[0], int_.input_ports[0])
 
         diagram = builder.build()
         ctx = diagram.create_context()
         recorded_signals = {"x": int_.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             ctx,
             (0.0, 1.0),
@@ -526,7 +531,7 @@ class TestIntegrator:
 
 class TestPID:
     def _make_pid_diagram(self, source, kp, ki, kd, n):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         pid = builder.add(library.PID(kp=kp, ki=ki, kd=kd, n=n, name="pid"))
         source = builder.add(source)
@@ -547,11 +552,11 @@ class TestPID:
             "u": diagram["pid"].output_ports[0],
         }
 
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             rtol=1e-6,
             atol=1e-8,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 10.0),
@@ -577,7 +582,7 @@ class TestPID:
             "u": diagram["pid"].output_ports[0],
         }
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 10.0),
@@ -600,7 +605,7 @@ class TestPID:
             "u": diagram["pid"].output_ports[0],
         }
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 10.0),
@@ -615,7 +620,7 @@ class TestPID:
     def test_pid_param(self):
         kp = Parameter(value=1.0)
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         constant = builder.add(library.Constant(1.0))
         pid = builder.add(library.PID(kp, 1.0, 1.0, 1.0))
 
@@ -670,7 +675,7 @@ class TestLTISystem:
         ],
     )
     def test_lti_system(self, A, B, C, D, x0, u, tf=1.0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         control = builder.add(library.Constant(u))
         lti = builder.add(library.LTISystem(A, B, C, D, x0))
@@ -682,7 +687,7 @@ class TestLTISystem:
         recorded_signals = {
             "y": lti.output_ports[0],
         }
-        sol = collimator.simulate(
+        sol = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -715,7 +720,7 @@ class TestLTISystem:
         assert np.allclose(y, y_expected, atol=1e-04)
 
     def test_initial_states(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         control = builder.add(library.Constant(1.0))
         A = [0.0]
@@ -758,7 +763,7 @@ class TestTransferFunction:
         ],
     )
     def test_transfer_function(self, num, den, u, tf=1.0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         control_block = builder.add(library.Constant(u))
         block = builder.add(library.TransferFunction(num, den))
@@ -770,7 +775,7 @@ class TestTransferFunction:
         recorded_signals = {
             "y": block.output_ports[0],
         }
-        sol = collimator.simulate(
+        sol = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -821,7 +826,7 @@ class TestDerivative:
         assert block.get_feedthrough() == [(0, 0)]
 
     def test_derivative_sine(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         filter_coefficient = 100
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
@@ -835,11 +840,11 @@ class TestDerivative:
             "u": sine.output_ports[0],
             "y": der.output_ports[0],
         }
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             rtol=1e-6,
             atol=1e-8,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 2.0),
@@ -869,7 +874,7 @@ class TestDerivative:
         )
 
     def test_derivative_of_integral(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         filter_coefficient = 100
         A = 1.0
@@ -885,11 +890,11 @@ class TestDerivative:
         recorded_signals = {
             "y": derivative.output_ports[0],
         }
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             rtol=1e-6,
             atol=1e-8,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 2.0),
@@ -914,7 +919,7 @@ class TestDerivative:
         )
 
     def test_vector_input_error(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         filter_coefficient = 20
         A = np.array([0.0, 1.0])

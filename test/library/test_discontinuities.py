@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test blocks that apply nonlinearities/discontinuities to the signal.
@@ -19,16 +18,16 @@ import jax.numpy as jnp
 
 import matplotlib.pyplot as plt
 
-import collimator
-from collimator import library
-from collimator.framework.error import BlockParameterError
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.framework.error import BlockParameterError
 
 pytestmark = pytest.mark.minimal
 
 
 class TestComparator:
     def test_ops(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         one = builder.add(library.Constant(1.0))
         two = builder.add(library.Constant(2.0))
@@ -72,7 +71,7 @@ class TestComparator:
             "neq": neq.output_ports[0],
             "eq": eq.output_ports[0],
         }
-        r = collimator.simulate(
+        r = jaxonomy.simulate(
             diagram, context, (0.0, 0.1), recorded_signals=recorded_signals
         )
         assert not r.outputs["gt"][-1]
@@ -83,7 +82,7 @@ class TestComparator:
         assert r.outputs["eq"][-1]
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Comparator(operator="="))
@@ -94,7 +93,7 @@ class TestComparator:
         assert "Valid options: >,>=,<,<=,==,!=" in str(e)
 
     def test_zc(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         zc_val = 1.2345678
         one = builder.add(library.Constant(zc_val))
@@ -116,7 +115,7 @@ class TestComparator:
             "gt": gt.output_ports[0],
             "ramp": ramp.output_ports[0],
         }
-        r = collimator.simulate(
+        r = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         zc_idx = np.argmax(r.outputs["gt"])
@@ -131,7 +130,7 @@ class TestComparator:
 
 class TestDeadZone:
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.DeadZone(half_range=-1.0, name="DeadZone"))
@@ -144,7 +143,7 @@ class TestDeadZone:
         )
 
     def test_zc(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         half_range = 0.2589
         start_value = -2.0
@@ -162,7 +161,7 @@ class TestDeadZone:
             "dz": dz.output_ports[0],
             "ramp": ramp.output_ports[0],
         }
-        r = collimator.simulate(
+        r = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -198,7 +197,7 @@ class TestDeadZone:
 
 class TestMinMax:
     def test_ops(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         ud = builder.add(library.UnitDelay(dt=0.2, initial_state=0.0))
         one = builder.add(library.Constant(1.0))
         ramp = builder.add(library.Ramp(start_time=0.0))
@@ -229,7 +228,7 @@ class TestMinMax:
             "max2": max2.output_ports[0],
             "min3": min3.output_ports[0],
         }
-        r = collimator.simulate(
+        r = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -251,7 +250,7 @@ class TestMinMax:
         assert np.allclose(r.outputs["min3"], min3_sol)
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.MinMax(n_in=2, operator="mini"))
             diagram = builder.build()
@@ -261,7 +260,7 @@ class TestMinMax:
         assert "Valid options: max, min" in str(e)
 
     def test_zc(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         zc_val = 1.2345678
         one = builder.add(library.Constant(zc_val))
@@ -282,7 +281,7 @@ class TestMinMax:
             "max_": max_.output_ports[0],
             "ramp": ramp.output_ports[0],
         }
-        r = collimator.simulate(
+        r = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         zc_idx = np.argmin(np.abs(r.time - zc_val))
@@ -297,7 +296,7 @@ class TestMinMax:
 
 class TestQuantizer:
     def evaluate_quantizer_output(self, input, interval):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         quantizer_block = builder.add(library.Quantizer(interval))
         input_block = builder.add(library.Constant(input))
         builder.connect(input_block.output_ports[0], quantizer_block.input_ports[0])
@@ -370,7 +369,7 @@ class TestRelay:
         # relay block should be localized in time.
         sim_stop_time = 2.0
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=10))
         rly = builder.add(
             library.Relay(
@@ -393,12 +392,12 @@ class TestRelay:
         }
         diagram = builder.build()
         context = diagram.create_context()
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=0.2,
             atol=1e-8,
             rtol=1e-6,
         )
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram,
             context,
             (0.0, sim_stop_time),
@@ -457,7 +456,7 @@ class TestRelay:
         # will not be localized
         sim_stop_time = 2.0
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=10))
         rly = builder.add(
             library.Relay(
@@ -477,7 +476,7 @@ class TestRelay:
         }
         diagram = builder.build()
         context = diagram.create_context()
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram,
             context,
             (0.0, sim_stop_time),
@@ -518,7 +517,7 @@ class TestRelay:
         sim_stop_time = 2.0
         dt = 0.1
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=10.0))
         builder.add(
             library.DiscreteClock(dt)
@@ -542,7 +541,7 @@ class TestRelay:
         }
         diagram = builder.build()
         context = diagram.create_context()
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram,
             context,
             (0.0, sim_stop_time),
@@ -583,7 +582,7 @@ class TestRelay:
         sim_stop_time = 2.0
         dt = 0.1
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=10))
         zoh = builder.add(library.ZeroOrderHold(dt))  # Discretize the signal in time
         builder.connect(sine.output_ports[0], zoh.input_ports[0])
@@ -636,7 +635,7 @@ class TestRelay:
         }
         diagram = builder.build()
         context = diagram.create_context()
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram,
             context,
             (0.0, sim_stop_time),
@@ -714,7 +713,7 @@ class TestRelay:
 
 class TestSaturate:
     def test_saturate_llim2_ulim2(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         slope = 100.0
         llim = 2.0
@@ -731,7 +730,7 @@ class TestSaturate:
         diagram = builder.build()
         context = diagram.create_context()
         recorded_signals = {"y": saturate.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 10.0), recorded_signals=recorded_signals
         )
         assert jnp.allclose(
@@ -739,7 +738,7 @@ class TestSaturate:
         )
 
     def test_saturate_llim2_ulim8(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         slope = 100.0
         llim = 2.0
@@ -756,7 +755,7 @@ class TestSaturate:
         diagram = builder.build()
         context = diagram.create_context()
         recorded_signals = {"y": saturate.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 10.0), recorded_signals=recorded_signals
         )
         assert jnp.allclose(
@@ -764,7 +763,7 @@ class TestSaturate:
         )
 
     def test_saturate_llim0_ulimd(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         slope = 100.0
         llim = 0.0
@@ -785,7 +784,7 @@ class TestSaturate:
         diagram = builder.build()
         context = diagram.create_context()
         recorded_signals = {"y": saturate.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 10.0), recorded_signals=recorded_signals
         )
         assert jnp.allclose(
@@ -793,7 +792,7 @@ class TestSaturate:
         )
 
     def test_saturate_llimd_ulim8(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         a = 10.0
         b = 100.0
 
@@ -819,7 +818,7 @@ class TestSaturate:
             "y": saturate.output_ports[0],
             "llimd": llimd.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 10.0), recorded_signals=recorded_signals
         )
 

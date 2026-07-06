@@ -1,0 +1,115 @@
+<mujoco model="bouncing_balls_stairs">
+  <!--
+    Three balls of different physical character cascading down the same
+    staircase, released simultaneously from staggered y-positions so they
+    don't collide with each other.
+
+    Visual / dynamic differences come from three knobs per ball:
+      * `mass`     — heavier balls have more inertia, deflect less.
+      * `solref` — soft-contact spring/damper. Two modes:
+          - Positive `(timeconst, dampratio)` — auto-tuned constraint;
+            with `solimp` near (0.95, 0.99) the impedance ramp dominates
+            dissipation and even ζ→0 only yields COR≈0.5–0.6.
+          - Negative `(-stiffness, -damping)` — direct (k, c) in
+            N/m and N·s/m. This is what you want for a visibly elastic
+            bounce: pick k high (~3e4–5e4 for a golf-mass ball) and tune
+            c down until each impact returns ~half the apex height.
+      * `friction[0]` — sliding friction coefficient. Lower lets the ball
+                       skid forward off the tread edge instead of biting
+                       and rolling.
+
+    Approximate real-world masses (kg): ping-pong 0.0027, golf 0.046,
+    bocce 0.92. We keep the geometric scale visualization-friendly
+    (radii ~ 0.04-0.08 m) — real-world radii would be ~0.020 / 0.021 /
+    0.053. The mass / solref / friction triples are what make the
+    qualitative behaviour read as "ping-pong vs golf vs bocce".
+
+    `timestep=0.002` resolves the ping-pong's stiff contact phase cleanly.
+  -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+
+  <visual>
+    <headlight ambient="0.45 0.45 0.45" diffuse="0.55 0.55 0.55" specular="0.2 0.2 0.2"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="100" elevation="-20" offwidth="1280" offheight="720"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.30 0.55 0.80" rgb2="0.05 0.10 0.20" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.20 0.30 0.40" rgb2="0.10 0.20 0.30" markrgb="0.85 0.85 0.85"
+             width="512" height="512"/>
+    <material name="ground"  texture="groundplane" texuniform="true" texrepeat="6 6" reflectance="0.15"/>
+    <material name="step"    rgba="0.78 0.66 0.50 1" specular="0.1" shininess="0.1"/>
+    <material name="bocce"   rgba="0.55 0.35 0.12 1" specular="0.4" shininess="0.4"/>
+    <material name="golf"    rgba="0.97 0.97 0.95 1" specular="0.6" shininess="0.7"/>
+    <material name="pingpong" rgba="0.95 0.55 0.10 1" specular="0.7" shininess="0.8"/>
+  </asset>
+
+  <worldbody>
+    <light name="key"  pos="-1 -1 4" dir="0.3 0.3 -1" diffuse="0.85 0.85 0.85" specular="0.3 0.3 0.3"/>
+    <light name="fill" pos="2 1 2.5" dir="-0.5 -0.3 -0.8" diffuse="0.4 0.4 0.45"/>
+
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 0" material="ground"/>
+
+    <!-- 5-step staircase. Half-sizes 0.30 (x) x 0.50 (y) x 0.10 (z) — the
+         y-depth is wider than the single-ball variant so 3 balls can
+         drop along y without sliding off the tread edge. -->
+    <geom name="step1" type="box" pos="0.00 0  1.30" size="0.30 0.50 0.10" material="step"/>
+    <geom name="step2" type="box" pos="0.60 0  1.10" size="0.30 0.50 0.10" material="step"/>
+    <geom name="step3" type="box" pos="1.20 0  0.90" size="0.30 0.50 0.10" material="step"/>
+    <geom name="step4" type="box" pos="1.80 0  0.70" size="0.30 0.50 0.10" material="step"/>
+    <geom name="step5" type="box" pos="2.40 0  0.50" size="0.30 0.50 0.10" material="step"/>
+
+    <!-- Bocce: heavy, near-overdamped contact -> rolls, barely bounces. -->
+    <body name="bocce" pos="-0.10 -0.30 2.20">
+      <freejoint name="bocce_free"/>
+      <geom name="bocce_geom" type="sphere" size="0.08" material="bocce"
+            mass="0.92"
+            condim="3"
+            friction="0.45 0.005 0.0001"
+            solref="0.01 0.95"
+            solimp="0.95 0.99 0.001"/>
+    </body>
+
+    <!-- Golf: medium-light, moderately bouncy -> several lively bounces. -->
+    <body name="golf" pos="-0.10 0.00 2.20">
+      <freejoint name="golf_free"/>
+      <geom name="golf_geom" type="sphere" size="0.05" material="golf"
+            mass="0.046"
+            condim="3"
+            friction="0.10 0.002 0.0001"
+            solref="-50000 -20"
+            solimp="0.95 0.99 0.001"/>
+    </body>
+
+    <!-- Ping pong: very light, near-elastic -> many small bounces.
+         Low friction[0] keeps the ball from biting hard on each tread. -->
+    <body name="pingpong" pos="-0.10 0.30 2.20">
+      <freejoint name="pingpong_free"/>
+      <geom name="pingpong_geom" type="sphere" size="0.04" material="pingpong"
+            mass="0.005"
+            condim="3"
+            friction="0.05 0.0005 0.0001"
+            solref="0.001 0.06"
+            solimp="0.95 0.99 0.001"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <!--
+      qpos layout per ball (in body-declaration order: bocce, golf, pingpong):
+        7 floats each = (x, y, z, qw, qx, qy, qz).
+      qvel layout per ball: 6 floats each = (vx, vy, vz, wx, wy, wz).
+      Every ball gets the same forward kick (vx=1.20) and is released from
+      z=2.20 above the top tread.
+    -->
+    <key name="release"
+      qpos="-0.10 -0.30 2.20  1 0 0 0
+            -0.10  0.00 2.20  1 0 0 0
+            -0.10  0.30 2.20  1 0 0 0"
+      qvel="1.20 0 0  0 0 0
+            1.20 0 0  0 0 0
+            1.20 0 0  0 0 0"/>
+  </keyframe>
+</mujoco>

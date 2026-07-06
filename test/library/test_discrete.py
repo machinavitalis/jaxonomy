@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test discrete system blocks.
@@ -24,10 +23,10 @@ from scipy import signal
 
 import matplotlib.pyplot as plt
 
-import collimator
-from collimator import library
+import jaxonomy
+from jaxonomy import library
 
-# from collimator import logging
+# from jaxonomy import logging
 # logging.set_log_level(logging.DEBUG)
 
 pytestmark = pytest.mark.minimal
@@ -45,7 +44,7 @@ int_dtypes = [
 ]
 
 
-# TODO:
+# NOTE:
 # - Test filter options (forward euler, backward euler, bilinear)
 class TestDerivativeDiscrete:
     def test_feedthrough(self):
@@ -56,7 +55,7 @@ class TestDerivativeDiscrete:
         assert block.get_feedthrough() == [(0, 0)]
 
     def test_discrete_derivative_sine(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
@@ -69,7 +68,7 @@ class TestDerivativeDiscrete:
         recorded_signals = {
             "y": derivative_dt.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         ts, ys = results.time, results.outputs["y"]
@@ -108,7 +107,7 @@ class TestDerivativeDiscrete:
         assert jnp.allclose(ys, y_sol)
 
     def test_discrete_derivative_of_integral_scalar(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         clock = builder.add(library.DiscreteClock(dt=dt))
@@ -125,7 +124,7 @@ class TestDerivativeDiscrete:
             "clock": clock.output_ports[0],
             "derivative": derivative.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -137,7 +136,7 @@ class TestDerivativeDiscrete:
         )
 
     def test_discrete_derivative_of_integral_vector(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         A = jnp.array([0.0, 1.0])
@@ -155,7 +154,7 @@ class TestDerivativeDiscrete:
         recorded_signals = {
             "derivative": derivative.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         ys = results.outputs["derivative"]
@@ -168,7 +167,7 @@ class TestDerivativeDiscrete:
 
 class TestDiscreteInitializer:
     def test_discrete_initializer(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         di = builder.add(library.DiscreteInitializer(dt=dt))
@@ -183,7 +182,7 @@ class TestDiscreteInitializer:
             "di": di.output_ports[0],
             "di_vec": di_vec.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 0.5), recorded_signals=recorded_signals
         )
         ts, ys, ys_vec = results.time, results.outputs["di"], results.outputs["di_vec"]
@@ -209,7 +208,7 @@ class TestDiscreteInitializer:
 
 class TestEdgeDetection:
     def test_edge_detection(self, show_plot=False):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         step_up = builder.add(
@@ -238,7 +237,7 @@ class TestEdgeDetection:
             "falling": falling.output_ports[0],
             "either": either.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         ts = results.time
@@ -317,7 +316,7 @@ class TestFilterDiscrete:
         filter_N = 10
         b = jnp.ones(filter_N) / filter_N
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         step = builder.add(library.Step(step_time=0.1))
         fir = builder.add(library.FilterDiscrete(dt=dt, b_coefficients=b))
 
@@ -329,8 +328,8 @@ class TestFilterDiscrete:
         }
         diagram = builder.build()
         context = diagram.create_context()
-        options = collimator.SimulatorOptions(enable_tracing=False)
-        res = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(enable_tracing=False)
+        res = jaxonomy.simulate(
             diagram,
             context,
             (0.0, sim_stop_time),
@@ -414,7 +413,7 @@ class TestIntegratorDiscrete:
     @pytest.mark.parametrize("x0,dtype", scalar_testdata)
     def test_discrete_scalar_constant(self, x0, dtype, dt=0.1, tf=1.0):
         x0 = dtype(x0)
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         const = builder.add(library.Constant(dtype(1.0), name="const"))
         integrator = builder.add(
@@ -427,7 +426,7 @@ class TestIntegratorDiscrete:
         print(ctx.discrete_state)
         recorded_signals = {"y": integrator.output_ports[0]}
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -441,7 +440,7 @@ class TestIntegratorDiscrete:
     @pytest.mark.parametrize("A,dtype", array_testdata)
     def test_discrete_array_constant(self, A, dtype, dt=0.1, tf=1.0):
         A = jnp.asarray(A, dtype=dtype)
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         const = builder.add(library.Constant(A, name="const"))
         integrator = builder.add(
@@ -454,7 +453,7 @@ class TestIntegratorDiscrete:
         diagram = builder.build()
         ctx = diagram.create_context()
         recorded_signals = {"y": integrator.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -470,7 +469,7 @@ class TestIntegratorDiscrete:
         A = np.asarray([0, 1, 2], dtype=dtype)
         step_time = 0.5
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         vec = builder.add(library.Constant(A, name="vec"))
         step = builder.add(
             library.Step(start_value=0, end_value=1, step_time=step_time)
@@ -495,7 +494,7 @@ class TestIntegratorDiscrete:
         diagram = builder.build()
         ctx = diagram.create_context()
         recorded_signals = {"y": integrator.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -516,7 +515,7 @@ class TestIntegratorDiscrete:
         B = np.asarray([4, 5, 6], dtype=dtype)
         step_time = 0.5
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         vec = builder.add(library.Constant(A, name="vec"))
         step = builder.add(
             library.Step(start_value=0, end_value=1, step_time=step_time)
@@ -544,7 +543,7 @@ class TestIntegratorDiscrete:
         diagram = builder.build()
         ctx = diagram.create_context()
         recorded_signals = {"y": integrator.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -561,7 +560,7 @@ class TestIntegratorDiscrete:
     def test_hold_discrete(self, show_plot=False):
         t1 = 1.0
         dt = 0.1
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         int_ = builder.add(
             library.IntegratorDiscrete(
                 dt,
@@ -587,7 +586,7 @@ class TestIntegratorDiscrete:
             "ramp_": ramp.output_ports[0],
             "cmp_": cmp.output_ports[0],
         }
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -621,7 +620,7 @@ class TestIntegratorDiscrete:
     def test_limit_discrete(self, ulim, llim, const, show_plot=False):
         t1 = 1.0
         dt = 0.1
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         int_ = builder.add(
             library.IntegratorDiscrete(
                 dt,
@@ -643,7 +642,7 @@ class TestIntegratorDiscrete:
         recorded_signals = {
             "int_": int_.output_ports[0],
         }
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -668,7 +667,7 @@ class TestIntegratorDiscrete:
         assert jnp.allclose(int__, int__sol)
 
 
-# TODO:
+# NOTE:
 # - Test filter options for the derivative filter
 class TestPIDDiscrete:
     # Tests equivalence between the PID controller and one constructed from
@@ -683,7 +682,7 @@ class TestPIDDiscrete:
         assert block.get_feedthrough() == [(0, 0)]
 
     def _test_open_loop(self, kp=0.0, ki=0.0, kd=0.0, dt=0.1):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
 
@@ -723,7 +722,7 @@ class TestPIDDiscrete:
             "pid": pid.output_ports[0],
             "pid_sol": pid_sol.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         assert jnp.allclose(results.outputs["pid"], results.outputs["pid_sol"])
@@ -745,7 +744,7 @@ class TestPIDDiscrete:
         # DerivativeDiscrete block when the proportional and integral gains are
         # zero.
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
@@ -761,7 +760,7 @@ class TestPIDDiscrete:
             "pid": pid.output_ports[0],
             "derivative": derivative.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -770,7 +769,7 @@ class TestPIDDiscrete:
     def test_nondefault_initial_state(self):
         dt = 0.1
         initial_state = 1.0
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
         pid = builder.add(
             library.PIDDiscrete(kp=0.0, ki=0.0, kd=1.0, dt=dt, initial_state=1.0)
@@ -786,7 +785,7 @@ class TestPIDDiscrete:
     def test_external_initial_state(self):
         dt = 0.1
         initial_state = 1.0
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(frequency=1.0, amplitude=1.0, phase=0.0))
         const = builder.add(library.Constant(initial_state))
         pid = builder.add(
@@ -823,7 +822,7 @@ class TestTransferFunctionDiscrete:
     def test_transfer_function_discrete(self, show_plot=False):
         t1 = 1.0
         dt = 0.1
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         ramp = builder.add(library.Ramp())
         # zoh = builder.add(library.ZeroOrderHold(dt))
@@ -872,7 +871,7 @@ class TestTransferFunctionDiscrete:
             "tf_0": tf_0.output_ports[0],
             "tf_0_sol": tf_0_sol.output_ports[0],
         }
-        res = collimator.simulate(
+        res = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -950,7 +949,7 @@ class TestLTISystemDiscrete:
     def test_lti_system_discrete(self, A, B, C, D, x0, u, dt=0.1, num_steps=100):
         dt = 0.1
         tf = dt * num_steps
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         control = builder.add(library.Constant(u))
         lti = builder.add(library.LTISystemDiscrete(A, B, C, D, dt, x0))
@@ -962,7 +961,7 @@ class TestLTISystemDiscrete:
         recorded_signals = {
             "y": lti.output_ports[0],
         }
-        sol = collimator.simulate(
+        sol = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals
         )
 
@@ -1000,7 +999,7 @@ class TestUnitDelay:
         """
         Test that a unit delay delays a continuous-time signal by one sample.
         """
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         z0 = 0.0
@@ -1013,7 +1012,7 @@ class TestUnitDelay:
         diagram = builder.build()
         context = diagram.create_context()
         recorded_signals = {"y": delay.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -1023,7 +1022,7 @@ class TestUnitDelay:
         """
         This test case is similar to above, but with an array of inputs.
         """
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1045,7 +1044,7 @@ class TestUnitDelay:
             "ramp": ramp.output_ports[0],
             "chirp": chirp.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 
@@ -1075,7 +1074,7 @@ class TestUnitDelay:
 
 class TestZeroOrderHold:
     def test_zoh_bool(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1096,7 +1095,7 @@ class TestZeroOrderHold:
             "cmp": cmp.output_ports[0],
         }
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, tf),
@@ -1119,7 +1118,7 @@ class TestZeroOrderHold:
 
     def test_zoh_int(self):
         # Test zero-order hold of an integrated signal
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1143,7 +1142,7 @@ class TestZeroOrderHold:
             "zoh": zoh.output_ports[0],
         }
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, tf),
@@ -1165,7 +1164,7 @@ class TestZeroOrderHold:
 
     def test_zoh_zoh(self):
         """Check that two ZOH blocks in series don't do anything."""
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1184,7 +1183,7 @@ class TestZeroOrderHold:
             "zoh2": zoh2.output_ports[0],
         }
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, tf),
@@ -1206,7 +1205,7 @@ class TestZeroOrderHold:
         and have no effect on the discrete clock signal, so both components of
         the vector output signal are the same.
         """
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1231,7 +1230,7 @@ class TestZeroOrderHold:
             "clk": clk.output_ports[0],
             "dclk": dclk.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, tf),
@@ -1268,12 +1267,12 @@ class TestZeroOrderHold:
     # @pytest.mark.xfail(reason="Fix was reverted because it crashed prod models: #5957")
     def test_zoh_group_init(self):
         # Tests recursion error in static initialization ordering. See:
-        # https://collimator.atlassian.net/browse/WC-266
+        # https://jaxonomy.atlassian.net/browse/WC-266
 
         dt = 0.1
 
         # Construct the subdiagram
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         zoh = builder.add(library.ZeroOrderHold(dt=dt, name="zoh"))
         delay = builder.add(library.UnitDelay(dt=dt, initial_state=0.0, name="delay"))
         builder.connect(zoh.output_ports[0], delay.input_ports[0])
@@ -1283,7 +1282,7 @@ class TestZeroOrderHold:
         group = builder.build(name="group")
 
         # Construct the root diagram
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(group)
         builder.connect(group.output_ports[0], group.input_ports[0])
 
@@ -1302,7 +1301,7 @@ class TestRateLimiter:
         """
         Basic test case for a rate limiter
         """
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         ramp = builder.add(library.Ramp(start_time=0.0))
@@ -1341,7 +1340,7 @@ class TestRateLimiter:
             "rt_dyn": rt_dyn.output_ports[0],
             "rt_d_dyn": rt_d_dyn.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 2.0),
@@ -1375,7 +1374,7 @@ class TestRateLimiter:
         """
         This test case is similar to above, but with an array of inputs.
         """
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         dt = 0.1
         tf = 2.0
@@ -1402,7 +1401,7 @@ class TestRateLimiter:
             "ramp_d": ramp_d.output_ports[0],
             "ramp_d_sol": ramp_d_sol.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
 

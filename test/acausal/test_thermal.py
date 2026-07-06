@@ -1,18 +1,17 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 from matplotlib import pyplot as plt
 
 # acausal imports
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import thermal as ht
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import thermal as ht
 
-# collimator imports
-import collimator
-from collimator import library as lib
-import collimator.logging as logging
-from collimator.testing.markers import skip_if_not_jax
+# jaxonomy imports
+import jaxonomy
+from jaxonomy import library as lib
+import jaxonomy.logging as logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 logging.set_log_level(logging.DEBUG)
 skip_if_not_jax()
@@ -44,11 +43,11 @@ def test_basic_thermal(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     lpf = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     lpf = builder.add(lpf)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
     lpf_ctx = context[lpf.system_id]
@@ -64,7 +63,7 @@ def test_basic_thermal(show_plot=False):
     recorded_signals = {
         "x": lpf.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -160,8 +159,8 @@ def test_basic_thermal_with_IO(show_plot=False):
     ac2 = AcausalCompiler(ev, ad2, verbose=True)
     hs2 = ac2()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     hs2 = builder.add(hs2)
     R_k = builder.add(lib.Constant(1.0))
     Gr_k = builder.add(lib.Constant(Gr_const))
@@ -170,7 +169,7 @@ def test_basic_thermal_with_IO(show_plot=False):
     builder.connect(R_k.output_ports[0], hs2.input_ports[R_k_idx])
     builder.connect(Gr_k.output_ports[0], hs2.input_ports[Gr_k_idx])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -184,7 +183,7 @@ def test_basic_thermal_with_IO(show_plot=False):
         "t2": hs2.output_ports[t2_idx],
         "t3": hs2.output_ports[t3_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),

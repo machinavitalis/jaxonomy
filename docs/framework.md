@@ -1,3 +1,3 @@
 # Framework
 
-## ::: collimator.framework
+## ::: jaxonomy.framework

@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MIT
+
+from typing import List, Optional, TYPE_CHECKING
+from .component_library.component_base import Sym, SymKind
+from .types import DiagramProcessingData
+
+if TYPE_CHECKING:
+    import sympy as sp
+
+
+class AcausalCompilerError(Exception):
+    def __init__(
+        self,
+        message: str,
+        dpd: Optional[DiagramProcessingData] = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.dpd = dpd
+
+    def __str__(self):
+        message = self.message or None
+        return f"Acausal compilation failed.\n{self._context_info()}\n{message}"
+
+    def _context_info(self) -> str:
+        strbuf = []
+        if self.dpd:
+            strbuf.append(f"Related AcausalDiagram: {self.dpd.ad.name}.")
+
+        return "".join(strbuf)
+
+
+class AcausalModelError(Exception):
+    """An error class for raising errors related to invalid model construction.
+    If possible, these should be 'collected' so that multiple errors can be reported
+    simultaneously, so as to reduce the number of compilation attempts needed to fix
+    all errors."""
+
+    def __init__(
+        self,
+        message: str,
+        components=None,  # : Optional[List[ComponentBase]] cant use this type hint without circular import
+        ports=None,  # : Optional[List[Tuple[ComponentBase, PortBase]]]  cant use this type hint without circular import
+        include_port_domain: bool = False,
+        dpd: Optional[DiagramProcessingData] = None,
+        variables: Optional[List["sp.Symbol"]] = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.components = components
+        self.ports = ports
+        self.include_port_domain = include_port_domain
+        self.dpd = dpd
+        self.vars = variables
+
+    def _deref_vars(self):
+        def _append(sym, var2ref):
+            cmp = self.dpd.ad.sym_to_cmp[sym]
+            if cmp not in var2ref.keys():
+                var2ref[cmp] = []
+            var2ref[cmp].append(sym.sym_name)
+
+            return var2ref
+
+        var2ref = {}  # dict{var:{comp:[params]}}
+        for var in self.vars:
+            if var in self.dpd.syms_map_original.keys():
+                # if var is a sp.Symbol, get the parent Sym object
+                sym = self.dpd.syms_map_original[var]
+            elif isinstance(var, Sym):
+                sym = var
+            else:
+                raise ValueError(f"{var=} cannot be dereferenced")
+
+            if sym.kind == SymKind.node_pot:
+                # node potential variable smean nothing for user, so de-alias to the
+                # component potential variables.
+                aliasees = self.dpd.aliaser_map[sym]
+                for aliasee_tuple in aliasees:
+                    (aliasee, aliasee_expr) = aliasee_tuple
+                    if aliasee == SymKind.node_pot:
+                        raise ValueError(
+                            f"node_pot {sym} aliased another node pot {aliasee} which error formatting does not support"
+                        )
+                    _append(aliasee, var2ref)
+            else:
+                _append(sym, var2ref)
+
+        return var2ref
+
+    def __str__(self):
+        message = self.message or self.default_message
+        return f"{self._context_info()}\n{message}"
+
+    def _context_info(self) -> str:
+        strbuf = []
+        if self.dpd:
+            strbuf.append(f"\nRelated AcausalDiagram:\n\t{self.dpd.ad.name}.")
+        if self.components:
+            components_str = "\n\t".join([c.name for c in self.components])
+            strbuf.append(f"\nRelated components:\n\t{components_str}")
+        elif self.ports:
+            portnames = []
+            for c, port_name in self.ports:
+                port_str = c.name + ":" + port_name
+                if self.include_port_domain:
+                    port = c.ports[port_name]
+                    port_str = port_str + f"[{port.domain}]"
+                portnames.append(port_str)
+            ports_str = "\n\t".join(portnames)
+            strbuf.append(f"\nRelated ports:\n\t{ports_str}")
+        elif self.vars:
+            deref_vars = self._deref_vars()
+            strbuf.append(f"\nRelated parameters:\n\t{deref_vars}")
+
+        return "".join(strbuf)
+
+    @property
+    def default_message(self):
+        return type(self).__name__

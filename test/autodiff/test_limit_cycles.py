@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 # Test automatically finding simple limit cycles via optimization
@@ -11,10 +10,10 @@ from jax.flatten_util import ravel_pytree
 
 from scipy.optimize import minimize
 
-import collimator
-from collimator.simulation import SimulatorOptions, estimate_max_major_steps
-from collimator.models import VanDerPol, RimlessWheel, CompassGait
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy
+from jaxonomy.simulation import SimulatorOptions, estimate_max_major_steps
+from jaxonomy.models import VanDerPol, RimlessWheel, CompassGait
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 
@@ -40,7 +39,7 @@ def _test_find_limit_cycle(model, xc0, xd0, tf0, max_major_step_length=1.0):
         context = context.with_discrete_state(xd0)
 
         # Run simulation
-        results = collimator.simulate(model, context, (0.0, tf), options=options)
+        results = jaxonomy.simulate(model, context, (0.0, tf), options=options)
         xf = results.context.continuous_state
         return jnp.linalg.norm(xf - xc0) ** 2
 

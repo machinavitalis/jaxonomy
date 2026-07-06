@@ -1,0 +1,134 @@
+{
+  "hardware": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.11.15",
+    "jax_version": "0.9.2",
+    "jaxonomy_version": "2.2.0",
+    "ru_maxrss_unit": "bytes",
+    "ram_gb_total": 68.7
+  },
+  "regression_threshold": 1.5,
+  "cases": {
+    "batch_n1": {
+      "peak_mb_median": 322.438,
+      "peak_mb_samples": [
+        322.438,
+        321.016,
+        326.688
+      ],
+      "n_repeat": 3
+    },
+    "batch_n10": {
+      "peak_mb_median": 336.594,
+      "peak_mb_samples": [
+        336.594,
+        337.734,
+        336.312
+      ],
+      "n_repeat": 3
+    },
+    "batch_n100": {
+      "peak_mb_median": 372.172,
+      "peak_mb_samples": [
+        373.422,
+        372.0,
+        372.172
+      ],
+      "n_repeat": 3
+    },
+    "batch_mb_per_element": 0.4589639639639644,
+    "long_horizon_t10": {
+      "peak_mb_median": 317.531,
+      "peak_mb_samples": [
+        317.531,
+        316.969,
+        317.656
+      ],
+      "n_repeat": 3
+    },
+    "long_horizon_t100": {
+      "peak_mb_median": 316.5,
+      "peak_mb_samples": [
+        316.5,
+        317.844,
+        316.375
+      ],
+      "n_repeat": 3
+    },
+    "long_horizon_t1000": {
+      "peak_mb_median": 318.203,
+      "peak_mb_samples": [
+        318.859,
+        318.203,
+        317.094
+      ],
+      "n_repeat": 3
+    },
+    "long_horizon_mb_per_sim_second": 0.0011707207207206905,
+    "compile_scalar_exponential_decay": {
+      "peak_mb_median": 254.484,
+      "peak_mb_samples": [
+        254.484,
+        256.25,
+        254.016
+      ],
+      "n_repeat": 3
+    },
+    "compile_harmonic_oscillator": {
+      "peak_mb_median": 256.547,
+      "peak_mb_samples": [
+        256.188,
+        256.547,
+        256.562
+      ],
+      "n_repeat": 3
+    },
+    "compile_pid_first_order_plant": {
+      "peak_mb_median": 384.25,
+      "peak_mb_samples": [
+        385.297,
+        384.25,
+        384.016
+      ],
+      "n_repeat": 3
+    },
+    "compile_rc_acausal_dae": {
+      "peak_mb_median": 366.516,
+      "peak_mb_samples": [
+        367.422,
+        366.25,
+        366.516
+      ],
+      "n_repeat": 3
+    },
+    "compile_bouncing_ball_zc": {
+      "peak_mb_median": 265.344,
+      "peak_mb_samples": [
+        265.109,
+        265.344,
+        266.609
+      ],
+      "n_repeat": 3
+    },
+    "compile_state_machine_three_state": {
+      "peak_mb_median": 255.172,
+      "peak_mb_samples": [
+        254.312,
+        255.344,
+        255.172
+      ],
+      "n_repeat": 3
+    },
+    "compile_simulate_batch_decay_n10": {
+      "peak_mb_median": 336.344,
+      "peak_mb_samples": [
+        336.828,
+        336.344,
+        335.75
+      ],
+      "n_repeat": 3
+    }
+  }
+}

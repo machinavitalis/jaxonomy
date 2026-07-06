@@ -1,4 +1,4 @@
-name: Publish py.colimator.ai
+name: Publish py.jaxonomy.com
 
 on:
   workflow_dispatch:

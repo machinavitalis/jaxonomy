@@ -1,17 +1,16 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
 
 import pytest
 
-from collimator.framework import (
-    CollimatorError,
+from jaxonomy.framework import (
+    JaxonomyError,
     StaticError,
     ShapeMismatchError,
     BlockParameterError,
 )
-import collimator.testing as test
+import jaxonomy.testing as test
 
 this_dir = os.path.dirname(__file__)
 output_dir = "test/workdir/errors"
@@ -40,7 +39,7 @@ def test_add_different_length_vectors(request, backend):
 
 
 def test_string_gain(request):
-    with pytest.raises(CollimatorError) as e:
+    with pytest.raises(JaxonomyError) as e:
         test.run(
             request,
             model_json="model_string_gain.json",

@@ -1,9 +1,8 @@
 /**
- * Copyright (C) 2025 Collimator, Inc
  * SPDX-License-Identifier: MIT
  */
 
-[data-md-color-scheme="collimator"] {
+[data-md-color-scheme="jaxonomy"] {
 
     /* Primary color shades */
     --md-primary-fg-color:              #019B99;
@@ -54,7 +53,7 @@
     --md-accent-bg-color--light:        #EAECF6;
 }
 
-[data-md-color-scheme="collimator-dark"] {
+[data-md-color-scheme="jaxonomy-dark"] {
 
     /* Primary color shades */
     --md-primary-fg-color:              #016E6C;

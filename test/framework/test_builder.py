@@ -1,26 +1,25 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 import jax.numpy as jnp
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Sine,
     Integrator,
     Gain,
     Offset,
 )
-from collimator.framework.diagram import AlgebraicLoopError
-from collimator.framework.diagram_builder import (
+from jaxonomy.framework.diagram import AlgebraicLoopError
+from jaxonomy.framework.diagram_builder import (
     DisconnectedInputError,
     BuilderError,
     SystemNameNotUniqueError,
     EmptyDiagramError,
 )
 
-from collimator import logging
+from jaxonomy import logging
 
 
 logging.set_file_handler("test.log")
@@ -35,7 +34,7 @@ class TestBasic:
 
         # Could add these systems directly to the builder, but this tests the
         # return value of add()
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Sin_0 = builder.add(Sine(name="Sin_0"))
         Integrator_0 = builder.add(Integrator(x0, name="Integrator_0"))
@@ -56,7 +55,7 @@ class TestBasic:
     def test_repeated_names(self):
         Gain_0 = Gain(1.0, name="Gain_0")
         Gain_1 = Gain(2.0, name="Gain_0")
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Gain_0)
         with pytest.raises(
@@ -68,7 +67,7 @@ class TestBasic:
         # Could add these systems directly to the builder, but this tests the
         # return value of add()
         Gain_0 = Gain(1.0, name="Gain_0")
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder._check_system_not_registered(Gain_0)
 
@@ -79,7 +78,7 @@ class TestBasic:
         builder._check_system_is_registered(Gain_0)
 
     def test_check_input_not_connected(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         Sin_0 = builder.add(Sine(name="Sin_0"))
@@ -93,7 +92,7 @@ class TestBasic:
             builder._check_input_not_connected(Gain_0.input_ports[0].locator)
 
     def test_check_input_connected(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         Gain_1 = builder.add(Gain(1.0, name="Gain_1"))
@@ -105,14 +104,14 @@ class TestBasic:
             builder._check_input_is_connected(Gain_0.input_ports[0].locator)
 
     def test_empty(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(
             EmptyDiagramError, match=r"Cannot compile an empty diagram.*"
         ):
             builder.build()
 
     def test_add_to_already_built(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Sine(name="Sin_0"))
         builder.build()
 
@@ -124,14 +123,14 @@ class TestBasic:
             builder.add(Gain_0)
 
     def test_add_twice(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         with pytest.raises(BuilderError, match=r"System Gain_0 is already registered"):
             builder.add(Gain_0)
 
     def test_connect_unregistered(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = Gain(1.0, name="Gain_0")
         Sin_0 = builder.add(Sine(name="Sin_0"))
@@ -140,7 +139,7 @@ class TestBasic:
             builder.connect(Sin_0.output_ports[0], Gain_0.input_ports[0])
 
     def test_connect_already_connected(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         Sin_0 = builder.add(Sine(name="Sin_0"))
@@ -155,7 +154,7 @@ class TestBasic:
         # Manually add an invalid connection between unregistered systems and
         #  test that the error is caught.
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = Gain(1.0, name="Gain_0")
         Sin_0 = builder.add(Sine(name="Sin_0"))
@@ -168,7 +167,7 @@ class TestBasic:
             builder.build()
 
     def test_export(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Gain_0 = builder.add(Gain(3.0, name="Gain_0"))
         builder.export_input(Gain_0.input_ports[0], name="u")
         builder.export_output(Gain_0.output_ports[0], name="y")
@@ -198,7 +197,7 @@ class TestAlgebraicLoops:
         # single integrator
 
         x0 = 0.5
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Integrator_0 = builder.add(Integrator(x0, name="Integrator_0"))
 
@@ -210,7 +209,7 @@ class TestAlgebraicLoops:
         ctx = diagram.create_context()
 
         t0, t1 = 0.0, 2.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             ctx,
             (t0, t1),
@@ -221,7 +220,7 @@ class TestAlgebraicLoops:
         assert jnp.allclose(xf, x0 * jnp.exp(t1))
 
     def test_algebraic_loop_single_block(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         builder.connect(Gain_0.output_ports[0], Gain_0.input_ports[0])
 
@@ -231,7 +230,7 @@ class TestAlgebraicLoops:
             diagram.check_no_algebraic_loops()
 
     def test_algebraic_loop_multi_block(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         Gain_1 = builder.add(Gain(1.0, name="Gain_1"))
         builder.connect(Gain_0.output_ports[0], Gain_1.input_ports[0])
@@ -243,7 +242,7 @@ class TestAlgebraicLoops:
             diagram.check_no_algebraic_loops()
 
     def test_algebraic_loop_submodel(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Gain_0 = builder.add(Gain(1.0, name="Gain_0"))
         Gain_1 = builder.add(Gain(1.0, name="Gain_1"))
         builder.connect(Gain_0.output_ports[0], Gain_1.input_ports[0])
@@ -252,7 +251,7 @@ class TestAlgebraicLoops:
 
         submodel = builder.build()
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Gain_2 = builder.add(Gain(1.0, name="Gain_2"))
         builder.add(submodel)
         builder.connect(Gain_2.output_ports[0], submodel.input_ports[0])
@@ -269,7 +268,7 @@ class TestComposition:
         a = 2.0
         b = 1.0
         x0 = 4.0
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Gain_0 = builder.add(Gain(-a, name="Gain_0"))
         Offset_0 = builder.add(Offset(b, name="Offset_0"))
@@ -281,7 +280,7 @@ class TestComposition:
         dynamics = builder.build(name="dynamics")
 
         # Start with a new DiagramBuilder and embed the subsystem
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Integrator_0 = builder.add(Integrator(x0, name="Integrator_0"))
         builder.add(dynamics)
         builder.connect(Integrator_0.output_ports[0], dynamics.input_ports[0])
@@ -296,7 +295,7 @@ class TestComposition:
         ctx = diagram.create_context()
 
         t0, t1 = 0.0, 2.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             ctx,
             (t0, t1),
@@ -310,7 +309,7 @@ class TestComposition:
         assert jnp.allclose(xf, x_true)
 
     def _make_nested_diagram(self, a=2.0, b=1.0, x0=0.0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Integrator_0 = builder.add(Integrator(x0, name="Integrator_0"))
         Gain_0 = builder.add(Gain(-a, name="Gain_0"))
@@ -321,7 +320,7 @@ class TestComposition:
         submodel = builder.build(name="submodel")
 
         # Start with a new DiagramBuilder and embed the subsystem
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Offset_0 = builder.add(Offset(b, name="Offset_0"))
         builder.add(submodel)
         builder.connect(Offset_0.output_ports[0], submodel.input_ports[0])
@@ -331,7 +330,7 @@ class TestComposition:
         return diagram
 
     def test_dependencies(self):
-        from collimator.framework import DependencyTicket
+        from jaxonomy.framework import DependencyTicket
 
         diagram = self._make_nested_diagram()
         diagram.create_context()
@@ -426,7 +425,7 @@ class TestComposition:
 
         # Test integration forward in time
         t0, t1 = 0.0, 2.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             ctx,
             (t0, t1),
@@ -453,7 +452,7 @@ class TestPrimitiveSystems:
         sys_2 = Integrator(x0, name="Integrator_0")
         sys_3 = Integrator(v0, name="Integrator_1")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Sin_0 = builder.add(sys_1)
         assert sys_1 is Sin_0
@@ -522,7 +521,7 @@ class TestPrimitiveSystems:
     def test_scalar_linear(self):
         a = 1.5
         x0 = 4.0
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         # Test adding multiple systems at once
         sys_1 = Gain(-a, name="Gain_0")

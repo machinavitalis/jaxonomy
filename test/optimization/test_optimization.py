@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,13 +5,16 @@ Standalone tests for optimization framework. These are separated from any UI or 
 processing.
 """
 
+import importlib.util
 import platform
 import pytest
 import numpy as np
 import jax.numpy as jnp
-from collimator import DiagramBuilder, Parameter, SimulatorOptions
-from collimator.library import Adder, Constant, Gain, Integrator, Power
-from collimator.optimization import (
+
+HAS_EVOSAX = importlib.util.find_spec("evosax") is not None
+from jaxonomy import DiagramBuilder, Parameter, SimulatorOptions
+from jaxonomy.library import Adder, Constant, Gain, Integrator, Power
+from jaxonomy.optimization import (
     IPOPT,
     DistributionConfig,
     Evosax,
@@ -23,7 +25,7 @@ from collimator.optimization import (
     OptimizableWithStochasticVars,
     Scipy,
 )
-from collimator.optimization import (
+from jaxonomy.optimization import (
     NormalizeTransform,
     LogitTransform,
     CompositeTransform,
@@ -241,27 +243,24 @@ def test_optimization_unbounded():
     opt_param = optim.optimize()
     assert np.isclose(opt_param["c"], 1.65, atol=0.1)
 
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_unbounded_evosax():
+    diagram = _make_diagram()
+    base_context = diagram.create_context()
+    params_0 = {"c": 0.5}
+    sim_t_span = (0.0, 2.0)
+    sim_options = SimulatorOptions(max_major_steps=1)
+    optimizable_model = OptimizableModel(diagram, base_context, params_0=params_0, sim_t_span=sim_t_span, sim_options=sim_options)
+
     # Evosax Particle Swarm Optimization
-    optim = Evosax(
-        optimizable_model,
-        "PSO",
-        pop_size=50,
-        num_generations=50,
-        print_every=10,
-        seed=42,
-    )
+    optim = Evosax(optimizable_model, "PSO", pop_size=50, num_generations=50, print_every=10, seed=42)
     opt_param = optim.optimize()
     assert np.isclose(opt_param["c"], 1.65, atol=0.1)
 
-    # Evosax Simulated Annealing
-    optim = Evosax(
-        optimizable_model,
-        "PSO",
-        pop_size=50,
-        num_generations=50,
-        print_every=10,
-        seed=42,
-    )
+    # Evosax Simulated Annealing (currently the original test uses PSO twice - keep as-is)
+    optim = Evosax(optimizable_model, "PSO", pop_size=50, num_generations=50, print_every=10, seed=42)
     opt_param = optim.optimize()
     assert np.isclose(opt_param["c"], 1.65, atol=0.1)
 
@@ -291,18 +290,6 @@ def test_optimization_bounded():
     opt_param = optim.optimize()
     assert np.isclose(opt_param["c"], 1.62, atol=0.01)
 
-    # Evosax with PSO
-    optim = Evosax(
-        optimizable_model,
-        "PSO",
-        pop_size=50,
-        num_generations=50,
-        print_every=10,
-        seed=42,
-    )
-    opt_param = optim.optimize()
-    assert np.isclose(opt_param["c"], 1.62, atol=0.01)
-
     # inf bounds with non-bound supporting algorithms should also work
     optimizable_model = OptimizableModel(
         diagram,
@@ -319,6 +306,20 @@ def test_optimization_bounded():
     )
     opt_param = optim.optimize()
     assert np.isclose(opt_param["c"], 1.65, atol=0.1)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_bounded_evosax():
+    diagram = _make_diagram()
+    base_context = diagram.create_context()
+    params_0 = {"c": 0.5}
+    sim_t_span = (0.0, 2.0)
+    optimizable_model = OptimizableModel(diagram, base_context, params_0=params_0, sim_t_span=sim_t_span, bounds={"c": (0.0, 1.62)})
+
+    optim = Evosax(optimizable_model, "PSO", pop_size=50, num_generations=50, print_every=10, seed=42)
+    opt_param = optim.optimize()
+    assert np.isclose(opt_param["c"], 1.62, atol=0.01)
 
 
 # if nlopt publishes a compatible version, reactivate this for all
@@ -360,7 +361,10 @@ def test_optimization_constrained():
     )
 
 
-@pytest.mark.skip(reason="Hessian computation needs investigation")
+HAS_CYIPOPT = importlib.util.find_spec("cyipopt") is not None
+
+
+@pytest.mark.skipif(not HAS_CYIPOPT, reason="cyipopt not installed")
 @pytest.mark.slow
 def test_optimization_constrainted_ipopt():
     diagram = _make_diagram()

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -9,13 +8,13 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Integrator,
     Gain,
 )
 
-from collimator.testing import fd_grad
+from jaxonomy.testing import fd_grad
 
 pytestmark = pytest.mark.slow
 
@@ -32,7 +31,7 @@ def test_scalar_linear(method):
     #  dx/dx0 = exp(-a * T)
 
     a = 1.5
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     Gain_0 = builder.add(Gain(-a, name="Gain_0"))
     Integrator_0 = builder.add(Integrator(0.0, name="Integrator_0"))
 
@@ -46,7 +45,7 @@ def test_scalar_linear(method):
     int_context = context[Integrator_0.system_id].with_continuous_state(jnp.array(4.0))
     context = context.with_subcontext(Integrator_0.system_id, int_context)
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         math_backend="jax",
         enable_autodiff=True,
         ode_solver_method=method,
@@ -55,7 +54,7 @@ def test_scalar_linear(method):
     @jax.jit
     def fwd(x0, context):
         context = context.with_continuous_state(x0)
-        results = collimator.simulate(diagram, context, (t0, t1), options=options)
+        results = jaxonomy.simulate(diagram, context, (t0, t1), options=options)
         return results.context[Integrator_0.system_id].continuous_state
 
     grad_fwd = jax.jit(jax.grad(fwd))
@@ -80,7 +79,7 @@ def test_vector_linear(method):
     #  dx/dx0 = exp(-a * T)
 
     a = 1.5
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     Gain_0 = builder.add(Gain(-a, name="Gain_0"))
     Integrator_0 = builder.add(Integrator(jnp.zeros(2), name="Integrator_0"))
 
@@ -91,7 +90,7 @@ def test_vector_linear(method):
     context = diagram.create_context()
     t0, t1 = 0.0, 2.0
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         math_backend="jax",
         enable_autodiff=True,
         ode_solver_method=method,
@@ -101,7 +100,7 @@ def test_vector_linear(method):
     def fwd(x0, context):
         int_context = context[Integrator_0.system_id].with_continuous_state(x0)
         context = context.with_subcontext(Integrator_0.system_id, int_context)
-        results = collimator.simulate(diagram, context, (t0, t1), options=options)
+        results = jaxonomy.simulate(diagram, context, (t0, t1), options=options)
         return results.context[Integrator_0.system_id].continuous_state
 
     jac = jax.jit(jax.jacrev(fwd))
@@ -125,7 +124,7 @@ def test_scalar_nonlinear(method):
     #  dx/dx0 = 1 / (1 + a * x0 * T)^2
     #  dx/da = -x0**2 * T / (1 + a * x0 * T)^2
 
-    class ScalarNonlinear(collimator.LeafSystem):
+    class ScalarNonlinear(jaxonomy.LeafSystem):
         def __init__(self, *args, a=1.0, **kwargs):
             super().__init__(*args, **kwargs)
 
@@ -143,7 +142,7 @@ def test_scalar_nonlinear(method):
 
     context = context.with_continuous_state(jnp.array(4.0))
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         math_backend="jax",
         enable_autodiff=True,
         ode_solver_method=method,
@@ -155,7 +154,7 @@ def test_scalar_nonlinear(method):
     def fwd(x0, a, context):
         context = context.with_continuous_state(x0)
         context.parameters["a"] = a
-        results = collimator.simulate(system, context, (t0, t1), options=options)
+        results = jaxonomy.simulate(system, context, (t0, t1), options=options)
         return results.context.continuous_state
 
     grad_fwd = jax.jit(jax.grad(fwd, argnums=(0, 1)))
@@ -185,7 +184,7 @@ def test_vector_nonlinear(method):
     #
     # Compare against finite-difference approximation of the gradient.
 
-    class VectorNonlinear(collimator.LeafSystem):
+    class VectorNonlinear(jaxonomy.LeafSystem):
         def __init__(self, *args, g=9.81, a=0.1, **kwargs):
             super().__init__(*args, **kwargs)
 
@@ -206,7 +205,7 @@ def test_vector_nonlinear(method):
     t0, t1 = 0.0, 0.5
 
     # Simulate and compare derivative against finite difference.
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         math_backend="jax",
         enable_autodiff=True,
         ode_solver_method=method,
@@ -217,7 +216,7 @@ def test_vector_nonlinear(method):
         context = context.with_continuous_state(x0)
         context.parameters["g"] = g
         context.parameters["a"] = a
-        results = collimator.simulate(system, context, (t0, t1), options=options)
+        results = jaxonomy.simulate(system, context, (t0, t1), options=options)
         return results.context.continuous_state[0]
 
     grad_fwd = jax.jit(jax.grad(fwd, argnums=(0, 1, 2)))
@@ -238,7 +237,7 @@ def test_mass_matrix():
     A0 = np.array([[-1.0, 0.0], [0.0, -1.0]])
     B0 = np.array([[0.0], [1.0]])
 
-    class VectorLinear(collimator.LeafSystem):
+    class VectorLinear(jaxonomy.LeafSystem):
         # M @ ẋ = A @ x + B @ u
 
         def __init__(self, mass_matrix=None, A=None, B=None, x0=None, name=None):
@@ -275,7 +274,7 @@ def test_mass_matrix():
     context = system.create_context()
     t0 = 0.0
     t1 = 2.0
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         ode_solver_method="bdf",
         enable_autodiff=True,
     )
@@ -288,7 +287,7 @@ def test_mass_matrix():
         # inconsistent initial conditions
         x0 = jnp.array(x0).at[1].set(B[1, 0] * u0[0])
         context = context.with_continuous_state(x0).with_parameters({"B": B})
-        results = collimator.simulate(system, context, (t0, t1), options=options)
+        results = jaxonomy.simulate(system, context, (t0, t1), options=options)
         return results.context.continuous_state[0]
 
     grad_fwd = jax.jit(jax.grad(fwd, argnums=(0, 1)))
@@ -301,7 +300,7 @@ def test_mass_matrix():
 
 
 if __name__ == "__main__":
-    # from collimator import logging
+    # from jaxonomy import logging
 
     # logging.set_log_level(logging.DEBUG)
     # logging.set_file_handler("test.log")

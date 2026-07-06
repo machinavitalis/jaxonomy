@@ -1,12 +1,11 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 import jax.numpy as jnp
 
-import collimator
-from collimator.framework import DependencyTicket
+import jaxonomy
+from jaxonomy.framework import DependencyTicket
 
 
 pytestmark = pytest.mark.minimal
@@ -14,7 +13,7 @@ pytestmark = pytest.mark.minimal
 
 # Test the case where no ODE is provided: the time derivatives should
 # automatically be zeroed
-class StaticContinuousState(collimator.LeafSystem):
+class StaticContinuousState(jaxonomy.LeafSystem):
     def __init__(self, name=None):
         super().__init__(name=name)
         self.declare_continuous_state(shape=(2,))
@@ -29,7 +28,7 @@ def test_no_ode():
     ctx = ctx.with_continuous_state(x0)
 
     t0, t1 = 0.0, 2.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         model,
         ctx,
         (t0, t1),
@@ -40,7 +39,7 @@ def test_no_ode():
     assert jnp.allclose(xf, x0)
 
 
-class ScalarLinear(collimator.LeafSystem):
+class ScalarLinear(jaxonomy.LeafSystem):
     #
     # dx/dt = -a * x + u
     #
@@ -66,7 +65,7 @@ class ScalarLinear(collimator.LeafSystem):
         def _feedthrough_callback(time, state, *inputs, **parameters):
             return inputs[0]
 
-        # TODO: Convenience function for declaring feedthrough ports?
+        # NOTE: Convenience function for declaring feedthrough ports?
         self.declare_output_port(
             _feedthrough_callback,
             name="u_out",
@@ -90,9 +89,9 @@ class TestScalarLinear:
         ctx = model.create_context()
         ctx = ctx.with_continuous_state(x0)
 
-        # TODO: This should use LogVectorOutput
+        # NOTE: This should use LogVectorOutput
         t0, t1 = 0.0, 2.0
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             model,
             ctx,
             (t0, t1),
@@ -103,7 +102,7 @@ class TestScalarLinear:
         assert jnp.allclose(xf, x0 * jnp.exp(-a * t1))
 
     def test_dependencies(self):
-        from collimator.framework.dependency_graph import mark_cache
+        from jaxonomy.framework.dependency_graph import mark_cache
 
         a = 1.5
         x0 = 4.0

@@ -1,12 +1,11 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 import jax.numpy as jnp
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Gain,
     Integrator,
 )
@@ -31,7 +30,7 @@ pytestmark = pytest.mark.minimal
 def test_scalar_linear():
     a = 1.5
     x0 = 4.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     Gain_0 = builder.add(Gain(-a, name="Gain_0"))
     Integrator_0 = builder.add(Integrator(x0, name="Integrator_0"))
 
@@ -42,7 +41,7 @@ def test_scalar_linear():
     ctx = diagram.create_context()
 
     t0, t1 = 0.0, 2.0
-    result = collimator.simulate(
+    result = jaxonomy.simulate(
         diagram,
         ctx,
         (t0, t1),

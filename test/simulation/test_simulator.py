@@ -1,35 +1,34 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Integrator,
     Sine,
     Gain,
     DiscreteClock,
     UnitDelay,
 )
-from collimator.backend import numpy_api as cnp
-from collimator.logging import logger
-from collimator.simulation import SimulatorOptions, ResultsOptions, ResultsMode
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy.logging import logger
+from jaxonomy.simulation import SimulatorOptions, ResultsOptions, ResultsMode
+from jaxonomy.testing.markers import skip_if_not_jax
 
 pytestmark = pytest.mark.minimal
 
 
 class TestContinuousTime:
     @pytest.mark.parametrize("enable_tracing", [True, False])
-    def test_leaf_system(self, enable_tracing, dtype=cnp.float64):
+    def test_leaf_system(self, enable_tracing, dtype=npa.float64):
         if enable_tracing:
             skip_if_not_jax()
 
         a = 1.5
 
-        class ScalarLinear(collimator.LeafSystem):
+        class ScalarLinear(jaxonomy.LeafSystem):
             def __init__(self):
                 super().__init__(name="ScalarLinear")
                 self.declare_continuous_state(shape=(), ode=self.ode, dtype=dtype)
@@ -46,24 +45,24 @@ class TestContinuousTime:
 
         tf = 1.5
 
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             rtol=1e-6,
             atol=1e-8,
             enable_tracing=enable_tracing,
         )
-        results = collimator.simulate(model, ctx, (0.0, tf), options=options)
+        results = jaxonomy.simulate(model, ctx, (0.0, tf), options=options)
         ctx = results.context
 
         assert ctx.time == tf
 
         x = ctx.continuous_state
-        assert cnp.allclose(x, x0 * cnp.exp(-a * tf), rtol=1e-4, atol=1e-6)
+        assert npa.allclose(x, x0 * npa.exp(-a * tf), rtol=1e-4, atol=1e-6)
 
     def test_flat_diagram(self, dtype=jnp.float64):
         # Continuous-time integration with double integrator model
         # from primitives
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Sin_0 = builder.add(Sine(name="Sin_0"))
 
         v0 = dtype(-1.0)
@@ -79,8 +78,8 @@ class TestContinuousTime:
         ctx = diagram.create_context()
 
         tf = 10.0
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         logger.debug(ctx.state)
 
@@ -92,7 +91,7 @@ class TestContinuousTime:
         assert jnp.allclose(v, -jnp.cos(tf), rtol=1e-4, atol=1e-6)
 
     def test_flat_diagram_full_output(self, dtype=jnp.float64):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         Sin_0 = builder.add(Sine(name="Sin_0"))
 
         v0 = dtype(-1.0)
@@ -112,8 +111,8 @@ class TestContinuousTime:
             "Integrator_0": Integrator_0.output_ports[0],
             "Integrator_1": Integrator_1.output_ports[0],
         }
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(
             diagram, ctx, (0.0, tf), recorded_signals=recorded_signals, options=options
         )
 
@@ -132,7 +131,7 @@ class TestContinuousTime:
         assert jnp.allclose(vs, -jnp.cos(ts), rtol=1e-4, atol=1e-6)
 
     def test_nested_diagram(self, dtype=jnp.float64):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         v0 = dtype(-1.0)
         x0 = dtype(0.0)
@@ -145,7 +144,7 @@ class TestContinuousTime:
 
         plant = builder.build(name="plant")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         Sin_0 = builder.add(Sine(name="Sin_0"))
         builder.add(plant)
@@ -155,8 +154,8 @@ class TestContinuousTime:
         ctx = diagram.create_context()
 
         tf = 10.0
-        options = collimator.SimulatorOptions(rtol=1e-6, atol=1e-8)
-        results = collimator.simulate(diagram, ctx, (0.0, tf), options=options)
+        options = jaxonomy.SimulatorOptions(rtol=1e-6, atol=1e-8)
+        results = jaxonomy.simulate(diagram, ctx, (0.0, tf), options=options)
         ctx = results.context
         logger.debug(ctx.state)
 
@@ -168,7 +167,7 @@ class TestContinuousTime:
         assert jnp.allclose(v, -jnp.cos(tf), rtol=1e-4, atol=1e-6)
 
 
-class SimpleDiscreteTimeSystem(collimator.LeafSystem):
+class SimpleDiscreteTimeSystem(jaxonomy.LeafSystem):
     def __init__(self, x0=0.0, period=1.0):
         super().__init__(name="plant")
 
@@ -209,8 +208,8 @@ class TestDiscreteTime:
         context = context.with_discrete_state(xd0)
 
         # Create a simulator
-        options = collimator.SimulatorOptions(max_major_steps=100)
-        simulator = collimator.Simulator(model, options=options)
+        options = jaxonomy.SimulatorOptions(max_major_steps=100)
+        simulator = jaxonomy.Simulator(model, options=options)
         sim_state = simulator.initialize(context)
         context = sim_state.context
 
@@ -233,8 +232,8 @@ class TestDiscreteTime:
         context = context.with_discrete_state(xd0)
 
         # Create a simulator
-        options = collimator.SimulatorOptions(max_major_steps=100)
-        simulator = collimator.Simulator(model, options=options)
+        options = jaxonomy.SimulatorOptions(max_major_steps=100)
+        simulator = jaxonomy.Simulator(model, options=options)
         sim_state = simulator.initialize(context)
         context = sim_state.context
 
@@ -260,18 +259,31 @@ class TestDiscreteTime:
         system = DiscreteClock(dt)
         context = system.create_context()
 
-        # First check that the default fails
+        # T-B6-followup-int-time-scale-auto: the default int_time_scale="auto"
+        # now sizes the integer-time scale to the horizon, so the 10-year sim
+        # runs without the user having to bump the scale by hand.
+        results = jaxonomy.simulate(
+            system,
+            context,
+            (0.0, tf),
+        )
+        assert jnp.allclose(results.context.time, tf)
+
+        # An explicitly-pinned scale that is too fine for the horizon still
+        # raises the representability error (so the diagnostic is preserved
+        # for users who pin a scale by hand).
         with pytest.raises(RuntimeError):
-            results = collimator.simulate(
+            jaxonomy.simulate(
                 system,
                 context,
                 (0.0, tf),
+                options=jaxonomy.SimulatorOptions(int_time_scale=1e-12),
             )
 
-        # Then if we increase the time scale to nanoseconds, it should work
+        # And an explicit nanosecond scale also works.
         ns_scale = 1e-9
-        options = collimator.SimulatorOptions(int_time_scale=ns_scale)
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(int_time_scale=ns_scale)
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -280,7 +292,7 @@ class TestDiscreteTime:
         assert jnp.allclose(results.context.time, tf)
 
 
-class DampedLinear(collimator.LeafSystem):
+class DampedLinear(jaxonomy.LeafSystem):
     def __init__(self, a=1.0, name="plant"):
         super().__init__(name=name)
 
@@ -299,7 +311,7 @@ class DampedLinear(collimator.LeafSystem):
         return -self.a * x + u
 
 
-class Actuator(collimator.LeafSystem):
+class Actuator(jaxonomy.LeafSystem):
     def __init__(self, name="actuator"):
         super().__init__(name=name)
 
@@ -329,7 +341,7 @@ class Actuator(collimator.LeafSystem):
 
 class TestHybridTime:
     def _make_diagram(self, dt=0.1):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         plant = builder.add(DampedLinear())
 
@@ -367,7 +379,7 @@ class TestHybridTime:
             "plant": diagram["plant"].output_ports[0],
             "actuator": diagram["actuator"].output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, tf),
@@ -391,7 +403,7 @@ def test_ffwd(show_plot=False):
     test simple feed forward model (no states, no discrete blocks)
     to verify that some results data is proiduced as expected.
     """
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     sw = builder.add(Sine(name="sw"))
     gain = builder.add(Gain(name="gain", gain=2.0))
     # int_ = builder.add(Integrator(0.0, name="Integrator_0"))
@@ -412,7 +424,7 @@ def test_ffwd(show_plot=False):
         max_major_step_length=dt,
     )
     recorded_signals = {"sw": sw.output_ports[0], "gain": gain.output_ports[0]}
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),
@@ -440,12 +452,12 @@ def test_ffwd(show_plot=False):
     assert jnp.allclose(results.outputs["gain"], jnp.sin(results.time) * 2)
 
 
-def test_discrete_albert(show_plot=False):
+def test_discrete_clock_unitdelay_solution(show_plot=False):
     """
     test simple discrete system for verifying the returned solution.
     """
     dt = 1.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     dclk = builder.add(DiscreteClock(dt=dt))
     ud = builder.add(UnitDelay(dt=dt, initial_state=0.0))
 
@@ -466,7 +478,7 @@ def test_discrete_albert(show_plot=False):
         "dclk": dclk.output_ports[0],
         "ud": ud.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),
@@ -523,12 +535,12 @@ def test_discrete_albert(show_plot=False):
     assert jnp.allclose(results.outputs["ud"], ud_sol)
 
 
-def test_hybrid_albert(show_plot=False):
+def test_hybrid_oscillator_discrete_clock_solution(show_plot=False):
     """
     test simple hybrid system with analytical solution.
     """
     dt = 1.0
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     int0 = builder.add(Integrator(name="int0", initial_state=0.0))
     int1 = builder.add(Integrator(name="int1", initial_state=1.0))
     gain = builder.add(Gain(name="gain", gain=-4.0))
@@ -552,6 +564,10 @@ def test_hybrid_albert(show_plot=False):
         save_time_series=True,
         atol=1e-8,
         rtol=1e-6,
+        # buffer_length defaults to max_major_steps (11), but the continuous
+        # oscillator records many minor steps per major step, overflowing it and
+        # truncating results.time — size it to hold the whole trajectory.
+        buffer_length=20000,
     )
     recorded_signals = {
         "int0": int0.output_ports[0],
@@ -559,7 +575,7 @@ def test_hybrid_albert(show_plot=False):
         "dclk": dclk.output_ports[0],
         "ud": ud.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, tf),
@@ -645,7 +661,7 @@ def test_notimplemented_output_mode():
     results_options = ResultsOptions(mode=ResultsMode.discrete_steps_only)
 
     with pytest.raises(NotImplementedError) as e:
-        collimator.simulate(
+        jaxonomy.simulate(
             sys,
             context,
             (0.0, 0.1),
@@ -665,9 +681,9 @@ def test_dirty_static_params_should_raise():
     Test simulate raises an error if a static parameter is dirty.
     """
 
-    @collimator.ports(inputs=0, outputs=1)
-    @collimator.parameters(static=["s"])
-    class MySystem(collimator.LeafSystem):
+    @jaxonomy.ports(inputs=0, outputs=1)
+    @jaxonomy.parameters(static=["s"])
+    class MySystem(jaxonomy.LeafSystem):
         def __init__(self, s, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
@@ -679,8 +695,8 @@ def test_dirty_static_params_should_raise():
                 requires_inputs=True,
             )
 
-    p = collimator.Parameter(1.0)
-    builder = collimator.DiagramBuilder()
+    p = jaxonomy.Parameter(1.0)
+    builder = jaxonomy.DiagramBuilder()
     builder.add(MySystem(p))
     diagram = builder.build(name="MyModel")
 
@@ -688,7 +704,7 @@ def test_dirty_static_params_should_raise():
     p.set(2.0)
 
     with pytest.raises(ValueError) as e:
-        collimator.simulate(
+        jaxonomy.simulate(
             diagram,
             context,
             (0.0, 1.0),
@@ -701,9 +717,9 @@ def test_dirty_static_params_should_raise():
 
 
 def test_change_static_parameter():
-    @collimator.ports(inputs=0, outputs=1)
-    @collimator.parameters(static=["s"])
-    class MySystem(collimator.LeafSystem):
+    @jaxonomy.ports(inputs=0, outputs=1)
+    @jaxonomy.parameters(static=["s"])
+    class MySystem(jaxonomy.LeafSystem):
         def __init__(self, s, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
@@ -715,14 +731,14 @@ def test_change_static_parameter():
                 requires_inputs=True,
             )
 
-    p = collimator.Parameter(1.0)
+    p = jaxonomy.Parameter(1.0)
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     my_system = builder.add(MySystem(p, name="MySystem"))
     diagram = builder.build(name="MyModel", parameters={"p": p})
 
     context1 = diagram.create_context()
-    results1 = collimator.simulate(
+    results1 = jaxonomy.simulate(
         diagram,
         context1,
         (0.0, 1.0),
@@ -734,7 +750,7 @@ def test_change_static_parameter():
     p.set(3.0)
     context2 = diagram.create_context()
 
-    results2 = collimator.simulate(
+    results2 = jaxonomy.simulate(
         diagram,
         context2,
         (0.0, 1.0),
@@ -748,7 +764,7 @@ if __name__ == "__main__":
     # test_ffwd()
     # TestHybridTime().test_heavy_damping()
     # test_ffwd(show_plot=True)
-    # test_discrete_albert(show_plot=True)
-    # test_hybrid_albert(show_plot=True)
+    # test_discrete_clock_unitdelay_solution(show_plot=True)
+    # test_hybrid_oscillator_discrete_clock_solution(show_plot=True)
     test_notimplemented_output_mode()
     pass

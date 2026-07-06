@@ -1,3 +1,3 @@
 # Optimization
 
-## ::: collimator.optimization
+## ::: jaxonomy.optimization

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test source blocks that generate signals.
@@ -23,9 +22,9 @@ import os
 import numpy as np
 from ..gen_datasource_csv import gen_files
 import shutil
-import collimator
-from collimator import library
-from collimator.backend import numpy_api as cnp
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.backend import numpy_api as npa
 
 pytestmark = pytest.mark.minimal
 
@@ -60,6 +59,14 @@ class TestSourceBlock:
 
 class TestChirp:
     def test_chirp_simulation(self):
+        """Default ``units='hz'`` matches the docstring / scipy.signal.chirp.
+
+        T-122-followup-chirp-hz-convention: pre-2026-05 the block
+        silently interpreted ``f0`` / ``f1`` in rad/s; the expected
+        sample below now includes the ``2π`` factor that the Hz path
+        introduces so the trace matches the (correct) documented
+        semantics.
+        """
         sim_stop_time = 20.0
         dt = 0.05
 
@@ -71,10 +78,10 @@ class TestChirp:
 
         context = system.create_context()
         recorded_signals = {"y": system.output_ports[0]}
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=dt,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, sim_stop_time),
@@ -82,12 +89,88 @@ class TestChirp:
             options=options,
         )
 
-        # Exact solution
+        # Exact solution under the Hz convention: instantaneous angular
+        # frequency is 2π·(f0 + (f1−f0)·t/stop_time), phase is the
+        # integral.
         f_t = f0 + (f1 - f0) * 0.5 * results.time / chirp_stop_time
-        chirp_sol = np.cos(f_t * results.time)
+        chirp_sol = np.cos(2.0 * np.pi * f_t * results.time)
 
         assert np.allclose(results.context.time, sim_stop_time)
         assert np.allclose(results.outputs["y"], chirp_sol)
+
+    def test_chirp_legacy_rad_s_convention_byte_equivalent(self):
+        """``units='rad/s'`` opt-in preserves the pre-fix expression.
+
+        Existing diagrams that depended on the old rad/s interpretation
+        must remain byte-equivalent after passing ``units='rad/s'``.
+        Emits a DeprecationWarning that we catch and assert on.
+        """
+        import warnings
+
+        sim_stop_time = 20.0
+        dt = 0.05
+        f0 = 0.01
+        f1 = 1.0
+        chirp_stop_time = 2.0
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            system = library.Chirp(
+                f0=f0, f1=f1, stop_time=chirp_stop_time, phi=0.0,
+                units="rad/s",
+            )
+        depr = [w for w in caught
+                if issubclass(w.category, DeprecationWarning)]
+        assert len(depr) == 1
+        assert "units='rad/s'" in str(depr[0].message)
+
+        context = system.create_context()
+        recorded_signals = {"y": system.output_ports[0]}
+        options = jaxonomy.SimulatorOptions(
+            max_major_step_length=dt,
+        )
+        results = jaxonomy.simulate(
+            system,
+            context,
+            (0.0, sim_stop_time),
+            recorded_signals=recorded_signals,
+            options=options,
+        )
+        # Pre-fix expected expression (NO 2π).
+        f_t = f0 + (f1 - f0) * 0.5 * results.time / chirp_stop_time
+        chirp_sol = np.cos(f_t * results.time)
+        assert np.allclose(results.outputs["y"], chirp_sol)
+
+    def test_chirp_hz_matches_scipy_chirp(self):
+        """At a sample of times, the Hz Chirp matches scipy.signal.chirp."""
+        from scipy.signal import chirp as scipy_chirp
+
+        sim_stop_time = 5.0
+        dt = 0.01
+        f0 = 0.5  # Hz
+        f1 = 3.0  # Hz
+
+        system = library.Chirp(f0=f0, f1=f1, stop_time=sim_stop_time, phi=0.0)
+        ctx = system.create_context()
+        results = jaxonomy.simulate(
+            system, ctx, (0.0, sim_stop_time),
+            recorded_signals={"y": system.output_ports[0]},
+            options=jaxonomy.SimulatorOptions(max_major_step_length=dt),
+        )
+        t = np.asarray(results.time)
+        expected = scipy_chirp(t, f0=f0, t1=sim_stop_time, f1=f1,
+                               method="linear")
+        # Tight tolerance: same analytic form, just floating-point
+        # accumulation differences in the JAX path.
+        np.testing.assert_allclose(
+            np.asarray(results.outputs["y"]), expected, atol=1e-6
+        )
+
+    def test_chirp_rejects_unknown_units(self):
+        from jaxonomy.framework.error import BlockParameterError
+
+        with pytest.raises(BlockParameterError):
+            library.Chirp(f0=1.0, f1=2.0, stop_time=1.0, units="rpm")
 
 
 class TestDataSource:
@@ -117,7 +200,7 @@ class TestDataSource:
 
         # create DataSource blocks that ingest the CSV files created to verify
         # ingestion functionality.
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         ds_f0_o1 = builder.add(
             library.DataSource(
@@ -195,7 +278,7 @@ class TestDataSource:
                 header_as_first_row=True,
                 time_samples_as_column=True,
                 time_column="1",
-                data_columns="2",  # FIXME why cant this be "1"
+                data_columns="2",  # NOTE why cant this be "1"
             )
         )
         builder.add(
@@ -244,7 +327,7 @@ class TestDataSource:
 
 class TestClock:
     def test_clock_simulation(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         clock = builder.add(library.Clock())
         integrator = builder.add(library.Integrator(0.0))
         builder.connect(clock.output_ports[0], integrator.input_ports[0])
@@ -253,7 +336,7 @@ class TestClock:
         context = diagram.create_context()
         diagram.check_types(context)
 
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram,
             context,
             (0.0, 1.0),
@@ -275,7 +358,7 @@ class TestClock:
         x = clock.output_ports[0].eval(ctx)
 
         assert np.allclose(x, t.astype(dtype))
-        assert isinstance(x, cnp.ndarray)
+        assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
 
@@ -290,7 +373,7 @@ class TestClock:
         ctx = clock.create_context()
 
         recorded_signals = {"y": clock.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             clock, ctx, (t[0], t[-1]), recorded_signals=recorded_signals
         )
 
@@ -332,7 +415,7 @@ class TestConstant:
         ctx = Constant_0.create_context()
         val = Constant_0.output_ports[0].eval(ctx)
         assert np.allclose(val, x)
-        assert isinstance(val, cnp.ndarray)
+        assert isinstance(val, npa.ndarray)
         assert val.shape == x.shape
         assert val.dtype == dtype
 
@@ -341,7 +424,7 @@ class TestConstant:
         ctx = Constant_0.create_context()
         val = Constant_0.output_ports[0].eval(ctx)
         assert np.allclose(val, x)
-        assert isinstance(val, cnp.ndarray)
+        assert isinstance(val, npa.ndarray)
         assert val.shape == x.shape
         assert val.dtype == np.bool_
 
@@ -360,10 +443,10 @@ class TestPulse:
 
         dt = 0.01
         sim_stop_time = 2.0
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=dt,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             pulse,
             context,
             (0.0, sim_stop_time),
@@ -464,7 +547,7 @@ class TestRandomNumber:
             "x": system.output_ports[0],
         }
 
-        result = collimator.simulate(
+        result = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -569,10 +652,10 @@ class TestRamp:
 
         dt = 0.1
         sim_stop_time = 10.0
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=dt,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             ramp,
             context,
             (0.0, sim_stop_time),
@@ -641,10 +724,10 @@ class TestSawtooth:
 
         dt = 0.1
         sim_stop_time = 10.0
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=dt,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             sawtooth,
             context,
             (0.0, sim_stop_time),
@@ -685,7 +768,7 @@ class TestSawtooth:
         assert np.allclose(y, y_ex)
 
 
-# FIXME: call like ctx.with_time(np.linspace(...)) is not a supported way to use the API
+# NOTE: call like ctx.with_time(np.linspace(...)) is not a supported way to use the API
 class TestSine:
     @pytest.mark.parametrize("dtype", float_dtypes)
     def test_sin(self, dtype):
@@ -700,7 +783,7 @@ class TestSine:
         x = Sine_0.output_ports[0].eval(ctx)
 
         assert np.allclose(x, np.sin(t))
-        assert isinstance(x, cnp.ndarray)
+        assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
 
@@ -714,7 +797,7 @@ class TestSine:
         x = Sine_0.output_ports[0].eval(ctx)
 
         assert np.allclose(x, A * np.sin(f * t))
-        assert isinstance(x, cnp.ndarray)
+        assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
 
@@ -728,7 +811,7 @@ class TestSine:
         x = Cosine_0.output_ports[0].eval(ctx)
 
         assert np.allclose(x, np.cos(t), atol=1e-6)
-        assert isinstance(x, cnp.ndarray)
+        assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
 
@@ -745,7 +828,7 @@ class TestStep:
         context = step.create_context()
 
         recorded_signals = {"y": step.output_ports[0]}
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             step, context, (0.0, 2.0), recorded_signals=recorded_signals
         )
         return results.time, results.outputs["y"]
@@ -824,11 +907,11 @@ class TestWhiteNoise:
 
         recorded_signals = {"y": system.output_ports[0]}
         tf = 100.0
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=1 / fs,
             buffer_length=int(tf * fs) + 1,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -870,11 +953,11 @@ class TestWhiteNoise:
 
         recorded_signals = {"y": system.output_ports[0]}
         tf = 100.0
-        options = collimator.SimulatorOptions(
+        options = jaxonomy.SimulatorOptions(
             max_major_step_length=1 / fs,
             buffer_length=int(tf * fs) + 1,
         )
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),

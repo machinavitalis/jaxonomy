@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test that numerical backend settings result in the correct active backend."""
@@ -7,10 +6,10 @@ import pytest
 
 import numpy as np
 
-import collimator
-from collimator import library
-from collimator.backend import numpy_api as cnp
-from collimator.testing import set_backend
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy.testing import set_backend
 
 pytestmark = pytest.mark.minimal
 
@@ -19,7 +18,7 @@ def _psb_ode_diagram(use_jax):
     """A simple Clock -> PythonScript -> Integrator system"""
     PythonScript = library.CustomJaxBlock if use_jax else library.CustomPythonBlock
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     clock = builder.add(library.Clock(name="Clock_0"))
     psb = builder.add(
         PythonScript(
@@ -44,7 +43,7 @@ def test_set_jax_global_backend(use_jax):
     context = system.create_context()
     recorded_signals = {"x": system["Integrator_0"].output_ports[0]}
     tf = 1.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -54,7 +53,7 @@ def test_set_jax_global_backend(use_jax):
     assert np.allclose(results.outputs["x"], 0.5 * results.time**2)
 
     expected_backend = "jax" if use_jax else "numpy"
-    assert cnp.active_backend == expected_backend
+    assert npa.active_backend == expected_backend
 
 
 @pytest.mark.parametrize("use_jax", [True, False])
@@ -66,7 +65,7 @@ def test_set_np_global_backend(use_jax):
     context = system.create_context()
     recorded_signals = {"x": system["Integrator_0"].output_ports[0]}
     tf = 1.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -74,10 +73,10 @@ def test_set_np_global_backend(use_jax):
     )
     assert results.time[-1] == tf
     assert np.allclose(results.outputs["x"], 0.5 * results.time**2)
-    assert cnp.active_backend == "numpy"
+    assert npa.active_backend == "numpy"
 
 
-# See https://github.com/collimator-ai/collimator/pull/6760
+# See https://github.com/machinavitalis/jaxonomy/pull/6760
 # It may be safe to remove these two tests. Based on experimental testing and profiling,
 # setting the backend before loading the model allows us to drastically improve the
 # overall performance. Changing it after load could be an unsupported scenario.
@@ -91,9 +90,9 @@ def test_set_jax_backend_options(use_jax):
     system = _psb_ode_diagram(use_jax=use_jax)
     context = system.create_context()
     recorded_signals = {"x": system["Integrator_0"].output_ports[0]}
-    options = collimator.SimulatorOptions(math_backend=expected_backend)
+    options = jaxonomy.SimulatorOptions(math_backend=expected_backend)
     tf = 1.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -102,7 +101,7 @@ def test_set_jax_backend_options(use_jax):
     )
     assert results.time[-1] == tf
     assert np.allclose(results.outputs["x"], 0.5 * results.time**2)
-    assert cnp.active_backend == expected_backend
+    assert npa.active_backend == expected_backend
 
 
 @pytest.mark.skip(reason="We MUST set the backend globally before loading the model")
@@ -113,9 +112,9 @@ def test_set_np_backend_options_untraced():
     system = _psb_ode_diagram(use_jax=False)
     context = system.create_context()
     recorded_signals = {"x": system["Integrator_0"].output_ports[0]}
-    options = collimator.SimulatorOptions(math_backend="numpy")
+    options = jaxonomy.SimulatorOptions(math_backend="numpy")
     tf = 1.0
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -124,4 +123,4 @@ def test_set_np_backend_options_untraced():
     )
     assert results.time[-1] == tf
     assert np.allclose(results.outputs["x"], 0.5 * results.time**2)
-    assert cnp.active_backend == "numpy"
+    assert npa.active_backend == "numpy"

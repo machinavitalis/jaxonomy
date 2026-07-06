@@ -1,7 +1,6 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
-from collimator.framework import DependencyTicket, next_dependency_ticket
+from jaxonomy.framework import DependencyTicket, next_dependency_ticket
 
 
 def test_empty():

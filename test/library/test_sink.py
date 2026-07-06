@@ -1,15 +1,14 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 import numpy as np
 
-import collimator
-from collimator.library import Constant, Integrator, Stop, Comparator
-from collimator.simulation import SimulatorOptions
+import jaxonomy
+from jaxonomy.library import Constant, Integrator, Stop, Comparator
+from jaxonomy.simulation import SimulatorOptions
 
-# from collimator import logging
+# from jaxonomy import logging
 
 
 # logging.set_log_handlers(to_file="test.log")
@@ -21,7 +20,7 @@ def test_stop_with_integrator():
     sim_stop_time = 1.0
     expected_stop_time = 0.123456
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     c = builder.add(Constant(value=1.0))
     i = builder.add(Integrator(initial_state=0.0))
     cmp = builder.add(Comparator(operator=">="))
@@ -41,7 +40,7 @@ def test_stop_with_integrator():
         atol=1e-8,
         rtol=1e-6,
     )
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, sim_stop_time),

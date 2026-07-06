@@ -1,20 +1,20 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 from matplotlib import pyplot as plt
 
 # acausal imports
-from collimator.experimental import AcausalCompiler, AcausalDiagram, EqnEnv
-from collimator.experimental import translational as trans
-from collimator.experimental import hydraulic as hd
+from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal import translational as trans
+from jaxonomy.acausal import hydraulic as hd
+from jaxonomy.acausal.component_library.base import SymKind
 
-# collimator imports
-import collimator
-from collimator import library as lib
+# jaxonomy imports
+import jaxonomy
+from jaxonomy import library as lib
 
-import collimator.logging as logging
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy.logging as logging
+from jaxonomy.testing.markers import skip_if_not_jax
 
 logging.set_log_level(logging.DEBUG)
 skip_if_not_jax()
@@ -38,11 +38,11 @@ def test_fluid_pressure_to_accumulator(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -51,7 +51,7 @@ def test_fluid_pressure_to_accumulator(show_plot=False):
     recorded_signals = {
         "sensP": acausal_system.output_ports[p0_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -97,13 +97,13 @@ def test_fluid_inline_pump(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
     pmp_pwr = builder.add(lib.Constant(value=1e3))
     builder.connect(pmp_pwr.output_ports[0], acausal_system.input_ports[0])
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -114,7 +114,7 @@ def test_fluid_inline_pump(show_plot=False):
         "sensP": acausal_system.output_ports[p0_idx],
         "sensMF": acausal_system.output_ports[mf0_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -178,11 +178,11 @@ def test_hyd_act_and_spring(show_plot=False):
     ac = AcausalCompiler(ev, ad, verbose=True)
     acausal_system = ac()
 
-    # make wildcat diagram
-    builder = collimator.DiagramBuilder()
+    # make jaxonomy diagram
+    builder = jaxonomy.DiagramBuilder()
     acausal_system = builder.add(acausal_system)
 
-    # 'compile' wildcat diagram
+    # 'compile' jaxonomy diagram
     diagram = builder.build()
     context = diagram.create_context(check_types=True)
 
@@ -195,7 +195,7 @@ def test_hyd_act_and_spring(show_plot=False):
         "tfrc": acausal_system.output_ports[tfrc_idx],
         "mf": acausal_system.output_ports[mf_idx],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         diagram,
         context,
         (0.0, 10.0),
@@ -225,6 +225,42 @@ def test_hyd_act_and_spring(show_plot=False):
         plt.show()
 
     assert np.allclose(tspd, tspd_sol, atol=0.0, rtol=0.005)
+
+
+def test_hydraulic_massflow_source_constant_flow(show_plot=False):
+    ev = EqnEnv()
+    src_param = hd.MassflowSource(
+        ev,
+        name="src_param",
+        M=0.5,
+        enable_massflow_port=False,
+    )
+    src_inp = hd.MassflowSource(
+        ev,
+        name="src_inp",
+        enable_massflow_port=True,
+    )
+
+    assert src_param.port_idx_to_name == {-1: "port"}
+    assert src_inp.port_idx_to_name == {-1: "port"}
+
+    m_param = [
+        s
+        for s in src_param.syms
+        if s.sym_name == "M" and "_port_" not in str(s.s) and "_port(" not in str(s.s)
+    ][0]
+    m_inp = [
+        s
+        for s in src_inp.syms
+        if s.sym_name == "M" and "_port_" not in str(s.s) and "_port(" not in str(s.s)
+    ][0]
+    assert m_param.kind == SymKind.param
+    assert m_inp.kind == SymKind.inp
+
+    eqs_param = [str(eq.e) for eq in src_param.eqs]
+    eqs_inp = [str(eq.e) for eq in src_inp.eqs]
+    assert any("src_param_port_M" in e and "src_param_M" in e for e in eqs_param)
+    assert any("src_inp_port_M" in e and "src_inp_M" in e for e in eqs_inp)
 
 
 if __name__ == "__main__":

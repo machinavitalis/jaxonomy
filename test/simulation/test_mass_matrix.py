@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Tests for semi-explicit index-1 DAEs specified as mass matrix ODEs."""
@@ -10,15 +9,15 @@ from scipy import linalg
 
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
-from collimator.testing.markers import requires_jax
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.testing.markers import requires_jax
 
 A0 = np.array([[-1.0, 0.0], [0.0, -1.0]])
 B0 = np.array([[0.0], [1.0]])
 
 
-class VectorLinear(collimator.LeafSystem):
+class VectorLinear(jaxonomy.LeafSystem):
     #
     # M @ ẋ = A @ x + B @ u
     #
@@ -61,8 +60,8 @@ class TestVectorLinearLeaf:
 
         ctx = model.create_context()
         ctx = ctx.with_continuous_state(x0)
-        options = collimator.SimulatorOptions(ode_solver_method=solver)
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(ode_solver_method=solver)
+        results = jaxonomy.simulate(
             model,
             ctx,
             (0.0, tf),
@@ -157,7 +156,7 @@ class TestVectorLinearDiagram:
     def _make_diagram(self, blk1, blk2, source):
         # Create a simple diagram with two blocks and one common source.
         # For testing purposes, the two blocks should define equivalent systems
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(blk1, blk2, source)
         builder.connect(source.output_ports[0], blk1.input_ports[0])
         builder.connect(source.output_ports[0], blk2.input_ports[0])
@@ -180,8 +179,8 @@ class TestVectorLinearDiagram:
         system = self._make_diagram(blk1, blk2, source)
 
         context = system.create_context()
-        options = collimator.SimulatorOptions(ode_solver_method="bdf")
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(ode_solver_method="bdf")
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, tf),
@@ -227,7 +226,7 @@ class TestVectorLinearDiagram:
         assert system.has_mass_matrix
 
 
-class Robertson(collimator.LeafSystem):
+class Robertson(jaxonomy.LeafSystem):
     #
     # dx/dt = -0.04 * x + 1e4 * y * z
     # dy/dt = 0.04 * x - 1e4 * y * z - 3e7 * y^2
@@ -268,11 +267,11 @@ def test_robertson():
     ctx = model.create_context()
     tf = 1e7
     recorded_signals = {"x": model.output_ports[0]}
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         ode_solver_method="bdf",
         int_time_scale=1e-10,
     )
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         model,
         ctx,
         (0.0, tf),
@@ -287,7 +286,7 @@ def test_robertson():
     assert np.allclose(x.sum(axis=-1), 1.0)
 
 
-class PlanarPendulum(collimator.LeafSystem):
+class PlanarPendulum(jaxonomy.LeafSystem):
     """
     ########## Final DAE equations F(x, x_dot, y)=0 ############
 
@@ -388,10 +387,10 @@ def test_planar_pendulum():
 
     tf = 2.0
     recorded_signals = {"x": model.output_ports[0]}
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         ode_solver_method="bdf",
     )
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         model,
         ctx,
         (0.0, tf),

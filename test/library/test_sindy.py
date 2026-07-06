@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -7,16 +6,17 @@ Tests for the Sindy block
 
 import pytest
 
-import os
+ps = pytest.importorskip("pysindy")
 
-from types import SimpleNamespace
+import os  # noqa: E402
 
-import numpy as np
-import pysindy as ps
+from types import SimpleNamespace  # noqa: E402
 
-import collimator
-from collimator.library import Sindy, Constant
-from collimator.library.utils import read_csv, extract_columns
+import numpy as np  # noqa: E402
+
+import jaxonomy  # noqa: E402
+from jaxonomy.library import Sindy, Constant
+from jaxonomy.library.utils import read_csv, extract_columns
 
 
 @pytest.fixture
@@ -77,13 +77,21 @@ def train_sindy(
         normalize_columns=normalize_columns,
     )
 
-    model = ps.SINDy(
-        optimizer=optimizer,
-        feature_library=ps.feature_library.GeneralizedLibrary(library),
-        discrete_time=discrete_time,
-    )
+    if discrete_time:
+        model = ps.DiscreteSINDy(
+            optimizer=optimizer,
+            feature_library=ps.feature_library.GeneralizedLibrary(library),
+        )
+    else:
+        model = ps.SINDy(
+            optimizer=optimizer,
+            feature_library=ps.feature_library.GeneralizedLibrary(library),
+        )
 
-    model.fit(x_train, u=u_train, x_dot=x_dot_train, t=time, quiet=True)
+    if discrete_time:
+        model.fit(x_train, u=u_train, x_next=x_dot_train, t=time)
+    else:
+        model.fit(x_train, u=u_train, x_dot=x_dot_train, t=time)
 
     return model
 
@@ -167,33 +175,33 @@ def test_sindy_continuous_with_control_constant_dt(
 
             x_and_u = np.concatenate([x_test, u_test])
             pysindy_output = model.predict(x_test.reshape((1, 3)), u=u_test)
-            wildcat_output_direct = np.matmul(
+            jaxonomy_output_direct = np.matmul(
                 sindy_block.coefficients,
                 np.atleast_1d(sindy_block.features_func(x_and_u)),
             )
             if discrete_time:
                 state.discrete_state = x_test
-                wildcat_output = sindy_block._discrete_update(0.0, state, u_test)
+                jaxonomy_output = sindy_block._discrete_update(0.0, state, u_test)
             else:
                 state.continuous_state = x_test
-                wildcat_output = sindy_block._ode(0.0, state, u_test)
+                jaxonomy_output = sindy_block._ode(0.0, state, u_test)
 
         else:
             pysindy_output = model.predict(x_test.reshape((1, 3)))
-            wildcat_output_direct = np.matmul(
+            jaxonomy_output_direct = np.matmul(
                 sindy_block.coefficients,
                 np.atleast_1d(sindy_block.features_func(x_test)),
             )
 
             if discrete_time:
                 state.discrete_state = x_test
-                wildcat_output = sindy_block._discrete_update(0.0, state, ())
+                jaxonomy_output = sindy_block._discrete_update(0.0, state, ())
             else:
                 state.continuous_state = x_test
-                wildcat_output = sindy_block._ode(0.0, state, ())
+                jaxonomy_output = sindy_block._ode(0.0, state, ())
 
-        assert np.allclose(pysindy_output, wildcat_output_direct)
-        assert np.allclose(wildcat_output_direct, wildcat_output)
+        assert np.allclose(pysindy_output, jaxonomy_output_direct)
+        assert np.allclose(jaxonomy_output_direct, jaxonomy_output)
 
 
 @pytest.mark.parametrize(
@@ -272,32 +280,32 @@ def test_sindy_continuous_with_control_tarray(
             u_test = u_train[test_index, :]
             x_and_u = np.concatenate([x_test, u_test])
             pysindy_output = model.predict(x_test.reshape((1, 3)), u=u_test)
-            wildcat_output_direct = np.matmul(
+            jaxonomy_output_direct = np.matmul(
                 sindy_block.coefficients,
                 np.atleast_1d(sindy_block.features_func(x_and_u)),
             )
             if discrete_time:
                 state.discrete_state = x_test
-                wildcat_output = sindy_block._discrete_update(0.0, state, u_test)
+                jaxonomy_output = sindy_block._discrete_update(0.0, state, u_test)
             else:
                 state.continuous_state = x_test
-                wildcat_output = sindy_block._ode(0.0, state, u_test)
+                jaxonomy_output = sindy_block._ode(0.0, state, u_test)
 
         else:
             pysindy_output = model.predict(x_test.reshape((1, 3)))
-            wildcat_output_direct = np.matmul(
+            jaxonomy_output_direct = np.matmul(
                 sindy_block.coefficients,
                 np.atleast_1d(sindy_block.features_func(x_test)),
             )
             if discrete_time:
                 state.discrete_state = x_test
-                wildcat_output = sindy_block._discrete_update(0.0, state, ())
+                jaxonomy_output = sindy_block._discrete_update(0.0, state, ())
             else:
                 state.continuous_state = x_test
-                wildcat_output = sindy_block._ode(0.0, state, ())
+                jaxonomy_output = sindy_block._ode(0.0, state, ())
 
-        assert np.allclose(pysindy_output, wildcat_output_direct)
-        assert np.allclose(wildcat_output_direct, wildcat_output)
+        assert np.allclose(pysindy_output, jaxonomy_output_direct)
+        assert np.allclose(jaxonomy_output_direct, jaxonomy_output)
 
 
 ####################  Serialization  ####################
@@ -339,14 +347,14 @@ def test_sindy_serialization(lorenz_csv):
         x_and_u = np.hstack([x_test[0], u_test[0]])
 
         pysindy_output = model.predict(x_test, u=u_test)
-        wildcat_output_direct = np.matmul(
+        jaxonomy_output_direct = np.matmul(
             sindy_block.coefficients, np.atleast_1d(sindy_block.features_func(x_and_u))
         )
         state.continuous_state = x_test[0]
-        wildcat_output_ode = sindy_block._ode(0.0, state, u_test[0])
+        jaxonomy_output_ode = sindy_block._ode(0.0, state, u_test[0])
 
-        assert np.allclose(pysindy_output, wildcat_output_direct)
-        assert np.allclose(wildcat_output_direct, wildcat_output_ode)
+        assert np.allclose(pysindy_output, jaxonomy_output_direct)
+        assert np.allclose(jaxonomy_output_direct, jaxonomy_output_ode)
 
 
 ####################  Simulation  ####################
@@ -417,10 +425,10 @@ def test_sindy_simulation(
         initial_state=initial_state,
     )
 
-    compare_pysindy_and_wildcat = False
+    compare_pysindy_and_jaxonomy = False
 
-    if compare_pysindy_and_wildcat:
-        # Compare Sindy and Collimator block outputs
+    if compare_pysindy_and_jaxonomy:
+        # Compare Sindy and Jaxonomy block outputs
         state = SimpleNamespace()
         for test_index in [0, 11, 55, -10, -1]:
             x_test = x_train[test_index, :]
@@ -429,36 +437,36 @@ def test_sindy_simulation(
                 u_test = np.array([u_train[test_index]])
                 x_and_u = np.concatenate([x_test, u_test])
                 pysindy_output = model.predict(x_test.reshape((1, 2)), u=u_test)
-                wildcat_output_direct = np.matmul(
+                jaxonomy_output_direct = np.matmul(
                     sindy_block.coefficients,
                     np.atleast_1d(sindy_block.features_func(x_and_u)),
                 )
                 if discrete_time:
                     state.discrete_state = x_test
-                    wildcat_output = sindy_block._discrete_update(0.0, state, u_test)
+                    jaxonomy_output = sindy_block._discrete_update(0.0, state, u_test)
                 else:
                     state.continuous_state = x_test
-                    wildcat_output = sindy_block._ode(0.0, state, u_test)
+                    jaxonomy_output = sindy_block._ode(0.0, state, u_test)
 
             else:
                 pysindy_output = model.predict(x_test.reshape((1, 2)))
-                wildcat_output_direct = np.matmul(
+                jaxonomy_output_direct = np.matmul(
                     sindy_block.coefficients,
                     np.atleast_1d(sindy_block.features_func(x_test)),
                 )
                 if discrete_time:
                     state.discrete_state = x_test
-                    wildcat_output = sindy_block._discrete_update(0.0, state, ())
+                    jaxonomy_output = sindy_block._discrete_update(0.0, state, ())
                 else:
                     state.continuous_state = x_test
-                    wildcat_output = sindy_block._ode(0.0, state, ())
+                    jaxonomy_output = sindy_block._ode(0.0, state, ())
 
-            assert np.allclose(pysindy_output, wildcat_output_direct)
-            assert np.allclose(wildcat_output_direct, wildcat_output)
+            assert np.allclose(pysindy_output, jaxonomy_output_direct)
+            assert np.allclose(jaxonomy_output_direct, jaxonomy_output)
 
     # Check that simulation runs without errors
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     builder.add(sindy_block)
 
     if with_control:
@@ -468,4 +476,4 @@ def test_sindy_simulation(
     diagram = builder.build()
     context = diagram.create_context()
 
-    collimator.simulate(diagram, context, (0.0, 0.2))
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))

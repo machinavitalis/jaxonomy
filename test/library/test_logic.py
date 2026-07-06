@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test blocks that apply logical and bit operations to the signal.
@@ -10,16 +9,16 @@ Contains tests for:
 
 import pytest
 import numpy as np
-import collimator
-from collimator import library
-from collimator.framework.error import BlockParameterError
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.framework.error import BlockParameterError
 
 pytestmark = pytest.mark.minimal
 
 
 class TestLogicalOperator:
     def test_scalar(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         true_ = builder.add(library.Constant(name="true", value=True))
         false_ = builder.add(library.Constant(name="false", value=False))
@@ -57,7 +56,7 @@ class TestLogicalOperator:
             "nor_": nor_.output_ports[0],
             "nand_": nand_.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 0.1), recorded_signals=recorded_signals
         )
 
@@ -70,7 +69,7 @@ class TestLogicalOperator:
 
     # @pytest.mark.xfail(reason="haven't resolved WC-227")
     def test_array(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         arr_true = np.array([True, True, True])
         arr_false = np.array([False, False, False])
@@ -111,7 +110,7 @@ class TestLogicalOperator:
             "nor_": nor_.output_ports[0],
             "nand_": nand_.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 0.1), recorded_signals=recorded_signals
         )
 
@@ -134,7 +133,7 @@ class TestLogicalOperator:
         assert np.all(results.outputs["nand_"][0] == nand_sol)
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(
                 library.LogicalOperator(function="some", name="LogicalOperator")
@@ -151,7 +150,7 @@ class TestLogicalOperator:
 
 class TestLogicalReducer:
     def test_ops(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         true_ = builder.add(library.Constant(name="true", value=True))
         arr_true = np.array([True, True, True])
@@ -176,7 +175,7 @@ class TestLogicalReducer:
             "any_arr": any_arr.output_ports[0],
             "all_arr": all_arr.output_ports[0],
         }
-        results = collimator.simulate(
+        results = jaxonomy.simulate(
             diagram, context, (0.0, 0.1), recorded_signals=recorded_signals
         )
 
@@ -190,7 +189,7 @@ class TestLogicalReducer:
         assert np.all(results.outputs["all_arr"][0] == all_arr_sol)
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.LogicalReduce(function="some", name="LogicalReduce"))
             diagram = builder.build()

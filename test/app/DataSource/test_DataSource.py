@@ -1,10 +1,9 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import numpy as np
 import pytest
-import collimator.testing as test
+import jaxonomy.testing as test
 from ...gen_datasource_csv import gen_files
 
 pytestmark = pytest.mark.app

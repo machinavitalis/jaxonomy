@@ -1,16 +1,15 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
 
-import collimator
-from collimator.library import (
+import jaxonomy
+from jaxonomy.library import (
     Integrator,
     Sine,
 )
-from collimator.backend import numpy_api as cnp
-from collimator import logging
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy import logging
 
 
 logging.set_file_handler("test.log")
@@ -18,8 +17,8 @@ logging.set_file_handler("test.log")
 pytestmark = pytest.mark.minimal
 
 
-def test_double_integrator(dtype=cnp.float64):
-    builder = collimator.DiagramBuilder()
+def test_double_integrator(dtype=npa.float64):
+    builder = jaxonomy.DiagramBuilder()
     Sin_0 = builder.add(Sine(name="Sin_0"))
 
     x0 = dtype(0.0)
@@ -39,13 +38,13 @@ def test_double_integrator(dtype=cnp.float64):
     print([(p.name, p.system) for p in Integrator_0.output_ports])
     print([(p.name, p.system) for p in Integrator_1.input_ports])
 
-    t = cnp.linspace(0.0, 10.0, 100, dtype=dtype)
-    options = collimator.SimulatorOptions(atol=1e-8, rtol=1e-6)
+    t = npa.linspace(0.0, 10.0, 100, dtype=dtype)
+    options = jaxonomy.SimulatorOptions(atol=1e-8, rtol=1e-6)
     recorded_signals = {
         "x": Integrator_1.output_ports[0],
         "v": Integrator_0.output_ports[0],
     }
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram,
         ctx,
         (t[0], t[-1]),
@@ -57,12 +56,12 @@ def test_double_integrator(dtype=cnp.float64):
 
     print(x)
     print(v)
-    print(cnp.sin(t))
-    print(cnp.cos(t))
-    print(cnp.std(x - cnp.sin(t)))
-    print(cnp.std(x + cnp.sin(t)))
-    assert cnp.allclose(x, -cnp.sin(t), rtol=1e-4, atol=1e-6)
-    assert cnp.allclose(v, -cnp.cos(t), rtol=1e-4, atol=1e-6)
+    print(npa.sin(t))
+    print(npa.cos(t))
+    print(npa.std(x - npa.sin(t)))
+    print(npa.std(x + npa.sin(t)))
+    assert npa.allclose(x, -npa.sin(t), rtol=1e-4, atol=1e-6)
+    assert npa.allclose(v, -npa.cos(t), rtol=1e-4, atol=1e-6)
 
     assert x.dtype == dtype
     assert v.dtype == dtype

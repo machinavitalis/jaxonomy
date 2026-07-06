@@ -1,0 +1,9 @@
+---
+description: Jaxonomy agent bootstrap — read AGENTS.md first
+alwaysApply: true
+---
+
+Read `AGENTS.md` at the repository root before working in Jaxonomy. It is the
+canonical, tool-neutral agent guide: which docs to read to *modify* the code
+(start at `AGENTS/README.md`) versus to *use* the public API (read `SKILL.md`).
+Full orientation lives in the `AGENTS/` directory.

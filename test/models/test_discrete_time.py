@@ -1,14 +1,13 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
-import collimator
+import jaxonomy
 
 pytestmark = pytest.mark.minimal
 
 
-class SimpleDiscreteTimeSystem(collimator.LeafSystem):
+class SimpleDiscreteTimeSystem(jaxonomy.LeafSystem):
     def __init__(self, x0=0.0):
         super().__init__()
 

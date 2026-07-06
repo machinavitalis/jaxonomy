@@ -1,11 +1,11 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
+import sys
+import jaxonomy.testing as test
 import subprocess as sp
-import collimator
+import jaxonomy
 import pathlib
 import matplotlib.pyplot as plt
 
@@ -18,7 +18,9 @@ def test_load(request):
 
 def test_cli():
     cmd = [
-        "collimator_cli",
+        sys.executable,
+        "-m",
+        "jaxonomy.cli.jaxonomy_cli",
         "run",
         "--modeldir",
         "test/models/app/test_load/",
@@ -31,7 +33,7 @@ def test_cli():
 
 def test_simset():
     testdir = pathlib.Path(__file__).parent
-    load_model = collimator.load_model(testdir, model="simset.json")
+    load_model = jaxonomy.load_model(testdir, model="simset.json")
 
     assert load_model.simulator_options.max_minor_step_size == 33.0
     assert load_model.simulator_options.min_minor_step_size == 22.0
@@ -40,16 +42,23 @@ def test_simset():
     assert load_model.results_options.max_results_interval == 100000
 
 
-# Is this test still necessary? or can these things be tested from wildcat directly?
+# Is this test still necessary? or can these things be tested from jaxonomy directly?
 def test_feedthru_bool():
     testdir = pathlib.Path(__file__).parent
-    model = collimator.load_model(testdir, model="feedthru_bool.json")
+    model = jaxonomy.load_model(testdir, model="feedthru_bool.json")
 
-    non_feedthrough_blk_names = []
+    non_feedthrough_blk_names = [
+        # PIDDiscrete is intentionally NON-feedthrough (T-127-followup): its
+        # output is a sample-and-hold, so declaring no input-port dependency
+        # un-breaks the canonical plant→err→PID→Saturate→plant loop without a
+        # hand-inserted UnitDelay. Enforced by
+        # test_t_127_followup_pid_discrete_feedthrough.py; this list entry was
+        # stale (it predates that design change).
+        "PID_Discrete_1",
+    ]
     feedthrough_blk_names = [
         "DerivativeDiscrete_1",
         "FilterDiscrete_1",
-        "PID_Discrete_1",
         "PythonScript_0",  # Discrete mode (still has feedthrough)
         "PythonScript_1",  # Agnostic mode
     ]
@@ -65,7 +74,7 @@ def test_feedthru_bool():
 @pytest.mark.skip(reason="development test")
 def test_impact_detection_results(show_plot=False):
     testdir = pathlib.Path(__file__).parent
-    model = collimator.load_model(testdir, model="double_ball.json")
+    model = jaxonomy.load_model(testdir, model="double_ball.json")
     r = model.simulate(stop_time=1.0)
 
     if show_plot:
@@ -80,7 +89,7 @@ def test_impact_detection_results(show_plot=False):
 
 def test_goto_from():
     testdir = pathlib.Path(__file__).parent
-    model = collimator.load_model(testdir, model="goto_from.json")
+    model = jaxonomy.load_model(testdir, model="goto_from.json")
     model.simulate(stop_time=1.0)
 
 

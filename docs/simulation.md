@@ -1,3 +1,3 @@
 # Simulation
 
-## ::: collimator.simulation
+## ::: jaxonomy.simulation

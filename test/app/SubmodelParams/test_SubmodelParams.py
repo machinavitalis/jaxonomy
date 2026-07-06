@@ -1,10 +1,9 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
-from collimator.framework.error import BlockParameterError, BlockInitializationError
+import jaxonomy.testing as test
+from jaxonomy.framework.error import BlockParameterError, BlockInitializationError
 
 pytestmark = pytest.mark.app
 
@@ -46,7 +45,7 @@ def test_OrphanParam(request):
     #       the model.json in the data base, and has entries for the user modified values of A,B,C
     #   edit the source submodel to remove param A
     #   the model.json entry for first_instance will not be updated to have the A param removed,
-    #       so when you run a simulation, wildcat preprocessing identifies these orphan params,
+    #       so when you run a simulation, jaxonomy preprocessing identifies these orphan params,
     #       and raises a warning.
     #   add another instance called second_instance, another entry in made in model.json, but this
     #       only has user values for params B and C.

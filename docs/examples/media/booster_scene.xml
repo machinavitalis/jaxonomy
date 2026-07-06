@@ -1,0 +1,163 @@
+
+<mujoco model="booster_cinematic">
+  <option timestep="0.005" gravity="0 0 -9.81"/>
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096"/>
+    <headlight ambient="0.22 0.24 0.30" diffuse="0.0 0.0 0.0" specular="0.0 0.0 0.0"/>
+    <map shadowscale="0.5" fogstart="2000" fogend="6000"/>
+  </visual>
+  <asset>
+    <!-- Sky: gradient — warm horizon to deep navy overhead -->
+    <texture name="sky" type="skybox" builtin="gradient"
+             rgb1="0.20 0.32 0.55" rgb2="0.96 0.55 0.28"
+             width="1024" height="1024"/>
+    <!-- Ocean: a near-uniform deep cobalt with subtle banding so it looks like
+         water, not a chessboard. We use the 'flat' built-in type. -->
+    <texture name="ocean_tex" type="2d" builtin="flat"
+             rgb1="0.04 0.10 0.20" rgb2="0.04 0.10 0.20"
+             width="100" height="100" mark="random" markrgb="0.06 0.16 0.28" random="0.10"/>
+    <material name="ocean" texture="ocean_tex" texrepeat="40 40"
+              reflectance="0.45" shininess="0.7" specular="0.7"/>
+    <!-- Drone-ship deck -->
+    <material name="deck"   rgba="0.30 0.32 0.34 1.0" reflectance="0.05"/>
+    <material name="deck_edge" rgba="0.95 0.80 0.10 1.0"/>
+    <material name="target_ring1" rgba="1.00 1.00 1.00 1.0"/>
+    <material name="target_ring2" rgba="0.85 0.10 0.10 1.0"/>
+    <material name="target_center" rgba="1.00 1.00 1.00 1.0"/>
+    <!-- Booster materials -->
+    <material name="booster_white" rgba="0.94 0.94 0.96 1.0" reflectance="0.30" shininess="0.5"/>
+    <material name="booster_band"  rgba="0.18 0.18 0.20 1.0" reflectance="0.10"/>
+    <material name="booster_logo"  rgba="0.12 0.12 0.30 1.0"/>
+    <material name="nose_mat"      rgba="0.94 0.94 0.96 1.0" reflectance="0.30"/>
+    <material name="nose_tip"      rgba="0.20 0.20 0.24 1.0"/>
+    <material name="leg_mat"       rgba="0.55 0.55 0.60 1.0" reflectance="0.20"/>
+    <material name="leg_pad"       rgba="0.18 0.18 0.20 1.0"/>
+    <material name="fin_mat"       rgba="0.42 0.42 0.46 1.0" reflectance="0.15"/>
+    <material name="engine_bell"   rgba="0.18 0.16 0.16 1.0" reflectance="0.05"/>
+    <material name="engine_nozzle" rgba="0.45 0.30 0.18 1.0"/>
+    <!-- Plume layers, with emission so they glow even on the unlit side of the booster -->
+    <material name="plume_core"  rgba="1.00 0.95 0.80 0.95" emission="0.9"/>
+    <material name="plume_mid"   rgba="1.00 0.65 0.20 0.65" emission="0.5"/>
+    <material name="plume_outer" rgba="0.95 0.35 0.10 0.35" emission="0.3"/>
+    <material name="plume_haze"  rgba="0.55 0.20 0.10 0.18" emission="0.1"/>
+  </asset>
+  <worldbody>
+    <!-- Golden-hour sun (low elevation, raked from one side) -->
+    <light name="sun" mode="targetbodycom" target="booster"
+           pos="-3000 1500 1200" dir="0.6 -0.3 -0.7"
+           diffuse="1.10 0.92 0.78" specular="0.5 0.42 0.35"
+           castshadow="true"/>
+    <!-- Cool blue fill -->
+    <light name="fill" pos="2500 -1500 800" dir="-0.5 0.3 -0.5"
+           diffuse="0.28 0.32 0.42" specular="0.0 0.0 0.0"
+           castshadow="false"/>
+
+    <!-- Ocean surface (huge plane, slight reflectance to give a water sheen) -->
+    <geom name="ocean_surface" type="plane" size="6000 6000 1" material="ocean"/>
+
+    <!-- Drone-ship deck -->
+    <geom name="deck"        type="box" pos="0 0 1.5"   size="25 25 1.5"  material="deck"/>
+    <geom name="deck_edge_n" type="box" pos="0  25 3.2" size="25 0.4 0.2" material="deck_edge"/>
+    <geom name="deck_edge_s" type="box" pos="0 -25 3.2" size="25 0.4 0.2" material="deck_edge"/>
+    <geom name="deck_edge_e" type="box" pos=" 25 0 3.2" size="0.4 25 0.2" material="deck_edge"/>
+    <geom name="deck_edge_w" type="box" pos="-25 0 3.2" size="0.4 25 0.2" material="deck_edge"/>
+    <!-- Concentric landing target -->
+    <geom name="target_ring_outer" type="cylinder" pos="0 0 3.05" size="14 0.05" material="target_ring1"/>
+    <geom name="target_ring_mid"   type="cylinder" pos="0 0 3.08" size="10 0.05" material="target_ring2"/>
+    <geom name="target_ring_in"    type="cylinder" pos="0 0 3.11" size="6  0.05" material="target_ring1"/>
+    <geom name="target_center"     type="cylinder" pos="0 0 3.14" size="2  0.05" material="target_center"/>
+
+    <!-- BOOSTER ----------------------------------------------------------------- -->
+    <body name="booster" pos="0 0 3.5">
+      <freejoint name="root"/>
+
+      <!-- Main hull: lower section + black band + upper section, all sharing axis -->
+      <geom name="hull_lower" type="cylinder" pos="0 0 -12.0" size="1.85 8"
+            material="booster_white"/>
+      <geom name="hull_band"  type="cylinder" pos="0 0 -4.0"  size="1.8685 0.6"
+            material="booster_band"/>
+      <geom name="hull_upper" type="cylinder" pos="0 0 0"  size="1.85 11.0"
+            material="booster_white"/>
+      <!-- Logo band near top of upper hull -->
+      <geom name="logo_band" type="cylinder" pos="0 0 8.0" size="1.8592499999999998 0.8"
+            material="booster_logo"/>
+      <!-- Nose cone — capsule centered to attach top of upper hull, plus a darker tip -->
+      <geom name="nose" type="capsule" pos="0 0 13.5" size="1.7575 2.5"
+            material="nose_mat"/>
+      <geom name="nose_tip" type="sphere" pos="0 0 17.7575"
+            size="1.0175" material="nose_tip"/>
+
+      <!-- Grid fins: bigger, lattice-coloured, attached to body at the top section -->
+      <geom name="fin_xp" type="box" pos=" 3.25 0  9.5"
+            size="1.5 0.10 1.8" material="fin_mat"/>
+      <geom name="fin_xn" type="box" pos="-3.25 0  9.5"
+            size="1.5 0.10 1.8" material="fin_mat"/>
+      <geom name="fin_yp" type="box" pos="0  3.25 9.5"
+            size="0.10 1.5 1.8" material="fin_mat"/>
+      <geom name="fin_yn" type="box" pos="0 -3.25 9.5"
+            size="0.10 1.5 1.8" material="fin_mat"/>
+
+      <!-- Four landing legs deployed, with foot pads (attached to body, not gimbal) -->
+      <geom name="leg_xp" type="capsule"
+            fromto=" 1.85 0 -20.5  5.35 0 -17.5"
+            size="0.20" material="leg_mat"/>
+      <geom name="leg_xn" type="capsule"
+            fromto="-1.85 0 -20.5 -5.35 0 -17.5"
+            size="0.20" material="leg_mat"/>
+      <geom name="leg_yp" type="capsule"
+            fromto="0  1.85 -20.5  0  5.35 -17.5"
+            size="0.20" material="leg_mat"/>
+      <geom name="leg_yn" type="capsule"
+            fromto="0 -1.85 -20.5  0 -5.35 -17.5"
+            size="0.20" material="leg_mat"/>
+      <geom name="pad_xp" type="cylinder" pos=" 5.35 0 -17.5" size="0.7 0.15"
+            material="leg_pad"/>
+      <geom name="pad_xn" type="cylinder" pos="-5.35 0 -17.5" size="0.7 0.15"
+            material="leg_pad"/>
+      <geom name="pad_yp" type="cylinder" pos="0  5.35 -17.5" size="0.7 0.15"
+            material="leg_pad"/>
+      <geom name="pad_yn" type="cylinder" pos="0 -5.35 -17.5" size="0.7 0.15"
+            material="leg_pad"/>
+
+      <!-- GIMBAL ASSEMBLY ------------------------------------------------------
+           Engine bell + nozzle + plume rotate together about the gimbal joints,
+           so when the controller commands a non-zero gimbal angle, the engine
+           visibly tilts relative to the body — *that's* the "side thrust" cue.
+           Two hinges (pitch about body-Y, yaw about body-X) give 2-DOF tilt.
+           The plume body adds a slide joint so its length can shrink with
+           throttle (and the renderer can jitter it for a flicker effect).      -->
+      <body name="gimbal_y" pos="0 0 -20.0">
+        <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001"/>
+        <joint name="gimbal_pitch" type="hinge" axis="0 1 0" damping="0.2"/>
+        <body name="gimbal_z" pos="0 0 0">
+          <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001"/>
+          <joint name="gimbal_yaw" type="hinge" axis="1 0 0" damping="0.2"/>
+          <geom name="engine_bell" type="cylinder" pos="0 0 -1.0" size="1.4800000000000002 1.0"
+                material="engine_bell"/>
+          <geom name="engine_nozzle" type="cylinder" pos="0 0 -2.4" size="1.11 0.4"
+                material="engine_nozzle"/>
+          <body name="plume" pos="0 0 -2.8">
+            <inertial pos="0 0 0" mass="0.01" diaginertia="0.001 0.001 0.001"/>
+            <joint name="plume_extend" type="slide" axis="0 0 1" damping="0.1"/>
+            <geom name="plume_core"  type="capsule" fromto="0 0 0 0 0 -6"
+                  size="0.45" material="plume_core"  contype="0" conaffinity="0"/>
+            <geom name="plume_mid"   type="capsule" fromto="0 0 -1 0 0 -14"
+                  size="0.95" material="plume_mid"   contype="0" conaffinity="0"/>
+            <geom name="plume_outer" type="capsule" fromto="0 0 -3 0 0 -22"
+                  size="1.60" material="plume_outer" contype="0" conaffinity="0"/>
+            <geom name="plume_haze"  type="capsule" fromto="0 0 -6 0 0 -30"
+                  size="2.40" material="plume_haze"  contype="0" conaffinity="0"/>
+            <!-- Mach diamonds: small bright rings spaced along the plume -->
+            <geom name="diamond1" type="sphere" pos="0 0 -3.0" size="0.55"
+                  material="plume_core" contype="0" conaffinity="0"/>
+            <geom name="diamond2" type="sphere" pos="0 0 -7.0" size="0.42"
+                  material="plume_core" contype="0" conaffinity="0"/>
+            <geom name="diamond3" type="sphere" pos="0 0 -11.5" size="0.32"
+                  material="plume_mid"  contype="0" conaffinity="0"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

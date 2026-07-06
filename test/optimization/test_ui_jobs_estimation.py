@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,16 +5,19 @@ Standalone tests for optimization framework. No json processing is performed.
 Incoming jobs from the UI are artificially generated.
 """
 
+import importlib.util
 from pathlib import Path
 import platform
 
 import numpy as np
 import pytest
 
-from collimator import DiagramBuilder, Parameter, SimulatorOptions
-from collimator.library import Adder, Constant, Gain, Integrator
-from collimator.optimization import ui_jobs
-from collimator.optimization.framework.base.optimizable import DesignParameter
+HAS_EVOSAX = importlib.util.find_spec("evosax") is not None
+
+from jaxonomy import DiagramBuilder, Parameter, SimulatorOptions
+from jaxonomy.library import Adder, Constant, Gain, Integrator
+from jaxonomy.optimization import ui_jobs
+from jaxonomy.optimization.framework.base.optimizable import DesignParameter
 
 
 def _here():
@@ -203,6 +205,23 @@ def test_optimization_unbounded():
     assert np.isclose(opt_param["c"], true_c, atol=0.1)
     assert np.isclose(opt_param["k"], true_k, atol=0.1)
 
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_unbounded_evosax():
+    data_file = _here() / "SpringMass-estimation-0p11_1p11.csv"
+    time_column = "time"
+    sim_t_span = (0.0, 2.0)
+
+    job_type = "estimation"
+    true_c = 0.11
+    true_k = 1.11
+
+    design_parameters = [
+        DesignParameter(param_name="c", initial=0.5, min=-np.inf, max=np.inf),
+        DesignParameter(param_name="k", initial=0.5, min=-np.inf, max=np.inf),
+    ]
+
     # Evosax PSO
     (
         diagram,
@@ -272,6 +291,23 @@ def test_optimization_bounded():
     print(f"{opt_param=}")
     assert np.isclose(opt_param["c"], expected_c, atol=0.1)
     assert np.isclose(opt_param["k"], expected_k, atol=0.1)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_bounded_evosax():
+    data_file = _here() / "SpringMass-estimation-0p11_1p11.csv"
+    time_column = "time"
+    sim_t_span = (0.0, 2.0)
+
+    job_type = "estimation"
+    expected_c = 0.15
+    expected_k = 0.8
+
+    design_parameters = [
+        DesignParameter(param_name="c", initial=0.5, min=0.15, max=np.inf),
+        DesignParameter(param_name="k", initial=0.5, min=0.0, max=0.8),
+    ]
 
     # Evosax with PSO
     (

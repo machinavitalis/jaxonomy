@@ -1,9 +1,8 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
+import jaxonomy.testing as test
 import os
 import shutil
 
@@ -22,8 +21,8 @@ def test_pallascat_model(projdir: str = None):
     ]
     print(f"model_files={model_files}")
 
-    # create test paths so that we can copy the files to a workdir for wildcat
-    # FIXME: this might need fixing (I didnt test because this is a personal/manual check) -- @jp
+    # create test paths so that we can copy the files to a workdir for jaxonomy
+    # NOTE: untested in CI — this is a manual-only harness (see the skip mark).
     test_paths = test.get_paths(
         None, testdir_=__file__, test_name_=os.path.basename(projdir)
     )
@@ -34,35 +33,22 @@ def test_pallascat_model(projdir: str = None):
         print(f"model_file={model_file}")
         copy_to_workdir(projdir, model_file, test_paths["workdir"])
 
-    # make wildcat look in workdir for json files
+    # make jaxonomy look in workdir for json files
     test_paths["testdir"] = test_paths["workdir"]
 
-    # run wildcat
+    # run jaxonomy
     test.run(test_paths=test_paths)
 
 
 if __name__ == "__main__":
-    absdir = "/home/albert/git/collimator/src/"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Auto - Electric Vehicle-f0c3a89f-8958-4182-9ffb-20079e588e7e/run/Main - Class 2A Truck Conventional"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Hybrid Examples-2d8c997a-ca33-47e7-b534-bea03c606f53/run/Newton's Cradle"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Hybrid Examples-2d8c997a-ca33-47e7-b534-bea03c606f53/run/Double Bouncing Ball"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Discrete-Time Examples-3d16c368-8e7b-4048-b312-91ffe22aedac/run/Simple Counter"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Continuous-Time Examples-dfc1f667-6754-4270-bfaa-f14e8f5341f2/run/VanDerPol"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Auto - Electric Vehicle-f0c3a89f-8958-4182-9ffb-20079e588e7e/run/Main - Class 2A Truck Conventional"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Auto - Electric Vehicle-f0c3a89f-8958-4182-9ffb-20079e588e7e/run/Test Harness - Automatic Transmission"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Aero - Satellite-98a3530d-3b97-4909-b5f3-64666669363a/run/SingleSatellite"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Tutorial Project-616eedd9-9e37-4a80-a3e0-6ada3ea14bfb/run/Tutorial Model"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Robotics - PUMA560-d5455562-f2bb-47ea-afa0-2eb93f6e9235/run/puma560"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/DataBookUW - Chapters 9+-607a7ef1-1a77-4890-a34e-1b19e4c70063/run/CruiseControl"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/DataBookUW - Chapter 8 (continuous)-a92e261e-5329-49fa-9a39-55fcb3a0965a/run/CartPole_NoControl"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/Biomedical - Pacemaker-c7c21691-1f4f-455f-9380-d2c66a45796d/run/heart_with_DDD_pacemaker"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/DataBookUW - Chapter 8 (continuous)-a92e261e-5329-49fa-9a39-55fcb3a0965a/run/CartPole_KF"
-    projdir = "tests/cmlc-vs-wildcat/workdir/Energy - Wind Turbine-a6baba87-ecbc-48a1-9614-f644e536c5e2/run/WindTurbine_model"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/Biomedical - Pacemaker-cb01128c-1785-400c-971b-b6a641fa8069/run/heart"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/Biomedical - Pacemaker-cb01128c-1785-400c-971b-b6a641fa8069/run/heart_with_DDD_pacemaker"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/Biomedical - Pacemaker-cb01128c-1785-400c-971b-b6a641fa8069/run/heart_with_VVI_pacemaker"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/DC Motor Controller (notebook)-5efda0a7-6028-4373-8987-44fd07953f7b/run/DC Motor PI"
-    # projdir = "tests/cmlc-vs-wildcat/workdir/Aero - F16 Fighter Jet-cab06f5b-e918-4abd-9d22-14a605392e51/run/F16 Model"
-
-    abs_projdir = absdir + projdir
-    test_pallascat_model(abs_projdir)
+    # Manual harness: point this at a downloaded model project directory
+    # (a "run/<model name>" folder containing the exported model JSON) and run
+    # this file directly. Pass the path via the JAXONOMY_PALLASCAT_PROJDIR
+    # environment variable so nothing machine-specific is committed.
+    projdir = os.environ.get("JAXONOMY_PALLASCAT_PROJDIR")
+    if not projdir:
+        raise SystemExit(
+            "Set JAXONOMY_PALLASCAT_PROJDIR to a model project directory "
+            "(a 'run/<model>' folder) to use this manual harness."
+        )
+    test_pallascat_model(projdir)

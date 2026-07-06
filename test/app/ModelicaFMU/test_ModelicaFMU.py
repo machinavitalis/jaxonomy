@@ -1,15 +1,14 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 import sys
-import collimator.testing as test
+import jaxonomy.testing as test
 
 pytestmark = pytest.mark.app
 
 """
-the intend here is just to ensure that wildcat can load/run an FMU
+the intend here is just to ensure that jaxonomy can load/run an FMU
 when this op is specified in the model.json
 """
 

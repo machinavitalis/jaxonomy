@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test primitive math blocks.
@@ -30,13 +29,13 @@ import pytest
 import numpy as np
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
-from collimator.framework.error import BlockParameterError
-from collimator.framework.error import StaticError
-from collimator.logging import logger
-from collimator.backend import numpy_api as cnp
-from collimator.testing import requires_jax
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.framework.error import BlockParameterError
+from jaxonomy.framework.error import StaticError
+from jaxonomy.logging import logger
+from jaxonomy.backend import numpy_api as npa
+from jaxonomy.testing import requires_jax
 
 
 pytestmark = pytest.mark.minimal
@@ -70,12 +69,12 @@ class TestAbs:
         block.input_ports[0].fix_value(np.sin(t))
         x = block.output_ports[0].eval(ctx)
         assert np.allclose(x, np.abs(jnp.sin(t)))
-        assert isinstance(x, cnp.ndarray)
+        assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
 
     def test_sine_simulation(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         sine = builder.add(library.Sine(name="sine"))
         abs = builder.add(library.Abs(name="abs"))
         builder.connect(sine.output_ports[0], abs.input_ports[0])
@@ -84,8 +83,8 @@ class TestAbs:
         context = system.create_context()
 
         recorded_signals = {"sine": sine.output_ports[0], "abs": abs.output_ports[0]}
-        options = collimator.SimulatorOptions(max_major_step_length=0.1)
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(max_major_step_length=0.1)
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, 10.0),
@@ -97,7 +96,7 @@ class TestAbs:
 
     def test_diagram_simulation(self):
         "Part of the FeedthruBlocks test case"
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         const = builder.add(library.Constant(value=1.0, name="const"))
         integrator = builder.add(
             library.Integrator(initial_state=0.0, name="integrator")
@@ -113,8 +112,8 @@ class TestAbs:
         context = system.create_context()
 
         recorded_signals = {"abs": abs.output_ports[0]}
-        options = collimator.SimulatorOptions(max_major_step_length=0.1)
-        results = collimator.simulate(
+        options = jaxonomy.SimulatorOptions(max_major_step_length=0.1)
+        results = jaxonomy.simulate(
             system,
             context,
             (0.0, 10.0),
@@ -128,7 +127,7 @@ class TestAbs:
         # Check that a zero-crossing event is only declared when the input
         # is used as the RHS of an ODE.
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         clock = builder.add(library.Clock(name="clock"))
         abs_1 = builder.add(library.Abs(name="abs_1"))
         abs_2 = builder.add(library.Abs(name="abs_2"))
@@ -165,7 +164,7 @@ class TestAdder:
         Constant_1 = library.Constant(jnp.array(inputs[1], dtype=dtype), name="const2")
         Constant_2 = library.Constant(jnp.array(inputs[2], dtype=dtype), name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Adder_0, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], Adder_0.input_ports[0])
@@ -195,7 +194,7 @@ class TestAdder:
         Constant_1 = library.Constant(jnp.array([2], dtype=dtype), name="const2")
         Constant_2 = library.Constant(jnp.array([3], dtype=dtype), name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(Adder_0, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], Adder_0.input_ports[0])
@@ -214,7 +213,7 @@ class TestAdder:
         assert y.dtype == dtype
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Adder(2, operators="*/", name="Adder"))
             diagram = builder.build()
@@ -235,7 +234,7 @@ class TestCrossProduct:
         vec2 = library.Constant(arr2)
         cp = library.CrossProduct()
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(vec1, vec2, cp)
         builder.connect(vec1.output_ports[0], cp.input_ports[0])
         builder.connect(vec2.output_ports[0], cp.input_ports[1])
@@ -254,7 +253,7 @@ class TestDotProduct:
         vec2 = library.Constant(np.array([2.0, 2.0, 2.0]))
         dp = library.DotProduct()
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(vec1, vec2, dp)
         builder.connect(vec1.output_ports[0], dp.input_ports[0])
         builder.connect(vec2.output_ports[0], dp.input_ports[1])
@@ -273,7 +272,7 @@ class TestExponent:
         exp2 = library.Exponent(base="2")
         exp = library.Exponent(base="exp")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(four, exp2, exp)
         builder.connect(four.output_ports[0], exp2.input_ports[0])
         builder.connect(four.output_ports[0], exp.input_ports[0])
@@ -289,7 +288,7 @@ class TestExponent:
         assert jnp.allclose(y, jnp.exp(4.0))
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Exponent(base=2, name="Exponent"))
             diagram = builder.build()
@@ -304,7 +303,7 @@ class TestExponent:
 
 class TestGain:
     def _make_diagram(self, Constant_0, Gain_0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Constant_0, Gain_0)
         builder.connect(Constant_0.output_ports[0], Gain_0.input_ports[0])
@@ -356,7 +355,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, np.array([2, 4, 6]))
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == (3,)
         assert y.dtype == dtype
 
@@ -371,7 +370,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, C * k)
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == C.shape
         assert y.dtype == dtype
 
@@ -386,7 +385,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, np.array([3, 6, 9]))
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == (3,)
         assert y.dtype == dtype
 
@@ -401,7 +400,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, np.array([[3, 6, 9], [12, 15, 18]]))
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == k.shape
         assert y.dtype == dtype
 
@@ -418,7 +417,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, np.array([[1, 4, 9], [4, 10, 18]]))
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == k.shape
         assert y.dtype == dtype
 
@@ -434,7 +433,7 @@ class TestGain:
 
         y = Gain_0.output_ports[0].eval(ctx)
         assert np.allclose(y, np.array([[1, 4, 9], [4, 10, 18]]))
-        assert isinstance(y, cnp.ndarray)
+        assert isinstance(y, npa.ndarray)
         assert y.shape == k.shape
         assert y.dtype == np.float64
 
@@ -446,7 +445,7 @@ class TestLogarithm:
         log2 = library.Logarithm(base="2")
         log10 = library.Logarithm(base="10")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(four, log, log2, log10)
         builder.connect(four.output_ports[0], log.input_ports[0])
         builder.connect(four.output_ports[0], log2.input_ports[0])
@@ -465,7 +464,7 @@ class TestLogarithm:
         assert jnp.allclose(y10, jnp.log10(4.0))
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Logarithm(base=2, name="Logarithm"))
             diagram = builder.build()
@@ -483,7 +482,7 @@ class TestOffset:
         four = library.Constant(4.0)
         offset = library.Offset(offset=2.0)
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(four, offset)
         builder.connect(four.output_ports[0], offset.input_ports[0])
 
@@ -501,7 +500,7 @@ class TestPower:
         four = library.Constant(4.0)
         power = library.Power(exponent=2.0)
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(four, power)
         builder.connect(four.output_ports[0], power.input_ports[0])
 
@@ -533,7 +532,7 @@ class TestProduct:
         Constant_1 = library.Constant(jnp.array(inputs[1], dtype=dtype), name="const2")
         Constant_2 = library.Constant(jnp.array(inputs[2], dtype=dtype), name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(prod, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], prod.input_ports[0])
@@ -566,7 +565,7 @@ class TestProduct:
         Constant_1 = library.Constant(jnp.array([2], dtype=dtype), name="const2")
         Constant_2 = library.Constant(jnp.array([3], dtype=dtype), name="const3")
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(prod, Constant_0, Constant_1, Constant_2)
 
         builder.connect(Constant_0.output_ports[0], prod.input_ports[0])
@@ -581,7 +580,7 @@ class TestProduct:
         # assert y.dtype == dtype # jnp does some type promotion. let's not bother validating that.
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Product(2, operators="+-", name="Product"))
             diagram = builder.build()
@@ -605,7 +604,7 @@ class TestProductOfElements:
             jnp.array([[1, 2, 3], [1, 2, 3]], dtype=dtype), name="const2"
         )
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(prod_s, prod_v, Constant_0, Constant_1)
 
         builder.connect(Constant_0.output_ports[0], prod_s.input_ports[0])
@@ -623,7 +622,7 @@ class TestProductOfElements:
 
 class TestReciprocal:
     def _make_diagram(self, Constant_0, Reciprocal_0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Constant_0, Reciprocal_0)
         builder.connect(Constant_0.output_ports[0], Reciprocal_0.input_ports[0])
@@ -649,7 +648,7 @@ class TestReciprocal:
 
 class TestConcat:
     def _make_diagram(self, Constant_0, Constant_1, Concat_0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Constant_0, Constant_1, Concat_0)
         builder.connect(Constant_0.output_ports[0], Concat_0.input_ports[0])
@@ -685,7 +684,7 @@ class TestConcat:
 
 class TestScalarBroadcast:
     def _make_diagram(self, Constant_0, ScalarBroadcast_0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Constant_0, ScalarBroadcast_0)
         builder.connect(Constant_0.output_ports[0], ScalarBroadcast_0.input_ports[0])
@@ -723,7 +722,7 @@ class TestScalarBroadcast:
         assert y.dtype == jnp.float64
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.ScalarBroadcast(m=None, n=0, name="ScalarBroadcast"))
             diagram = builder.build()
@@ -754,7 +753,7 @@ class TestMatrixConcatenation:
         return jnp.array([[5, 6], [7, 8]])
 
     def evaluate_concatenation_output(self, input_matrix_a, input_matrix_b, axis=None):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         concatenation_block = builder.add(
             library.MatrixConcatenation(
                 axis=axis,
@@ -841,7 +840,7 @@ class TestMatrixConcatenation:
 
 class TestMatrixInversion:
     def evaluate_matrix_inversion(self, input):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         inversion_block = builder.add(library.MatrixInversion())
         input_block = builder.add(library.Constant(input))
         builder.connect(input_block.output_ports[0], inversion_block.input_ports[0])
@@ -865,8 +864,8 @@ class TestMatrixInversion:
         ), "Inverse does not match expected result for known matrix."
 
     def test_singular_matrix(self):
-        # FIXME Can we reconcile JAX and numpy's behavior?
-        if cnp.active_backend == "numpy":
+        # NOTE Can we reconcile JAX and numpy's behavior?
+        if npa.active_backend == "numpy":
             with pytest.raises(StaticError):
                 _ = self.evaluate_matrix_inversion(
                     np.array([[1, 2], [2, 4]])  # This matrix is singular
@@ -897,7 +896,7 @@ class TestMatrixMultiplication:
         input_matrix_a,
         input_matrix_b,
     ):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         multiplication_block = builder.add(library.MatrixMultiplication())
         input_x_block = builder.add(library.Constant(input_matrix_a))
         input_y_block = builder.add(library.Constant(input_matrix_b))
@@ -966,7 +965,7 @@ class TestMatrixMultiplication:
 
 class TestMatrixTransposition:
     def evaluate_matrix_transpose(self, input):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         transpose_block = builder.add(library.MatrixTransposition())
         input_block = builder.add(library.Constant(input))
         builder.connect(input_block.output_ports[0], transpose_block.input_ports[0])
@@ -1021,7 +1020,7 @@ class TestSlice:
         ],
     )
     def test_ops(self, input, slice_, sol):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         inp = builder.add(library.Constant(input))
         sl = builder.add(library.Slice(slice_=slice_))
         builder.connect(inp.output_ports[0], sl.input_ports[0])
@@ -1033,7 +1032,7 @@ class TestSlice:
         assert np.allclose(y, sol)
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Slice(slice_="3-5", name="Slice_0"))
             diagram = builder.build()
@@ -1048,7 +1047,7 @@ class TestSlice:
 
 class TestStack:
     def test_ops(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         arr = np.array([[1, 2, 3], [4, 5, 6]])
         inp = builder.add(library.Constant(arr))
         st20 = builder.add(library.Stack(n_in=2, axis=0))
@@ -1091,7 +1090,7 @@ class TestSumOfElements:
             jnp.array([[1, 2, 3], [1, 2, 3]], dtype=dtype), name="const2"
         )
 
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         builder.add(sum_s, sum_v, Constant_0, Constant_1)
 
         builder.connect(Constant_0.output_ports[0], sum_s.input_ports[0])
@@ -1109,7 +1108,7 @@ class TestSumOfElements:
 
 class TestSquareRoot:
     def _make_diagram(self, Constant_0, SquareRoot_0):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
 
         builder.add(Constant_0, SquareRoot_0)
         builder.connect(Constant_0.output_ports[0], SquareRoot_0.input_ports[0])
@@ -1150,7 +1149,7 @@ class TestTrigonometric:
         ],
     )
     def test_ops(self, fun_name, fun_sol):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         one = builder.add(library.Constant(1.0))
         trig = builder.add(library.Trigonometric(function=fun_name))
         builder.connect(one.output_ports[0], trig.input_ports[0])
@@ -1162,7 +1161,7 @@ class TestTrigonometric:
         assert np.allclose(y, fun_sol(1.0))
 
     def test_invalid_input(self):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(BlockParameterError) as e:
             builder.add(library.Trigonometric(function="sine"))
             diagram = builder.build()

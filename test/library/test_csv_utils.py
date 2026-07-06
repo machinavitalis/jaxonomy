@@ -1,12 +1,11 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
 import pytest
 import pandas as pd
-from collimator.backend import numpy_api as cnp
+from jaxonomy.backend import numpy_api as npa
 
-from collimator.library.utils import read_csv, extract_columns
+from jaxonomy.library.utils import read_csv, extract_columns
 
 #################### Fixtures ####################
 
@@ -49,49 +48,49 @@ def test_extract_columns_single_column(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, "col0")
     assert extracted.shape == (10,)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_single_column_as_a_list(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, ["col0"])
     assert extracted.shape == (10,)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_multiple_columns(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, ["col0", "col1"])
     assert extracted.shape == (10, 2)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_slice(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, "0:3")
     assert extracted.shape == (10, 3)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_slice_with_negative_index(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, "1:-1")
     assert extracted.shape == (10, 3)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_full_front_slice_with_negative_index(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, ":-1")
     assert extracted.shape == (10, 4)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_full_end_slice_with_negative_index(csv_with_header):
     df = read_csv(csv_with_header, header_as_first_row=True)
     extracted = extract_columns(df, "1:")
     assert extracted.shape == (10, 4)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 #################### Index-based column extraction ####################
@@ -105,7 +104,7 @@ def test_extract_columns_single_column_by_index(request, csv_file):
     )
     extracted = extract_columns(df, 0)
     assert extracted.shape == (10,)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 @pytest.mark.parametrize("csv_file", ["csv_with_header", "csv_without_header"])
@@ -116,7 +115,7 @@ def test_extract_columns_multiple_columns_by_index(request, csv_file):
     )
     extracted = extract_columns(df, [0, 1])
     assert extracted.shape == (10, 2)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 @pytest.mark.parametrize("csv_file", ["csv_with_header", "csv_without_header"])
@@ -127,7 +126,7 @@ def test_extract_columns_with_negative_index(request, csv_file):
     )
     extracted = extract_columns(df, -1)
     assert extracted.shape == (10,)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 @pytest.mark.parametrize("csv_file", ["csv_with_header", "csv_without_header"])
@@ -138,7 +137,7 @@ def test_extract_columns_multiple_columns_by_negative_index(request, csv_file):
     )
     extracted = extract_columns(df, [0, -1])
     assert extracted.shape == (10, 2)
-    assert isinstance(extracted, cnp.ndarray)
+    assert isinstance(extracted, npa.ndarray)
 
 
 def test_extract_columns_invalid_type(csv_with_header):

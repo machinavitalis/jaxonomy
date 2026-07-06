@@ -1,21 +1,21 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import jax.numpy as jnp
+import pytest
 
-import control
+control = pytest.importorskip("control")
 
-import collimator
-from collimator.library import linearize
-from collimator.models import PendulumDiagram
-from collimator.testing.markers import skip_if_not_jax
+import jaxonomy  # noqa: E402
+from jaxonomy.library import linearize
+from jaxonomy.models import PendulumDiagram
+from jaxonomy.testing.markers import skip_if_not_jax
 
 
 skip_if_not_jax()
 
 
 def test_pendulum_linearize_down():
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     g = 9.81
     L = 1.0
     b = 0.5
@@ -27,7 +27,7 @@ def test_pendulum_linearize_down():
     plant.input_ports[0].fix_value(u0)
     context = plant.create_context()
 
-    lin_sys = linearize(plant, context)
+    lin_sys = linearize(plant, context).to_lti()
 
     A = lin_sys.dynamic_parameters["A"].value
     B = lin_sys.dynamic_parameters["B"].value
@@ -43,9 +43,9 @@ def test_pendulum_linearize_down():
     control.ss(A, B, C, D)
 
 
-# Tests bug from https://collimator.atlassian.net/browse/WC-38
+# Tests bug from https://jaxonomy.atlassian.net/browse/WC-38
 def test_repeated_linearization():
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     g = 9.81
     L = 1.0
     b = 0.5
@@ -64,7 +64,7 @@ def test_repeated_linearization():
 
 
 def test_pendulum_linearize_up():
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     g = 9.81
     L = 1.0
     b = 0.5
@@ -76,7 +76,7 @@ def test_pendulum_linearize_up():
     plant.input_ports[0].fix_value(u0)
     context = plant.create_context()
 
-    lin_sys = linearize(plant, context)
+    lin_sys = linearize(plant, context).to_lti()
 
     # Check that the linearization matches the pendulum in the "up" position
     A = lin_sys.dynamic_parameters["A"].value

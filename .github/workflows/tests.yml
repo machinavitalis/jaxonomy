@@ -1,0 +1,255 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  schedule:
+    # 07:00 UTC daily → nightly comprehensive run (slow + autodiff_full tests)
+    - cron: "0 7 * * *"
+    # 06:00 UTC every Monday → weekly public benchmark suite (T-019)
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── quick suite on every PR / push to main ─────────────────────────────────
+  # Installs only the `test` extra; tests that need optional libraries (control,
+  # pysindy, tensorflow, torch, ...) skip via pytest.importorskip at collection.
+  quick:
+    name: Quick test suite
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run quick suite (excludes slow, dashboard, autodiff_full)
+        run: pytest -q --tb=short -n auto
+
+  # ── autodiff smoke: the small T-001 PR-time gradient test set ──────────────
+  autodiff-smoke:
+    name: Autodiff smoke (T-001 PR subset)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run autodiff framework + stateless block sweep
+        run: |
+          pytest -q --tb=short \
+            test/autodiff/test_gradient_property_pilot.py \
+            test/autodiff/test_block_gradients_stateless.py
+
+  # ── nightly comprehensive (slow + autodiff_full) ───────────────────────────
+  # Installs the `test-full` extra which pulls every optional runtime library so
+  # the full test matrix (including control, pysindy, mujoco, torch, ...) runs.
+  nightly:
+    name: Nightly comprehensive suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test-full]"
+
+      - name: Run full suite (slow + autodiff_full, excludes dashboard)
+        run: |
+          pytest -q --tb=short \
+            -m "not dashboard" \
+            --override-ini="addopts=--strict-markers"
+
+  # ── T-017 compile-time regression gate ────────────────────────────────────
+  # Re-runs the compile-time benchmark and fails if any case regresses beyond
+  # the threshold encoded in benchmarks/compile_time.py (currently +50 %).
+  # The check tolerates SKIPPED cases (e.g. when an optional dep is missing)
+  # so it never blocks PRs on environment drift.
+  compile-time:
+    name: Compile-time regression gate (T-017)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run compile-time benchmark with --check
+        run: python benchmarks/compile_time.py --check
+
+  # ── T-018 memory regression gate ──────────────────────────────────────────
+  # Re-runs the memory benchmark and fails if any case's peak RSS regresses
+  # beyond the threshold encoded in benchmarks/memory.py (currently +50 %).
+  # Same trigger pattern as compile-time (PR + push to main, NOT scheduled).
+  memory:
+    name: Memory regression gate (T-018)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run memory benchmark with --check
+        run: python benchmarks/memory.py --check
+
+  # ── T-019 public benchmark suite (weekly + manual only) ───────────────────
+  # Cartpole / quadruped / sysid / linearization. NOT on PR or push: each
+  # full run takes several minutes (the sysid step alone is ~7 s on CPU and
+  # the quadruped batch needs a fresh XLA compile).  The compile/memory
+  # gates above are the per-PR backstop; this one runs weekly to track
+  # public-facing throughput numbers and is also available on
+  # workflow_dispatch for manual re-baselining.
+  public-benchmarks:
+    name: Public benchmark suite (T-019)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
+      || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run public benchmark suite with --check
+        run: python benchmarks/public.py --check
+
+      - name: Upload baseline JSON as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-benchmark-baseline
+          path: benchmarks/public_baseline.json
+          if-no-files-found: ignore
+
+  # ── T-019a public-benchmarks GPU job (DISABLED: needs self-hosted runners) ─
+  # Uncomment when GPU runners are provisioned. Requires
+  #   `runs-on: [self-hosted, linux, gpu]`
+  # plus a runner labelled with the actual accelerator (`t4`/`a100`/`h100`).
+  # The matrix below populates `gpu_t4` / `gpu_a100` / `gpu_h100` columns in
+  # benchmarks/public_baseline.json — these columns are independent of the
+  # CPU-only `public-benchmarks` job above and never block CPU CI.
+  #
+  # public-benchmarks-gpu:
+  #   name: Public benchmark suite on GPU (T-019a)
+  #   if: github.event_name == 'workflow_dispatch'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - device_key: gpu_t4
+  #           runs_on: [self-hosted, linux, gpu, t4]
+  #         - device_key: gpu_a100
+  #           runs_on: [self-hosted, linux, gpu, a100]
+  #         - device_key: gpu_h100
+  #           runs_on: [self-hosted, linux, gpu, h100]
+  #   runs-on: ${{ matrix.runs_on }}
+  #   timeout-minutes: 45
+  #   env:
+  #     JAXONOMY_BENCH_DEVICE: gpu
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         lfs: true
+  #     - name: Set up Python 3.11
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.11"
+  #         cache: pip
+  #     - name: Install (with CUDA-flavour JAX)
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         pip install -e ".[test]" "jax[cuda12]"
+  #     - name: Run public benchmark suite (--device gpu, --check)
+  #       run: python benchmarks/public.py --device gpu --check
+  #     - name: Update GPU column in baseline (workflow_dispatch only)
+  #       if: github.event_name == 'workflow_dispatch'
+  #       run: |
+  #         python benchmarks/public.py \
+  #           --device gpu --update-baseline ${{ matrix.device_key }}
+  #     - name: Upload updated baseline JSON
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: public-benchmark-baseline-${{ matrix.device_key }}
+  #         path: benchmarks/public_baseline.json
+  #         if-no-files-found: ignore

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -6,22 +5,22 @@ import pytest
 import jax.numpy as jnp
 import numpy as np
 
-from collimator.framework import DiagramBuilder
-from collimator.library.generic import FeedthroughBlock
-from collimator.library.primitives import (
+from jaxonomy.framework import DiagramBuilder
+from jaxonomy.library.generic import FeedthroughBlock
+from jaxonomy.library.primitives import (
     Constant,
     Demultiplexer,
     Multiplexer,
     Gain,
     Integrator,
 )
-from collimator.testing import make_benchmark, set_backend
+from jaxonomy.testing import make_benchmark, set_backend
 
 pytestmark = pytest.mark.minimal
 
 
 def _make_benchmark_pendulum(t0=0.0, tf=100.0, rtol=1e-6, atol=1e-8, run_once=True):
-    from collimator.models import Pendulum
+    from jaxonomy.models import Pendulum
 
     system = Pendulum()
     recorded_signals = {"y": system.output_ports[0]}
@@ -39,7 +38,7 @@ def _make_benchmark_pendulum(t0=0.0, tf=100.0, rtol=1e-6, atol=1e-8, run_once=Tr
 def _make_benchmark_pendulum_diagram(
     t0=0.0, tf=100.0, rtol=1e-6, atol=1e-8, run_once=True
 ):
-    from collimator.models import PendulumDiagram
+    from jaxonomy.models import PendulumDiagram
 
     system = PendulumDiagram()
     recorded_signals = {"y": system.output_ports[0]}
@@ -62,7 +61,7 @@ def _make_benchmark_lotka_volterra(
     rtol=1e-12,
     run_once=True,
 ):
-    from collimator.models import LotkaVolterra
+    from jaxonomy.models import LotkaVolterra
 
     system = LotkaVolterra()
     recorded_signals = {"y": system.output_ports[0]}
@@ -81,7 +80,7 @@ def _make_benchmark_lotka_volterra(
 def _make_benchmark_fitzhugh_nagumo(
     t0=0.0, tf=100.0, atol=1e-14, rtol=1e-12, run_once=True
 ):
-    from collimator.models import FitzHughNagumo
+    from jaxonomy.models import FitzHughNagumo
 
     system = FitzHughNagumo()
     recorded_signals = {"y": system.output_ports[0]}

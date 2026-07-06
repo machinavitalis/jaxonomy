@@ -1,19 +1,21 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
+# Skip the entire module when flax/brax are not installed (RLEnv hard-depends on both)
 import pytest
+pytest.importorskip("flax", reason="flax not installed; skipping RL tests")
+pytest.importorskip("brax", reason="brax not installed; skipping RL tests")
 
 import jax
 import jax.numpy as jnp
 
-import collimator
-from collimator import library
-from collimator.optimization import RLEnv
-from collimator.testing import requires_jax
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.optimization import RLEnv
+from jaxonomy.testing import requires_jax
 
 
 def make_submodel(name="double_integrator"):
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     int_v = builder.add(library.Integrator(initial_state=[0.0], name="int_v"))
     int_x = builder.add(library.Integrator(initial_state=[0.0], name="int_x"))
 
@@ -120,4 +122,4 @@ def test_randomization(env, rng):
     randomized_context = env.randomize(context, rng)
 
     assert randomized_context is not None
-    assert isinstance(randomized_context, collimator.framework.ContextBase)
+    assert isinstance(randomized_context, jaxonomy.framework.ContextBase)

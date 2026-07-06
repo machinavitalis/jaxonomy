@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,12 +5,15 @@ Standalone tests for optimization framework. No json processing is performed.
 Incoming jobs from the UI are artificially generated.
 """
 
+import importlib.util
 import platform
 import pytest
 import numpy as np
 
-from collimator import DiagramBuilder, Parameter, SimulatorOptions
-from collimator.library import (
+HAS_EVOSAX = importlib.util.find_spec("evosax") is not None
+
+from jaxonomy import DiagramBuilder, Parameter, SimulatorOptions
+from jaxonomy.library import (
     Adder,
     Constant,
     Gain,
@@ -19,8 +21,8 @@ from collimator.library import (
     Power,
     Clock,
 )
-from collimator.optimization import ui_jobs
-from collimator.optimization.framework.base.optimizable import (
+from jaxonomy.optimization import ui_jobs
+from jaxonomy.optimization.framework.base.optimizable import (
     DesignParameter,
     Distribution,
     StochasticParameter,
@@ -151,6 +153,17 @@ def test_optimization_unbounded():
     print(f"{opt_param=}")
     np.testing.assert_allclose(opt_param["c"], 1.65, atol=0.1)
 
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_unbounded_evosax():
+    sim_t_span = (0.0, 2.0)
+
+    job_type = "design"
+    design_parameters = DesignParameter(
+        param_name="c", initial=0.5, min=-np.inf, max=np.inf
+    )
+
     sim_options = SimulatorOptions(max_major_steps=1)
 
     # Evosax PSO
@@ -194,6 +207,15 @@ def test_optimization_bounded():
     )
     print(f"{opt_param=}")
     np.testing.assert_allclose(opt_param["c"], 1.62, atol=0.1)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_EVOSAX, reason="evosax not installed")
+def test_optimization_bounded_evosax():
+    sim_t_span = (0.0, 2.0)
+
+    job_type = "design"
+    design_parameters = DesignParameter(param_name="c", initial=0.5, min=0.0, max=1.62)
 
     sim_options = SimulatorOptions(max_major_steps=1)
 

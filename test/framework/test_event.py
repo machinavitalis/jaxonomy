@@ -1,9 +1,8 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
 
-from collimator.framework.event import (
+from jaxonomy.framework.event import (
     LeafEventCollection,
     DiagramEventCollection,
 )

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test for Ansys integration
@@ -12,8 +11,8 @@ import shutil
 
 import pytest
 
-import collimator
-from collimator.library import PyTwin
+import jaxonomy
+from jaxonomy.library import PyTwin
 
 
 @pytest.fixture
@@ -38,7 +37,7 @@ def twin_file():
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="Does not run on macOS")
 def test_pytwin(twin_file, plot=False):
-    """Basic test to check if the Collimator model runs"""
+    """Basic test to check if the Jaxonomy model runs"""
 
     dt = 10.0
     tf = 100.0
@@ -59,7 +58,7 @@ def test_pytwin(twin_file, plot=False):
         "speed_ref": diagram.output_ports[6],
     }
 
-    sol = collimator.simulate(
+    sol = jaxonomy.simulate(
         diagram, context, (0.0, tf), recorded_signals=recorded_signals
     )
 

@@ -1,12 +1,11 @@
 #!/bin/env pytest
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
-import collimator.testing as test
+import jaxonomy.testing as test
 import json
 import os
-from collimator.framework.error import ShapeMismatchError
+from jaxonomy.framework.error import ShapeMismatchError
 
 pytestmark = pytest.mark.app
 
@@ -282,7 +281,7 @@ def test_signal_type_error(request):
 
     assert sol_data == res_data
 
-    # FIXME. for some reason, the 'exc' variable doesn't appear to be the same
+    # NOTE. for some reason, the 'exc' variable doesn't appear to be the same
     # error object that was raised in model_interface:AppInterface.
     # Not sure how to fix this, it would be better if it were then we could have
     # a pass condition here requiring the error object to be specific.

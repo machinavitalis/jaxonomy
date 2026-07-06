@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -12,7 +11,7 @@ from jax.flatten_util import ravel_pytree
 from scipy.optimize import minimize, root
 from jax.scipy.optimize import minimize as jax_minimize
 
-from collimator.models import Pendulum, PlanarQuadrotor
+from jaxonomy.models import Pendulum, PlanarQuadrotor
 
 
 def make_pendulum(x0=[0.0, 0.0], g=9.81, L=1.0, b=0.0):
@@ -107,7 +106,7 @@ def test_trim_quadrotor():
     # Note we have to use Levenberg-Marquardt because the input and output have
     # different dimensions
     #
-    # FIXME: Stack overflow is offline, but why won't this work?
+    # NOTE: Stack overflow is offline, but why won't this work?
     # func = jax.jit(partial(quadrotor_ode, model, context, unflatten))
     # res = root(func, vec, jac=jax.jacfwd(func), method='lm')
     # x_eq, u_eq = unflatten(res.x)

@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest
@@ -7,31 +6,31 @@ import dataclasses
 
 import numpy as np
 import matplotlib.pyplot as plt
-import collimator
+import jaxonomy
 
-# from collimator.common import *
-from collimator.library import Sine, Integrator
-from collimator.framework.event import (
+# from jaxonomy.common import *
+from jaxonomy.library import Sine, Integrator
+from jaxonomy.framework.event import (
     IntegerTime,
     ZeroCrossingEvent,
     ZeroCrossingEventData,
 )
-from collimator.simulation import SimulatorOptions
-from collimator.simulation.simulator import (
+from jaxonomy.simulation import SimulatorOptions
+from jaxonomy.simulation.simulator import (
     ContinuousIntervalData,
     StepEndReason,
     guard_interval_start,
 )
-from collimator.backend import jit
+from jaxonomy.backend import jit
 
 
-# from collimator import logging
+# from jaxonomy import logging
 
 
 pytestmark = pytest.mark.minimal
 
 
-class ConstantIntegrator(collimator.LeafSystem):
+class ConstantIntegrator(jaxonomy.LeafSystem):
     def __init__(self, *args, a=1.0, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -62,7 +61,7 @@ class ConstantIntegrator(collimator.LeafSystem):
         return state.with_continuous_state(0.0)
 
 
-class ScalarLinear(collimator.LeafSystem):
+class ScalarLinear(jaxonomy.LeafSystem):
     def __init__(self, *args, a=1.0, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -87,7 +86,7 @@ class ScalarLinear(collimator.LeafSystem):
         return state.with_continuous_state(0.0)
 
 
-class SimpleStateMachine(collimator.LeafSystem):
+class SimpleStateMachine(jaxonomy.LeafSystem):
     class Mode(IntEnum):
         A = 1
         B = 2
@@ -289,12 +288,12 @@ def test_guard_interval_start():
 
 
 def test_guarded_integrate():
-    from collimator.simulation.simulator import _determine_step_end_reason
+    from jaxonomy.simulation.simulator import _determine_step_end_reason
 
     model = ConstantIntegrator()
     context = model.create_context()
 
-    sim = collimator.Simulator(model)
+    sim = jaxonomy.Simulator(model)
 
     update_time = np.inf
 
@@ -345,12 +344,12 @@ def test_advance_to():
     model = ConstantIntegrator(a=a)
     context = model.create_context()
 
-    options = collimator.SimulatorOptions(
+    options = jaxonomy.SimulatorOptions(
         max_major_steps=100,
         atol=1e-8,
         rtol=1e-6,
     )
-    sim = collimator.Simulator(model, options=options)
+    sim = jaxonomy.Simulator(model, options=options)
 
     # Test single reset at t=0.5
     tf = 1.0
@@ -379,7 +378,7 @@ def test_simple_state_machine(show_plot=False):
     # The state machine should change modes from A->B, B->C, C->A
     # at every zero crossing.  Given a sine wave input u=sin(pi*t),
     # the mode should change at t=1, t=2, t=3, etc.
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
     state_machine = builder.add(SimpleStateMachine())
     source = builder.add(Sine(frequency=np.pi))
     int_ = builder.add(Integrator(initial_state=0.0))
@@ -398,7 +397,7 @@ def test_simple_state_machine(show_plot=False):
         "s": state_machine.output_ports[0],
         "u": source.output_ports[0],
     }
-    results = collimator.simulate(
+    results = jaxonomy.simulate(
         system,
         context,
         (0.0, tf),
@@ -423,9 +422,9 @@ def test_simple_state_machine(show_plot=False):
     # The zero crossing detection is only accurate to within a certain tolerance.  By default,
     # this is about rtol=1e-6.  In other words, the exact transition time is likely to overshoot
     # the analytic value by about 1e-6 with default settings.
-    # @am. since simulator.py now requires num_continuous_states>0 in order to handle "transoitions",
-    # this test results in slightly different user facing results, and hence the pass conditions
-    # change slightly.
+    # Since simulator.py now requires num_continuous_states>0 to handle
+    # transitions, this test produces slightly different user-facing results,
+    # so the pass conditions change slightly.
     zc_tol = 1e-6
     assert all(
         np.where(

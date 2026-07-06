@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
@@ -6,11 +5,16 @@ Standalone tests for optimization framework. These are separated from any UI or 
 processing.
 """
 
+import importlib.util
 import platform
 import pytest
 import numpy as np
-from collimator import DiagramBuilder, Parameter, SimulatorOptions
-from collimator.library import (
+
+if importlib.util.find_spec("control") is None:
+    pytest.skip("python-control not installed", allow_module_level=True)
+
+from jaxonomy import DiagramBuilder, Parameter, SimulatorOptions
+from jaxonomy.library import (
     Adder,
     Constant,
     Gain,
@@ -19,9 +23,9 @@ from collimator.library import (
     PID,
     PIDDiscrete,
 )
-from collimator.optimization import ui_jobs
+from jaxonomy.optimization import ui_jobs
 
-from collimator.optimization.framework.base.optimizable import (
+from jaxonomy.optimization.framework.base.optimizable import (
     Distribution,
     StochasticParameter,
 )
@@ -147,7 +151,7 @@ def test_optimization_pid(discrete_pid):
     )
     print(f"{opt_param=}")
 
-    # TODO: Check why PSO intermittently fails. Perhaps something due to
+    # NOTE: Check why PSO intermittently fails. Perhaps something due to
     # initial population with pid_gains_max being 1e03, and garbage sim output for
     # high gains
     check_PSO_results = False

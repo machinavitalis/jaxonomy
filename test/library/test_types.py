@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test for types
@@ -11,7 +10,7 @@ import numpy as np
 import jax.numpy as jnp
 import pytest
 
-from collimator.library import SignalDatatypeConversion
+from jaxonomy.library import SignalDatatypeConversion
 
 
 @pytest.fixture(scope="class")

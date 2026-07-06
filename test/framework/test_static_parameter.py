@@ -1,14 +1,13 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import json
 import numpy as np
 import pytest
 
-from collimator import DiagramBuilder, LeafSystem, Simulator, SimulatorOptions, simulate
-from collimator.dashboard.serialization import to_model_json
-from collimator.framework import parameters, Parameter
-from collimator.library import (
+from jaxonomy import DiagramBuilder, LeafSystem, Simulator, SimulatorOptions, simulate
+from jaxonomy.dashboard.serialization import to_model_json
+from jaxonomy.framework import parameters, Parameter
+from jaxonomy.library import (
     Constant,
     Gain,
     Abs,
@@ -17,9 +16,9 @@ from collimator.library import (
     PID,
     TransferFunction,
 )
-from collimator.simulation.types import SimulatorState
-from collimator.testing import set_backend
-from collimator.backend import numpy_api as cnp
+from jaxonomy.simulation.types import SimulatorState
+from jaxonomy.testing import set_backend
+from jaxonomy.backend import numpy_api as npa
 
 
 class GainWithStaticParam(LeafSystem):
@@ -104,7 +103,7 @@ def test_update_static_param_no_compilation(backend, mode):
     recorded_signals = {"output": gain.output_ports[0]}
     options = SimulatorOptions(recorded_signals=recorded_signals, save_time_series=True)
     simulator = Simulator(diagram, options=options)
-    advance_to = cnp.jit(simulator.advance_to)
+    advance_to = npa.jit(simulator.advance_to)
 
     for gain_value in range(10):
         p.set(float(gain_value))
@@ -167,7 +166,7 @@ def test_invalid_pid_ensemble_sim(backend):
     recorded_signals = {"error": err_cum.output_ports[0]}
     options = SimulatorOptions(recorded_signals=recorded_signals, save_time_series=True)
     simulator = Simulator(diagram, options=options)
-    advance_to = cnp.jit(simulator.advance_to)
+    advance_to = npa.jit(simulator.advance_to)
 
     # Set Kp to 0.0 - makes the block non-feedthrough
     kp.set(0.0)
@@ -188,7 +187,7 @@ def test_invalid_pid_ensemble_sim(backend):
     results_kp_1 = np.array(outputs["error"], copy=True)
     print("results_kp_1", results_kp_1)
 
-    # FIXME this does not belong here
+    # NOTE this does not belong here
     def resample(x, y, x_new):
         results_resampled = np.zeros_like(x_new)
         for i in range(len(x_new)):

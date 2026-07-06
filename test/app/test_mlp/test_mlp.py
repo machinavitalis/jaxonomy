@@ -1,13 +1,12 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import os
 
 import pytest
 
-import collimator
-import collimator.testing as test
-from collimator.library import MLP
+import jaxonomy
+import jaxonomy.testing as test
+from jaxonomy.library import MLP
 
 pytestmark = pytest.mark.minimal
 
@@ -36,12 +35,12 @@ def test_mlp(request):
     model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "model.json"))
     os.system(f"ln -sf {model_path} {workdir}/")
 
-    # FIXME collimator.load_model should know to look for files in workdir
+    # NOTE jaxonomy.load_model should know to look for files in workdir
     curdir = os.getcwd()
     try:
         os.chdir(workdir)
-        # load/simulate collimator model which references the above saved NN
-        model = collimator.load_model(".")
+        # load/simulate jaxonomy model which references the above saved NN
+        model = jaxonomy.load_model(".")
         model.simulate()
 
     finally:

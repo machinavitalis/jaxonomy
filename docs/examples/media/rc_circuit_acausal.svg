@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" font-family="DejaVu Sans, Verdana, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#33475b"/>
+    </marker>
+  </defs>
+
+  <!-- card background -->
+  <rect x="0" y="0" width="1000" height="600" rx="14" fill="#f6f8fb"/>
+
+  <!-- title -->
+  <text x="500" y="52" text-anchor="middle" font-size="26" font-weight="700" fill="#22303f">Acausal RC circuit</text>
+  <text x="500" y="82" text-anchor="middle" font-size="16" fill="#64748b">series R&#8211;C charging from a 1&#8201;V source  &#183;  &#964; = RC = 1&#8201;s  &#183;  V<tspan font-size="12" dy="4">C</tspan><tspan dy="-4">: 0 &#8594; 1&#8201;V</tspan></text>
+
+  <!-- ===================== wires (slate) ===================== -->
+  <g stroke="#33475b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- left branch: node A down to source, source down to node D -->
+    <line x1="250" y1="220" x2="250" y2="294"/>
+    <line x1="250" y1="366" x2="250" y2="440"/>
+    <!-- top branch: node A -> resistor lead-in / lead-out -> node B -->
+    <line x1="250" y1="220" x2="445" y2="220"/>
+    <line x1="565" y1="220" x2="750" y2="220"/>
+    <!-- right branch: node B down to cap, cap down to node C -->
+    <line x1="750" y1="220" x2="750" y2="316"/>
+    <line x1="750" y1="344" x2="750" y2="440"/>
+    <!-- bottom branch: node D -> node C -->
+    <line x1="250" y1="440" x2="750" y2="440"/>
+    <!-- ground stub -->
+    <line x1="250" y1="440" x2="250" y2="492"/>
+  </g>
+
+  <!-- ===================== voltage source ===================== -->
+  <circle cx="250" cy="330" r="36" fill="#e6f2fd" stroke="#1f7fd4" stroke-width="3"/>
+  <text x="250" y="319" text-anchor="middle" font-size="22" font-weight="700" fill="#1f7fd4">+</text>
+  <text x="250" y="356" text-anchor="middle" font-size="24" font-weight="700" fill="#1f7fd4">&#8722;</text>
+  <text x="200" y="323" text-anchor="end" font-size="18" font-weight="700" fill="#2b3a4a">vs</text>
+  <text x="200" y="346" text-anchor="end" font-size="15" fill="#45586b">1&#8201;V</text>
+
+  <!-- ===================== resistor (zig-zag) ===================== -->
+  <polyline points="445,220 465,204 485,236 505,204 525,236 545,204 565,220"
+            fill="none" stroke="#e8890c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="505" y="182" text-anchor="middle" font-size="16" fill="#45586b"><tspan font-size="18" font-weight="700" fill="#2b3a4a">r</tspan>&#160;&#160;&#160;R = 1&#8201;&#937;</text>
+
+  <!-- ===================== capacitor (parallel plates) ===================== -->
+  <line x1="722" y1="316" x2="778" y2="316" stroke="#0e9b8e" stroke-width="4" stroke-linecap="round"/>
+  <line x1="722" y1="344" x2="778" y2="344" stroke="#0e9b8e" stroke-width="4" stroke-linecap="round"/>
+  <text x="794" y="322" font-size="18" font-weight="700" fill="#2b3a4a">c</text>
+  <text x="794" y="344" font-size="15" fill="#45586b">C = 1&#8201;F</text>
+  <text x="794" y="365" font-size="13" fill="#8494a6">V<tspan font-size="11" dy="3">C</tspan><tspan dy="-3">(0) = 0&#8201;V</tspan></text>
+
+  <!-- ===================== ground ===================== -->
+  <g stroke="#33475b" stroke-width="3" stroke-linecap="round">
+    <line x1="226" y1="492" x2="274" y2="492"/>
+    <line x1="234" y1="500" x2="266" y2="500"/>
+    <line x1="242" y1="508" x2="258" y2="508"/>
+  </g>
+  <text x="250" y="532" text-anchor="middle" font-size="14" fill="#64748b">gnd</text>
+
+  <!-- ===================== current arrow ===================== -->
+  <line x1="638" y1="206" x2="686" y2="206" stroke="#33475b" stroke-width="2.4" marker-end="url(#arrow)"/>
+  <text x="662" y="196" text-anchor="middle" font-size="15" font-style="italic" fill="#33475b">I</text>
+
+  <!-- ===================== node dots ===================== -->
+  <g fill="#33475b">
+    <circle cx="250" cy="220" r="4.5"/>
+    <circle cx="750" cy="220" r="4.5"/>
+    <circle cx="250" cy="440" r="4.5"/>
+    <circle cx="750" cy="440" r="4.5"/>
+  </g>
+
+  <!-- ===================== pin labels (map to connect(...) calls) ===================== -->
+  <g font-size="13" font-weight="600" fill="#8494a6">
+    <text x="264" y="272">p</text>          <!-- vs.p -->
+    <text x="264" y="400">n</text>          <!-- vs.n -->
+    <text x="438" y="243" text-anchor="middle">n</text>   <!-- r.n -->
+    <text x="572" y="243" text-anchor="middle">p</text>   <!-- r.p -->
+    <text x="714" y="313" text-anchor="end">p</text>      <!-- c.p -->
+    <text x="714" y="349" text-anchor="end">n</text>      <!-- c.n -->
+    <text x="268" y="462">p</text>          <!-- gnd.p -->
+  </g>
+</svg>

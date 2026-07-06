@@ -1,18 +1,22 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """
 Test for autotuner with constraints in frequency domain. The autotuner tested
-here is part of the collimator/optimization suite.
+here is part of the jaxonomy/optimization suite.
 """
+
+import importlib.util
 
 import pytest
 import numpy as np
-from collimator.library import (
+
+if importlib.util.find_spec("control") is None:
+    pytest.skip("python-control not installed", allow_module_level=True)
+from jaxonomy.library import (
     TransferFunction,
 )
-from collimator.optimization import AutoTuner
-from collimator.testing.markers import requires_jax
+from jaxonomy.optimization import AutoTuner
+from jaxonomy.testing.markers import requires_jax
 
 
 def get_plant():

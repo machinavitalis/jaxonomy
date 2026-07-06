@@ -1,21 +1,21 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 import pytest  # noqa
+pytest.importorskip("cyipopt")
 
 import jax.numpy as jnp
 
-import collimator
-from collimator.models import PendulumDiagram
+import jaxonomy
+from jaxonomy.models import PendulumDiagram
 
-from collimator.library import (
+from jaxonomy.library import (
     Constant,
     DirectShootingNMPC,
     DirectTranscriptionNMPC,
     HermiteSimpsonNMPC,
 )
 
-from collimator.testing.markers import skip_if_not_jax
+from jaxonomy.testing.markers import skip_if_not_jax
 
 skip_if_not_jax()
 
@@ -28,7 +28,7 @@ def test_nmpc_direct_transcription():
     controller and simulates the system for a short duration. The LeafSystem is
     considered to have passed if the CyIPOPT exception is not raised.
     """
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     plant = PendulumDiagram(input_port=True, full_state_output=True)
 
     x0 = jnp.array([1.0, 0.0])
@@ -57,7 +57,7 @@ def test_nmpc_direct_transcription():
     x_optvars_0 = jnp.tile(x0, (N + 1, 1))
     u_optvars_0 = jnp.tile(jnp.zeros(nu), (N, 1))
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     mpc = builder.add(
         DirectTranscriptionNMPC(
@@ -92,7 +92,7 @@ def test_nmpc_direct_transcription():
 
     context = diagram.create_context()
 
-    collimator.simulate(diagram, context, (0.0, 0.2))
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))
 
 
 def test_nmpc_direct_shooting():
@@ -103,7 +103,7 @@ def test_nmpc_direct_shooting():
     controller and simulates the system for a short duration. The LeafSystem is
     considered to have passed if the CyIPOPT exception is not raised.
     """
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     plant = PendulumDiagram(input_port=True, full_state_output=True)
 
     x0 = jnp.array([1.0, 0.0])
@@ -128,7 +128,7 @@ def test_nmpc_direct_shooting():
 
     u_optvars_0 = jnp.tile(jnp.zeros(nu), (N, 1))
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     mpc = builder.add(
         DirectShootingNMPC(
@@ -159,7 +159,7 @@ def test_nmpc_direct_shooting():
     diagram = builder.build()
     context = diagram.create_context()
 
-    collimator.simulate(diagram, context, (0.0, 0.2))
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))
 
 
 def test_nmpc_hermite_simpson():
@@ -170,7 +170,7 @@ def test_nmpc_hermite_simpson():
     controller and simulates the system for a short duration. The LeafSystem is
     considered to have passed if the CyIPOPT exception is not raised.
     """
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     plant = PendulumDiagram(input_port=True, full_state_output=True)
 
     x0 = jnp.array([1.0, 0.0])
@@ -198,7 +198,7 @@ def test_nmpc_hermite_simpson():
     x_optvars_0 = jnp.tile(x0, (N + 1, 1))
     u_optvars_0 = jnp.tile(jnp.zeros(nu), (N + 1, 1))
 
-    builder = collimator.DiagramBuilder()
+    builder = jaxonomy.DiagramBuilder()
 
     mpc = builder.add(
         HermiteSimpsonNMPC(
@@ -232,7 +232,7 @@ def test_nmpc_hermite_simpson():
 
     context = diagram.create_context()
 
-    collimator.simulate(diagram, context, (0.0, 0.2))
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))
 
 
 def test_hermite_simpson_trajectory_optimization():
@@ -243,7 +243,7 @@ def test_hermite_simpson_trajectory_optimization():
     `DirectTranscriptionNMPC` controller and simulates the system for a short duration.
     The LeafSystem is considered to have passed if the CyIPOPT exception is not raised.
     """
-    collimator.set_backend("jax")
+    jaxonomy.set_backend("jax")
     plant = PendulumDiagram(input_port=True, full_state_output=True)
 
     x0 = jnp.array([1.0, 0.0])
@@ -287,8 +287,77 @@ def test_hermite_simpson_trajectory_optimization():
     mpc.solve_trajectory_optimzation(0.0, x0, x_ref, u_ref, x_optvars_0, u_optvars_0)
 
 
+def test_nmpc_warm_start():
+    """
+    Ensure that passing `warm_start=True` to an NMPC block works correctly without
+    exceptions, utilizing the internal host-side cache.
+    """
+    jaxonomy.set_backend("jax")
+    plant = PendulumDiagram(input_port=True, full_state_output=True)
+
+    x0 = jnp.array([1.0, 0.0])
+    nu = 1
+    N = 5
+    nh = 2
+    dt = 0.1
+
+    xf = jnp.array([0.0, 0.0])
+    ur = jnp.array([0.0])
+    x_ref = jnp.tile(xf, (N + 1, 1))
+    u_ref = jnp.tile(ur, (N, 1))
+
+    lb_x = jnp.array([-jnp.pi / 2, -5.0])
+    ub_x = jnp.array([+jnp.pi / 2, +5.0])
+
+    lb_u = jnp.array([-10.0])
+    ub_u = jnp.array([+10.0])
+    Q = jnp.eye(2)
+    QN = Q
+    R = 0.1 * jnp.eye(1)
+
+    x_optvars_0 = jnp.tile(x0, (N + 1, 1))
+    u_optvars_0 = jnp.tile(jnp.zeros(nu), (N, 1))
+
+    builder = jaxonomy.DiagramBuilder()
+
+    mpc = builder.add(
+        DirectTranscriptionNMPC(
+            plant,
+            Q,
+            QN,
+            R,
+            N,
+            nh,
+            dt,
+            lb_x=lb_x,
+            ub_x=ub_x,
+            lb_u=lb_u,
+            ub_u=ub_u,
+            x_optvars_0=x_optvars_0,
+            u_optvars_0=u_optvars_0,
+            name="controller",
+            warm_start=True,
+        )
+    )
+
+    plant_sys = builder.add(PendulumDiagram(x0=x0, input_port=True, full_state_output=True))
+    ref_u_sys = builder.add(Constant(u_ref, name="ref_u"))
+    ref_x_sys = builder.add(Constant(x_ref, name="ref_x"))
+
+    builder.connect(plant_sys.output_ports[0], mpc.input_ports[0])
+    builder.connect(ref_x_sys.output_ports[0], mpc.input_ports[1])
+    builder.connect(ref_u_sys.output_ports[0], mpc.input_ports[2])
+    builder.connect(mpc.output_ports[0], plant_sys.input_ports[0])
+
+    diagram = builder.build()
+    context = diagram.create_context()
+
+    jaxonomy.simulate(diagram, context, (0.0, 0.2))
+
+
 if __name__ == "__main__":
     # test_nmpc_direct_shooting()
     # test_nmpc_direct_transcription()
     # test_nmpc_hermite_simpson()
     test_hermite_simpson_trajectory_optimization()
+    test_nmpc_warm_start()

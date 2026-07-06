@@ -1,4 +1,3 @@
-# Copyright (C) 2025 Collimator, Inc
 # SPDX-License-Identifier: MIT
 
 """Test blocks using interpolation
@@ -11,10 +10,10 @@ Contains tests for:
 import pytest
 from scipy.interpolate import LinearNDInterpolator
 import jax.numpy as jnp
-import collimator
-from collimator import library
-from collimator.testing import set_backend
-from collimator.framework.error import StaticError
+import jaxonomy
+from jaxonomy import library
+from jaxonomy.testing import set_backend
+from jaxonomy.framework.error import StaticError
 
 
 class TestLookupTable1d:
@@ -29,7 +28,7 @@ class TestLookupTable1d:
     def evaluate_lookuptable_block_output(
         self, input, input_array, output_array, interpolation_type
     ):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         lookup_block = builder.add(
             library.LookupTable1d(input_array, output_array, interpolation_type)
         )
@@ -87,14 +86,14 @@ class TestLookupTable1d:
         )
 
     def test_invalid_interpolation(self, input_array, output_array):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(StaticError):
             builder.add(library.LookupTable1d(input_array, output_array, "invalid"))
             diagram = builder.build()
             diagram.create_context()
 
     def test_invalid_input_array(self, output_array):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(StaticError):
             builder.add(
                 library.LookupTable1d(
@@ -105,7 +104,7 @@ class TestLookupTable1d:
             diagram.create_context()
 
     def test_invalid_output_array(self, input_array):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         with pytest.raises(StaticError):
             builder.add(
                 library.LookupTable1d(
@@ -140,7 +139,7 @@ class TestLookupTable2d:
     def evaluate_lookuptable_block_output(
         self, input_x, input_y, input_x_array, input_y_array, output_table_array
     ):
-        builder = collimator.DiagramBuilder()
+        builder = jaxonomy.DiagramBuilder()
         lookup_block = builder.add(
             library.LookupTable2d(
                 input_x_array, input_y_array, output_table_array, "linear"
