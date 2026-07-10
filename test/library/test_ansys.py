@@ -11,6 +11,8 @@ import shutil
 
 import pytest
 
+pytest.importorskip("pytwin", reason="Ansys pytwin not installed (optional `safe`/`all` extra)")
+
 import jaxonomy
 from jaxonomy.library import PyTwin
 

@@ -31,8 +31,10 @@ concurrency:
 
 jobs:
   # ── quick suite on every PR / push to main ─────────────────────────────────
-  # Installs only the `test` extra; tests that need optional libraries (control,
-  # pysindy, tensorflow, torch, ...) skip via pytest.importorskip at collection.
+  # Installs only the `test` extra (which includes control + pandas — soft deps
+  # of library code that lazy-imports them at runtime). Tests needing heavier
+  # optional libraries (pysindy, tensorflow, torch, pytwin, ...) skip via
+  # pytest.importorskip at collection; the nightly test-full job runs them all.
   quick:
     name: Quick test suite
     runs-on: ubuntu-latest

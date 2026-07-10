@@ -80,6 +80,11 @@ test = [
   "hypothesis",
   "toml",
   "matplotlib ~= 3.9",
+  # Soft deps of library code the fast tier exercises at runtime, where a
+  # collection-time importorskip can't intervene: PID / TransferFunction /
+  # LTISystem lazily import `control`; DataSource / csv_utils / fmu need pandas.
+  "control",
+  "pandas ~= 2.2",
 ]
 
 # Full test matrix — adds every optional runtime extra that has test coverage
