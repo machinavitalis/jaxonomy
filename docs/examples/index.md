@@ -211,13 +211,13 @@ Long-horizon constrained-DAE integration with constraint projection, showing how
 
 ### Battery modeling
 
-1. [Equivalent circuit model (ECM) for a battery](part_1_battery_ecm_model.ipynb)
-2. [ECM parameter estimation: synthetic data](part_2_parameter_estimation_synthetic_data.ipynb)
-3. [ECM parameter estimation: experimental data](part_3_parameter_estimation_real_data.ipynb)
-4. [Data-driven modeling: Dynamic Mode Decomposition (DMD)](part_4_data_driven_battery_models_DMDc.ipynb)
-5. [Data-driven modeling: Extended DMD](part_5_data_driven_battery_models_eDMDc.ipynb)
-6. [Data-driven modeling: SINDy with control](part_6_data_driven_battery_models_SINDyc.ipynb)
-7. [Data-driven modeling: Neural Networks](part_7_data_driven_battery_models_Neural_Networks.ipynb)
+1. [Equivalent circuit model (ECM) for a battery](battery_part_1_ecm_model.ipynb)
+2. [ECM parameter estimation: synthetic data](battery_part_2_parameter_estimation_synthetic_data.ipynb)
+3. [ECM parameter estimation: experimental data](battery_part_3_parameter_estimation_real_data.ipynb)
+4. [Data-driven modeling: Dynamic Mode Decomposition (DMD)](battery_part_4_data_driven_models_DMDc.ipynb)
+5. [Data-driven modeling: Extended DMD](battery_part_5_data_driven_models_eDMDc.ipynb)
+6. [Data-driven modeling: SINDy with control](battery_part_6_data_driven_models_SINDyc.ipynb)
+7. [Data-driven modeling: Neural Networks](battery_part_7_data_driven_models_Neural_Networks.ipynb)
 8. [Pack-level modeling: cell, module, and thermally-coupled pack](battery_pack_thermal.ipynb) — compose `BatteryCellECM` cells into series modules and a parallel pack via the acausal electrical layer, wrap each cell in a `HeatCapacitor` with `Insulator`-based lateral conduction and `TemperatureSource` ambient boundaries to couple electrical and thermal domains, and run projected gradient descent on a fixed cooling budget (gradient via parameter-rebinding finite differences, since the BDF-DAE adjoint returns the wrong sign on this DAE — filed as a follow-up finding) to redistribute cooling capacity onto the bottlenecked module. Showcases T-121 (`BatteryCellECM` + `BatteryCellTabular`) and the cross-domain acausal libraries; the marketing wedge is production-grade pack modelling in open source, no toolbox license required.
 9. [Scaling a battery pack from 8 cells to 100,000](battery_pack_10k_scaling.ipynb) — takes the same acausal-ECM pack construction to a 100k-cell pack, documenting what scales cleanly under JAX (`vmap`ed cell dynamics, JIT-compiled kernels) and what breaks (compile time, memory footprint, DAE solve cost) as the cell count grows five orders of magnitude.
 
@@ -252,12 +252,12 @@ A six-part series taking an interior permanent-magnet synchronous motor from a d
 
 A six-part series modelling the propulsive landing of a returning rocket booster from atmospheric apogee to a soft touchdown on a drone-ship pad. Each part progressively adds fidelity — atmospheric aerodynamics and multi-phase guidance, a multi-engine cluster with bandwidth-limited actuators and variable inertia, noisy sensors with Kalman filtering — and culminates in cinematic MuJoCo rendering. Part 6 fills the GNC validation tooling that production aerospace work expects: linearised Bode / Nyquist / eigenvalue analysis at hover, a 1000-trial Monte Carlo dispersion sweep, the autodiff-vs-finite-difference timing comparison that quantifies what `jaxonomy` uniquely buys you over MATLAB / Modelica / hand-rolled scipy, plus prose on real-time scheduling, lossless convex powered-descent guidance, and the ITAR realities of production flight software.
 
-1. [6-DOF dynamics and open-loop trajectory optimisation](part_1_returning_booster_modeling.ipynb)
-2. [Closed-loop MPC with MuJoCo rendering](part_2_returning_booster_mpc_and_render.ipynb)
-3. [Atmosphere, multi-phase guidance, and autodiff parameter tuning](part_3_returning_booster_atmosphere_and_phases.ipynb)
-4. [High-fidelity propulsion: engine cluster, variable inertia, actuator dynamics, engine-out](part_4_returning_booster_high_fidelity_propulsion.ipynb)
-5. [Imperfect sensing and EKF state estimation](part_5_returning_booster_sensing_and_estimation.ipynb)
-6. [GNC validation, analysis, and the autodiff advantage](part_6_returning_booster_gnc_validation_and_analysis.ipynb)
+1. [6-DOF dynamics and open-loop trajectory optimisation](booster_part_1_modeling.ipynb)
+2. [Closed-loop MPC with MuJoCo rendering](booster_part_2_mpc_and_render.ipynb)
+3. [Atmosphere, multi-phase guidance, and autodiff parameter tuning](booster_part_3_atmosphere_and_phases.ipynb)
+4. [High-fidelity propulsion: engine cluster, variable inertia, actuator dynamics, engine-out](booster_part_4_high_fidelity_propulsion.ipynb)
+5. [Imperfect sensing and EKF state estimation](booster_part_5_sensing_and_estimation.ipynb)
+6. [GNC validation, analysis, and the autodiff advantage](booster_part_6_gnc_validation_and_analysis.ipynb)
 
 Bonus: the [cinematic Falcon-9-class landing demo](media/booster_landing_cinematic.mp4) — a 14-second 1280×720 video produced by [`render_booster.py`](media/render_booster.py), which solves Part 1's trajectory optimisation and renders it through a richly-instrumented MuJoCo scene (drone-ship pad, ocean, sun + fill lighting, four landing legs, four grid fins, four-layer plume with visible Mach diamonds, and a hinged engine assembly that visibly tilts on the gimbal command — the visceral cue that there is *active control* of the descent).
 

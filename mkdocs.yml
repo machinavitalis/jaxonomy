@@ -150,13 +150,13 @@ nav:
           - Modelica plant FMU co-sim: examples/openmodelica_plant_fmu_cosim.ipynb
           - Hybrid ML + physics predictor: examples/hybrid_ml_physics_predictor.ipynb
       - Battery series:
-          - 01 - Battery ECM: examples/part_1_battery_ecm_model.ipynb
-          - 02 - Using synthetic data: examples/part_2_parameter_estimation_synthetic_data.ipynb
-          - 03 - Using experimental data: examples/part_3_parameter_estimation_real_data.ipynb
-          - 04 - Dynamic mode decomposition: examples/part_4_data_driven_battery_models_DMDc.ipynb
-          - 05 - Extended DMD: examples/part_5_data_driven_battery_models_eDMDc.ipynb
-          - 06 - SINDy with control: examples/part_6_data_driven_battery_models_SINDyc.ipynb
-          - 07 - Neural networks: examples/part_7_data_driven_battery_models_Neural_Networks.ipynb
+          - 01 - Battery ECM: examples/battery_part_1_ecm_model.ipynb
+          - 02 - Using synthetic data: examples/battery_part_2_parameter_estimation_synthetic_data.ipynb
+          - 03 - Using experimental data: examples/battery_part_3_parameter_estimation_real_data.ipynb
+          - 04 - Dynamic mode decomposition: examples/battery_part_4_data_driven_models_DMDc.ipynb
+          - 05 - Extended DMD: examples/battery_part_5_data_driven_models_eDMDc.ipynb
+          - 06 - SINDy with control: examples/battery_part_6_data_driven_models_SINDyc.ipynb
+          - 07 - Neural networks: examples/battery_part_7_data_driven_models_Neural_Networks.ipynb
           - 08 - Pack-level thermal: examples/battery_pack_thermal.ipynb
           - 09 - Scaling to 100k cells: examples/battery_pack_10k_scaling.ipynb
       - Electric drives series:
@@ -178,12 +178,12 @@ nav:
           - 04 - Trajectory optimization: examples/quanser/04-trajopt.ipynb
           - 05 - Neural network control: examples/quanser/05-nn-control.ipynb
       - Returning booster (Falcon-9 class):
-          - 01 - 6-DOF modelling + trajopt: examples/part_1_returning_booster_modeling.ipynb
-          - 02 - Closed-loop MPC + MuJoCo render: examples/part_2_returning_booster_mpc_and_render.ipynb
-          - 03 - Atmosphere + multi-phase guidance: examples/part_3_returning_booster_atmosphere_and_phases.ipynb
-          - 04 - High-fidelity propulsion: examples/part_4_returning_booster_high_fidelity_propulsion.ipynb
-          - 05 - Sensing and EKF: examples/part_5_returning_booster_sensing_and_estimation.ipynb
-          - 06 - GNC validation + autodiff advantage: examples/part_6_returning_booster_gnc_validation_and_analysis.ipynb
+          - 01 - 6-DOF modelling + trajopt: examples/booster_part_1_modeling.ipynb
+          - 02 - Closed-loop MPC + MuJoCo render: examples/booster_part_2_mpc_and_render.ipynb
+          - 03 - Atmosphere + multi-phase guidance: examples/booster_part_3_atmosphere_and_phases.ipynb
+          - 04 - High-fidelity propulsion: examples/booster_part_4_high_fidelity_propulsion.ipynb
+          - 05 - Sensing and EKF: examples/booster_part_5_sensing_and_estimation.ipynb
+          - 06 - GNC validation + autodiff advantage: examples/booster_part_6_gnc_validation_and_analysis.ipynb
       - F1 race car:
           - 01 - Lap-time simulator: examples/f1_part_1_lap_time_simulator.ipynb
           - 02 - Setup optimisation via jax.grad: examples/f1_part_2_setup_optimization.ipynb
