@@ -2,6 +2,14 @@ name: Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      rebaseline:
+        description: >-
+          Regenerate benchmark baselines on this runner and upload them as an
+          artifact (skips the regular gates). Download the artifact and commit
+          the JSONs to benchmarks/ to adopt them.
+        type: boolean
+        default: false
 
   push:
     branches:
@@ -28,14 +36,14 @@ jobs:
   quick:
     name: Quick test suite
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && !inputs.rebaseline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -52,14 +60,14 @@ jobs:
   autodiff-smoke:
     name: Gradient smoke tests (framework + stateless blocks)
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && !inputs.rebaseline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -81,18 +89,25 @@ jobs:
   nightly:
     name: Nightly comprehensive suite
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && !inputs.rebaseline
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
+
+      # cyipopt (pulled in via the `all` extra) builds from source against the
+      # system IPOPT library; without it the whole `test-full` install fails.
+      - name: Install IPOPT (build dep of cyipopt)
+        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev
 
       - name: Install
         run: |
@@ -113,14 +128,14 @@ jobs:
   compile-time:
     name: Compile-time regression gate
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && !inputs.rebaseline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -140,14 +155,14 @@ jobs:
   memory:
     name: Memory regression gate
     runs-on: ubuntu-latest
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && !inputs.rebaseline
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -170,17 +185,18 @@ jobs:
   public-benchmarks:
     name: Weekly public benchmark suite (cartpole / quadruped / sysid)
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
-      || github.event_name == 'workflow_dispatch'
+    if: >-
+      ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
+      || github.event_name == 'workflow_dispatch')
+      && !inputs.rebaseline
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -195,11 +211,56 @@ jobs:
 
       - name: Upload baseline JSON as artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: public-benchmark-baseline
           path: benchmarks/public_baseline.json
           if-no-files-found: ignore
+
+  # ── benchmark rebaseline (manual only) ────────────────────────────────────
+  # The compile-time / memory / public baselines must be recorded on the same
+  # hardware the gates run on (ubuntu-latest). Trigger this via
+  # workflow_dispatch with `rebaseline: true`, download the artifact, and
+  # commit the three JSONs to benchmarks/. public.py merges into the existing
+  # file, so non-CPU device columns (gpu_t4, ...) are preserved.
+  rebaseline:
+    name: Regenerate benchmark baselines on CI hardware
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.rebaseline
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Regenerate compile-time baseline
+        run: python benchmarks/compile_time.py
+
+      - name: Regenerate memory baseline
+        run: python benchmarks/memory.py
+
+      - name: Regenerate public benchmark baseline (cpu column)
+        run: python benchmarks/public.py
+
+      - name: Upload regenerated baselines
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-benchmark-baselines
+          path: |
+            benchmarks/compile_time_baseline.json
+            benchmarks/memory_baseline.json
+            benchmarks/public_baseline.json
 
   # ── public-benchmarks GPU job (DISABLED: needs self-hosted runners) ───────
   # Uncomment when GPU runners are provisioned. Requires
@@ -227,11 +288,11 @@ jobs:
   #   env:
   #     JAXONOMY_BENCH_DEVICE: gpu
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #       with:
   #         lfs: true
   #     - name: Set up Python 3.11
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v6
   #       with:
   #         python-version: "3.11"
   #         cache: pip
@@ -248,7 +309,7 @@ jobs:
   #           --device gpu --update-baseline ${{ matrix.device_key }}
   #     - name: Upload updated baseline JSON
   #       if: always()
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v5
   #       with:
   #         name: public-benchmark-baseline-${{ matrix.device_key }}
   #         path: benchmarks/public_baseline.json
