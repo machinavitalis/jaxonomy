@@ -14,7 +14,7 @@ on:
   schedule:
     # 07:00 UTC daily → nightly comprehensive run (slow + autodiff_full tests)
     - cron: "0 7 * * *"
-    # 06:00 UTC every Monday → weekly public benchmark suite (T-019)
+    # 06:00 UTC every Monday → weekly public benchmark suite
     - cron: "0 6 * * 1"
 
 concurrency:
@@ -48,9 +48,9 @@ jobs:
       - name: Run quick suite (excludes slow, dashboard, autodiff_full)
         run: pytest -q --tb=short -n auto
 
-  # ── autodiff smoke: the small T-001 PR-time gradient test set ──────────────
+  # ── autodiff smoke: the small PR-time gradient test set ────────────────────
   autodiff-smoke:
-    name: Autodiff smoke (T-001 PR subset)
+    name: Gradient smoke tests (framework + stateless blocks)
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
     steps:
@@ -105,13 +105,13 @@ jobs:
             -m "not dashboard" \
             --override-ini="addopts=--strict-markers"
 
-  # ── T-017 compile-time regression gate ────────────────────────────────────
+  # ── compile-time regression gate ──────────────────────────────────────────
   # Re-runs the compile-time benchmark and fails if any case regresses beyond
   # the threshold encoded in benchmarks/compile_time.py (currently +50 %).
   # The check tolerates SKIPPED cases (e.g. when an optional dep is missing)
   # so it never blocks PRs on environment drift.
   compile-time:
-    name: Compile-time regression gate (T-017)
+    name: Compile-time regression gate
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
     steps:
@@ -133,12 +133,12 @@ jobs:
       - name: Run compile-time benchmark with --check
         run: python benchmarks/compile_time.py --check
 
-  # ── T-018 memory regression gate ──────────────────────────────────────────
+  # ── memory regression gate ────────────────────────────────────────────────
   # Re-runs the memory benchmark and fails if any case's peak RSS regresses
   # beyond the threshold encoded in benchmarks/memory.py (currently +50 %).
   # Same trigger pattern as compile-time (PR + push to main, NOT scheduled).
   memory:
-    name: Memory regression gate (T-018)
+    name: Memory regression gate
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
     steps:
@@ -160,7 +160,7 @@ jobs:
       - name: Run memory benchmark with --check
         run: python benchmarks/memory.py --check
 
-  # ── T-019 public benchmark suite (weekly + manual only) ───────────────────
+  # ── public benchmark suite (weekly + manual only) ─────────────────────────
   # Cartpole / quadruped / sysid / linearization. NOT on PR or push: each
   # full run takes several minutes (the sysid step alone is ~7 s on CPU and
   # the quadruped batch needs a fresh XLA compile).  The compile/memory
@@ -168,7 +168,7 @@ jobs:
   # public-facing throughput numbers and is also available on
   # workflow_dispatch for manual re-baselining.
   public-benchmarks:
-    name: Public benchmark suite (T-019)
+    name: Weekly public benchmark suite (cartpole / quadruped / sysid)
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
@@ -201,7 +201,7 @@ jobs:
           path: benchmarks/public_baseline.json
           if-no-files-found: ignore
 
-  # ── T-019a public-benchmarks GPU job (DISABLED: needs self-hosted runners) ─
+  # ── public-benchmarks GPU job (DISABLED: needs self-hosted runners) ───────
   # Uncomment when GPU runners are provisioned. Requires
   #   `runs-on: [self-hosted, linux, gpu]`
   # plus a runner labelled with the actual accelerator (`t4`/`a100`/`h100`).
@@ -210,7 +210,7 @@ jobs:
   # CPU-only `public-benchmarks` job above and never block CPU CI.
   #
   # public-benchmarks-gpu:
-  #   name: Public benchmark suite on GPU (T-019a)
+  #   name: Weekly public benchmark suite on GPU
   #   if: github.event_name == 'workflow_dispatch'
   #   strategy:
   #     fail-fast: false

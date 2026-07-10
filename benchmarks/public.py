@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""T-019 — Public benchmark suite with published numbers.
+"""Public benchmark suite with published numbers.
 
 Run directly:
 
@@ -734,7 +734,7 @@ def _emit_github_summary(measured):
     sp = os.environ.get("GITHUB_STEP_SUMMARY")
     if not sp:
         return
-    lines = ["## T-019 public benchmark suite", "",
+    lines = ["## Public benchmark suite", "",
              "| problem | headline metric | value |",
              "| --- | --- | --- |"]
     fmt = {
@@ -859,7 +859,7 @@ def main():
 
     backend = jax.default_backend()
     devices = jax.devices()
-    print(f"Running public benchmark suite (T-019)\n  N_REPEAT = {N_REPEAT}"
+    print(f"Running public benchmark suite\n  N_REPEAT = {N_REPEAT}"
           f"\n  quadruped_n = {args.quadruped_n}\n"
           f"  jax_default_backend = {backend}\n"
           f"  jax_devices = {devices}\n")

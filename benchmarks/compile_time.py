@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""T-017 — JIT compile-time benchmark suite.
+"""JIT compile-time benchmark suite.
 
 Run directly:
 
@@ -291,7 +291,7 @@ def _emit_github_summary(measured):
     sp = os.environ.get("GITHUB_STEP_SUMMARY")
     if not sp:
         return
-    lines = ["## T-017 compile-time benchmark", "",
+    lines = ["## Compile-time benchmark", "",
              "| case | compile (s) | sim (s) |", "| --- | --- | --- |"]
     for name, case in measured.items():
         if case.get("skipped"):

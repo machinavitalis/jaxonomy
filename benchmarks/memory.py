@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""T-018 — memory footprint benchmark suite.
+"""Memory footprint benchmark suite.
 
 Run directly:
 
@@ -445,7 +445,7 @@ def _emit_github_summary(measured):
     sp = os.environ.get("GITHUB_STEP_SUMMARY")
     if not sp:
         return
-    lines = ["## T-018 memory benchmark", "",
+    lines = ["## Memory benchmark (peak RSS)", "",
              "| case | peak (MB) |", "| --- | --- |"]
     for name, case in measured.items():
         if not isinstance(case, dict):
