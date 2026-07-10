@@ -633,6 +633,7 @@ class TestFitParametersMCPTool:
         assert r["fitted_params"]["gain.gain"] == pytest.approx(2.0, abs=0.3)
         assert r["converged"] is True
 
+    @pytest.mark.timeout(360)  # 500 SGD steps run ~172s idle; 180s default is too tight under load
     def test_sgd_method_converges(self):
         """SGD method with higher LR converges on a simple ramp."""
         r = self._run(method="sgd", learning_rate=0.05, n_steps=500)

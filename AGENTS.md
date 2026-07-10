@@ -70,15 +70,19 @@ maintainer (commit message / PR), not fixed as a drive-by on your branch.
 - Fast tier: `pytest -m "not slow"`. Use this for regression checks on
   routine work.
 - Tests live in `test/` (singular), mirroring the source layout.
-- **Baseline failures unrelated to your change** (don't chase these unless
-  the task is to fix them):
-  - `test_state_estimators.py::test_kalman_filter*` + `test_infinite_horizon_kalman_filter*` + `test_continuous_time_infinite_horizon_kalman_filter`
-  - `test_state_machine.py::test_state_machine_output_mismatch_dtype`
-  - `test_source.py::TestRandomNumber::test_random_normal` + `test_random_gamma`
-  - `test_predictor.py::TestPyTorch::*` + `TestTensorFlow::*` (Torch/TF env-version drift)
-  - Fluid tests, `battery_cell`, `edge_detection_comparator`
-- `pytest --timeout` is not configured; long-running tests should be
-  gated behind `@pytest.mark.slow`.
+- **Baseline: fully green.** A full-suite run (2026-07-09, all 5109 tests,
+  fast + slow tiers) had zero unexpected failures — the previously listed
+  baseline failures (Kalman filters, state-machine dtype, random
+  normal/gamma, fluid, `battery_cell`, `edge_detection_comparator`) all
+  pass now. `test_predictor.py` Torch/TF tests *skip* when
+  torch/tensorflow aren't installed (currently absent locally). A new
+  failure on your branch is therefore yours to explain.
+- `pytest.ini` sets a global `--timeout=180` per test via pytest-timeout,
+  and its default `addopts` deselect `slow`/`dashboard`/`autodiff_full` —
+  pass `-m slow` explicitly to run slow tests. Genuinely long tests are
+  marked `@pytest.mark.slow` and, if they can exceed ~180s, carry a
+  per-test `@pytest.mark.timeout(N)` override (the global cap applies to
+  slow-marked tests too).
 - Optional cross-tool deps: `python-control 0.10.x` is available locally
   for SLICOT cross-validation; wrap such tests in `pytest.importorskip("control")`.
 

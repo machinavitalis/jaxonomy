@@ -556,14 +556,6 @@
             "order": 8,
             "value": "propellant_mass * ox_mass_frac"
           },
-          "rho": {
-            "order": 9,
-            "value": "ox_density"
-          },
-          "tank_pressure_nominal": {
-            "order": 10,
-            "value": "ox_tank_pressure_nominal"
-          },
           "tank_temperature": {
             "order": 11,
             "value": "ox_tank_temperature"
@@ -670,14 +662,6 @@
           "propellant_mass": {
             "order": 8,
             "value": "propellant_mass * fuel_mass_frac"
-          },
-          "rho": {
-            "order": 9,
-            "value": "fuel_density"
-          },
-          "tank_pressure_nominal": {
-            "order": 10,
-            "value": "fuel_tank_pressure_nominal"
           },
           "tank_temperature": {
             "order": 11,

@@ -287,7 +287,29 @@ class Dopri5Solver(ODESolverImpl):
         # so the loop terminates.  The error callback above has already notified the
         # caller; the resulting inaccuracy is intentional and documented.
         at_step_floor = (self.hmin > 0.0) & (next_dt <= self.hmin)
-        forced_accept_ratio = jnp.where(at_step_floor, 0.0, error_ratio)
+        # Two further termination guards (T-005/T-008 — the ``~accepted`` loop
+        # only exits when a step is accepted):
+        # - NaN error ratio (a NaN/Inf state or RHS, e.g. a NaN parameter):
+        #   ``ratio <= 1`` is False forever and the controller propagates the
+        #   NaN into ``next_dt``, so even the hmin floor above never fires.
+        #   Force-accept so the non-finite state propagates to the caller and
+        #   the simulation terminates (fixed-step rk4 semantics).  An *Inf*
+        #   ratio is deliberately NOT force-accepted — shrinking dt and
+        #   retrying can recover from an overflowed error estimate.
+        # - Step-size underflow with the default hmin == 0: a diverging RHS
+        #   shrinks ``next_dt`` geometrically without ever being accepted.
+        #   Once dt falls below the smallest increment representable at the
+        #   current time scale (~eps·max(|t|, |tf|)), no accuracy is
+        #   achievable; force-accept the inaccurate step — the resulting
+        #   blown-up state then terminates via the NaN guard on the next
+        #   attempt.
+        nan_error = jnp.isnan(error_ratio)
+        dt_floor = jnp.finfo(dt_dtype).eps * jnp.maximum(
+            jnp.abs(t), jnp.abs(boundary_time)
+        ).astype(dt_dtype)
+        dt_underflow = next_dt <= dt_floor
+        force_accept = at_step_floor | nan_error | dt_underflow
+        forced_accept_ratio = jnp.where(force_accept, 0.0, error_ratio)
         return solver_state.update(
             forced_accept_ratio, next_y, next_f, next_t, next_dt, new_interp_coeff
         )

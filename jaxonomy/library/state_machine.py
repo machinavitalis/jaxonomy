@@ -376,6 +376,87 @@ def _is_lambda_body_true(f):
     return False
 
 
+class _RewriteBoolOps(ast.NodeTransformer):
+    """Rewrite python ``and``/``or``/``not`` into ``logical_*`` helper calls.
+
+    Python's short-circuit boolean operators call ``bool()`` on their
+    operands, which raises ``TracerBoolConversionError`` when a guard or
+    action is evaluated with traced values — as happens in the
+    zero-crossing (``time_mode="agnostic"``) execution path and when
+    ``accelerate_with_jax=True``. Rewriting to array-safe
+    ``logical_and``/``logical_or``/``logical_not`` calls keeps such source
+    traceable. Note the rewritten form evaluates all operands (no
+    short-circuit) and yields booleans rather than operand values, which
+    matches the guard contract (guards must evaluate to Bool).
+    """
+
+    def visit_BoolOp(self, node):
+        self.generic_visit(node)
+        name = (
+            "__sm_logical_and__"
+            if isinstance(node.op, ast.And)
+            else "__sm_logical_or__"
+        )
+        expr = node.values[0]
+        for operand in node.values[1:]:
+            expr = ast.Call(
+                func=ast.Name(id=name, ctx=ast.Load()),
+                args=[expr, operand],
+                keywords=[],
+            )
+        return expr
+
+    def visit_UnaryOp(self, node):
+        self.generic_visit(node)
+        if isinstance(node.op, ast.Not):
+            return ast.Call(
+                func=ast.Name(id="__sm_logical_not__", ctx=ast.Load()),
+                args=[node.operand],
+                keywords=[],
+            )
+        return node
+
+
+def _logical_and(a, b):
+    return npa.logical_and(a, b)
+
+
+def _logical_or(a, b):
+    return npa.logical_or(a, b)
+
+
+def _logical_not(a):
+    return npa.logical_not(a)
+
+
+# Names referenced by source rewritten with ``rewrite_bool_ops``; must be
+# merged into the environment that source is eval/exec'd in. The wrappers
+# defer to ``npa`` at call time so the active numerical backend is respected.
+TRACE_SAFE_BOOL_ENV = {
+    "__sm_logical_and__": _logical_and,
+    "__sm_logical_or__": _logical_or,
+    "__sm_logical_not__": _logical_not,
+}
+
+
+def rewrite_bool_ops(source: str, mode: str = "eval") -> str:
+    """Rewrite ``and``/``or``/``not`` in guard/action source to trace-safe calls.
+
+    Args:
+        source: Python source for a guard expression or action statement(s).
+        mode: ``"eval"`` for expressions (guards), ``"exec"`` for
+            statements (actions).
+
+    Returns:
+        Source whose boolean operators are replaced by calls to the helper
+        names in ``TRACE_SAFE_BOOL_ENV``.
+    """
+    tree = ast.parse(source, mode=mode)
+    tree = _RewriteBoolOps().visit(tree)
+    ast.fix_missing_locations(tree)
+    return ast.unparse(tree)
+
+
 @parameters(static=["accelerate_with_jax"])
 class StateMachine(LeafSystem):
     """Finite State Machine similar to Mealy Machine.
@@ -591,8 +672,15 @@ class StateMachine(LeafSystem):
                         updated_outputs = self._exec_actions(
                             t.action_ids, inputs, outputs
                         )
+                    # Actions only assign a subset of the outputs; carry the
+                    # untouched ones over from the current discrete state
+                    # (mirrors the merge in the discrete-update callbacks).
+                    merged_outputs = {
+                        k: updated_outputs[k] if k in updated_outputs else outputs[k]
+                        for k in self._output_names
+                    }
                     return state.with_discrete_state(
-                        value=self.DiscreteStateType(**updated_outputs)
+                        value=self.DiscreteStateType(**merged_outputs)
                     )
 
                 return _reset

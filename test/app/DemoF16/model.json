@@ -1576,10 +1576,6 @@
             "order": 0,
             "value": "20.2"
           },
-          "lower_limit": {
-            "order": 1,
-            "value": "-60"
-          },
           "lower_rate": {
             "order": 2,
             "value": "-60"
@@ -1591,10 +1587,6 @@
           "trim_value": {
             "order": 4,
             "value": "trim_control[1]"
-          },
-          "upper_limit": {
-            "order": 5,
-            "value": "60"
           },
           "upper_rate": {
             "order": 6,

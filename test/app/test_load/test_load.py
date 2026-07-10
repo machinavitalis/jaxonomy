@@ -71,7 +71,6 @@ def test_feedthru_bool():
             assert node.get_feedthrough()
 
 
-@pytest.mark.skip(reason="development test")
 def test_impact_detection_results(show_plot=False):
     testdir = pathlib.Path(__file__).parent
     model = jaxonomy.load_model(testdir, model="double_ball.json")

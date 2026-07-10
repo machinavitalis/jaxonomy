@@ -22,8 +22,8 @@ def test_version():
     assert len(version) == 3 or len(version) == 4
 
     # Check major and minor
-    assert version[0] == "2"
-    assert version[1] == "2"
+    assert version[0] == "3"
+    assert version[1] == "0"
 
     # Check micro
     assert version[2].isdigit()

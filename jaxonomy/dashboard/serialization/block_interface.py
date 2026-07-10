@@ -634,7 +634,7 @@ def _extract_assigned_vars(code_str):
     return set(assigned_vars)
 
 
-def _create_action(registry, action, input_names, output_names):
+def _create_action(registry, action, input_names, output_names, trace_safe_bool_ops=False):
     # get outputs assigned in this action
     assigned_vars = _extract_assigned_vars(action)
     filtered_output_names = [
@@ -650,6 +650,11 @@ def _create_action(registry, action, input_names, output_names):
         action = action[:-1]
     func_string = f"def {fname}({args}): {action}; return {{ {return_str} }}"
     env = {**globals()}
+    if trace_safe_bool_ops:
+        # Rewrite python and/or/not so the action stays traceable when it is
+        # executed under JIT (zero-crossing reset maps, accelerate_with_jax).
+        func_string = sm_lib.rewrite_bool_ops(func_string, mode="exec")
+        env.update(sm_lib.TRACE_SAFE_BOOL_ENV)
     # NOTE: this is executed in the sandbox so it's safe
     exec(func_string, env)
     return registry.register_action(eval(fname, env))
@@ -696,11 +701,21 @@ def _create_partial_transitions(
     output_names: list[str],
     dst: int,
     warn_bool_ops: bool,
+    trace_safe_bool_ops: bool = False,
 ):
     inputs = ", ".join(input_names)
     outputs = ", ".join(output_names)
+    guard_src = f"lambda {inputs}, {outputs}: {data.guard}"
+    guard_env = {**globals()}
+    if trace_safe_bool_ops:
+        # Guards are evaluated under JAX tracing in the zero-crossing
+        # ("agnostic") path and when accelerate_with_jax=True; python's
+        # short-circuit and/or/not would raise TracerBoolConversionError
+        # there, so rewrite them to trace-safe logical_* calls.
+        guard_src = sm_lib.rewrite_bool_ops(guard_src, mode="eval")
+        guard_env.update(sm_lib.TRACE_SAFE_BOOL_ENV)
     # NOTE: this is executed in the sandbox so it's safe
-    guard = eval(f"lambda {inputs}, {outputs}: {data.guard}")
+    guard = eval(guard_src, guard_env)
     # Smooth residual for the event-time gradient (T-NEW-sm-smooth-guard); only
     # for single-comparison guards, else None (no event-time gradient surface).
     grad_guard = None
@@ -719,7 +734,15 @@ def _create_partial_transitions(
 
     action_ids = []
     for action in data.actions:
-        action_ids.append(_create_action(registry, action, input_names, output_names))
+        action_ids.append(
+            _create_action(
+                registry,
+                action,
+                input_names,
+                output_names,
+                trace_safe_bool_ops=trace_safe_bool_ops,
+            )
+        )
         if warn_bool_ops and _contains_bool_ops(action):
             logger.warning(
                 "Boolean operators detected in action: '%s'. "
@@ -738,6 +761,7 @@ def _create_state_machine_data(
     input_names: list[str],
     output_names: list[str],
     warn_bool_ops: bool,
+    trace_safe_bool_ops: bool = False,
 ):
     # process the state machine diagram
     # first enumerate the states with integers since we need a type that
@@ -774,6 +798,7 @@ def _create_state_machine_data(
                 output_names,
                 states_lookup[load_trns.destNodeId],
                 warn_bool_ops,
+                trace_safe_bool_ops=trace_safe_bool_ops,
             )
             transitions.append(transition)
         state = sm_lib.StateMachineState(name=node.name, transitions=transitions)
@@ -796,8 +821,20 @@ def StateMachineBlock(
 ):
     inputs_, outputs_ = _process_user_define_ports(block_spec)
     accelerate_with_jax = kwargs.get("accelerate_with_jax", False)
+    # Guards and transition actions run under JAX tracing in the
+    # zero-crossing ("agnostic") path and when accelerate_with_jax=True;
+    # rewrite python bool ops to trace-safe logical_* calls there. The
+    # discrete non-accelerated path runs concretely (pure_callback) and is
+    # left byte-identical.
+    trace_safe_bool_ops = (
+        accelerate_with_jax or block_spec.time_mode == "agnostic"
+    )
     sm_data = _create_state_machine_data(
-        state_machine_diagram, inputs_, outputs_, accelerate_with_jax
+        state_machine_diagram,
+        inputs_,
+        outputs_,
+        accelerate_with_jax,
+        trace_safe_bool_ops=trace_safe_bool_ops,
     )
 
     return _wrap(library.StateMachine)(

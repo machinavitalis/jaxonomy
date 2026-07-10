@@ -7,6 +7,8 @@ import numpy as np
 import jax.numpy as jnp
 
 from jaxonomy.backend import numpy_api as npa
+from jaxonomy.backend import get_dispatcher, set_backend as _raw_set_backend
+from jaxonomy.backend.backend import MathDispatcher
 from jaxonomy.testing import set_backend
 
 try:
@@ -15,11 +17,32 @@ except ImportError:
     warnings.warn("torch not installed - skipping relevant checks")
     torch = None
 
+# The torch backend is opt-in: MathDispatcher only registers it when
+# JAXONOMY_BACKEND=torch is set (see backend.py). Having torch importable is
+# not enough — set_backend("torch") raises KeyError unless it was requested.
+if torch is not None and "torch" not in MathDispatcher._backends:
+    warnings.warn(
+        "torch installed but torch backend not registered "
+        "(set JAXONOMY_BACKEND=torch to exercise it) - skipping torch branches"
+    )
+    torch = None
+
 float_dtypes = ["float64", "float32", "float16"]
 int_dtypes = ["int64", "int32", "int16"]
 
 
-@pytest.mark.skip(reason="see PR 6523")
+@pytest.fixture(autouse=True)
+def _restore_backend():
+    """These tests mutate the process-global backend dispatcher. Restore the
+    entry backend afterwards so a mid-test failure (or a torch-installed run,
+    whose tests end on set_backend("torch")) cannot leak backend state into
+    the rest of the suite. That leak was the reason this module was skipped
+    (the old "see PR 6523" quarantine)."""
+    before = get_dispatcher().active_backend
+    yield
+    _raw_set_backend(before)
+
+
 def test_switch_backend():
     set_backend("numpy")
     x = npa.array([0.0, 1.0])
@@ -44,7 +67,6 @@ def test_switch_backend():
         assert isinstance(sin_x, torch.Tensor)
 
 
-@pytest.mark.skip(reason="see PR 6523")
 @pytest.mark.parametrize("dtype_str", [*float_dtypes, *int_dtypes])
 def test_array(dtype_str):
     x = [1, 2, 3]
@@ -75,7 +97,6 @@ def test_array(dtype_str):
         assert np.allclose(y, x)
 
 
-@pytest.mark.skip(reason="see PR 6523")
 @pytest.mark.parametrize("dtype_str", [*float_dtypes, *int_dtypes])
 def test_zeros_like_vec(dtype_str):
     set_backend("numpy")
@@ -106,7 +127,6 @@ def test_zeros_like_vec(dtype_str):
         assert z.shape == (3,)
 
 
-@pytest.mark.skip(reason="see PR 6523")
 @pytest.mark.parametrize("dtype_str", [*float_dtypes, *int_dtypes])
 def test_zeros_like_array(dtype_str):
     set_backend("numpy")
@@ -138,7 +158,6 @@ def test_zeros_like_array(dtype_str):
         assert torch.all(z == 0.0)
 
 
-@pytest.mark.skip(reason="see PR 6523")
 def test_reshape():
     set_backend("numpy")
     x = npa.array([[1, 2, 3], [4, 5, 6]])

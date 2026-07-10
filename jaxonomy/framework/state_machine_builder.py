@@ -482,6 +482,10 @@ class StateMachineBuilder:
             input_names,
             output_names,
             False,
+            # Agnostic (zero-crossing) guards/actions are evaluated under
+            # JAX tracing; rewrite python and/or/not to trace-safe
+            # logical_* calls there.
+            trace_safe_bool_ops=(time_mode == "agnostic"),
         )
 
         from jaxonomy.library.state_machine import StateMachine

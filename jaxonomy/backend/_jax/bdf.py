@@ -557,6 +557,46 @@ class BDFSolver(ODESolverImpl):
             jnp.where(error_norm > 1, opt_factor, jnp.asarray(-jnp.inf, dtype=dtype)),
         )
 
+        # Termination guards (T-005/T-008), mirroring the dopri5 ones — the
+        # ``~accepted`` loop in ``step`` only exits when a step is accepted:
+        # - A NaN state/RHS (e.g. a NaN parameter) never converges the Newton
+        #   iteration and never passes the error test, so the retry factor
+        #   stays positive forever.
+        # - A diverging solution keeps failing the error test and halves dt
+        #   geometrically without bound (there is no hmin floor by default).
+        # Gated on ``would_retry`` so a healthy step (which the controller
+        # accepts on its own, e.g. a tiny final sliver before the interval
+        # boundary) can never be affected.  On a terminal step: poison the
+        # state with NaN (it is by construction garbage — the error test
+        # failed and the controller could not shrink dt further), force-accept
+        # it, and jump dt to the remaining interval so the enclosing
+        # simulation loop terminates promptly with the non-finite state
+        # visible to the caller, instead of hanging.
+        #
+        # NOTE ``would_retry`` is NOT ``factor > 0``: a NaN error norm fails
+        # ``error_norm > 1`` and would flow to the ``-inf`` (accept) branch —
+        # i.e. without this guard a NaN step is silently *accepted* at the
+        # current (often already collapsed) dt, and the simulation crawls to
+        # tf in billions of tiny NaN steps.  A NaN error norm must count as
+        # a retry so the bailout below can fire instead.
+        would_retry = (~converged & updated_jacobian) | ~(error_norm <= 1.0)
+        nonfinite = ~jnp.all(jnp.isfinite(y_new)) | jnp.isnan(error_norm)
+        dt_floor = (
+            jnp.finfo(dtype).eps
+            * jnp.maximum(jnp.abs(state.t), jnp.abs(boundary_time))
+        ).astype(dtype)
+        force_accept = would_retry & (nonfinite | (state.dt <= dt_floor))
+        factor = jnp.where(
+            force_accept, jnp.asarray(-jnp.inf, dtype=dtype), factor
+        )
+        y_new = jnp.where(force_accept, jnp.full_like(y_new, jnp.nan), y_new)
+        bailout_state = dataclasses.replace(
+            state, dt=jnp.asarray(boundary_time - state.t, dtype=dtype)
+        )
+        state = jax.tree.map(
+            partial(jnp.where, force_accept), bailout_state, state
+        )
+
         # If the factor is negative, then the step is accepted.  Otherwise, we have to
         # update the step size and LU factorization for the next iteration.
         (state, accepted) = jax.tree.map(

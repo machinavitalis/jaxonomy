@@ -320,58 +320,114 @@ class TestVanDerPolStiff:
 class TestDivergingSystem:
     """Case 5: dx/dt = x^2 — finite-time blowup at t=1."""
 
-    @pytest.mark.skip(
-        reason="Integrating dx/dt=x^2 past its finite-time singularity hangs the "
-        "adaptive inner loop uninterruptibly (no step-underflow guard) for BOTH "
-        "dopri5 and bdf — a signal/thread pytest --timeout cannot kill, so it "
-        "wedges CI to the job wall-clock. Same solver-divergence gap as "
-        "test_ode_solver.test_diverging_solution; both quarantined pending the "
-        "step-underflow / early-termination fix (see TODO T-005/T-008)."
-    )
+    # The blow-up simulation runs in a FRESH SUBPROCESS, for two reasons:
+    # 1. This test guards an anti-hang property (the T-005/T-008 NaN /
+    #    step-underflow termination guards).  If the guards ever regress the
+    #    solve hangs uninterruptibly (pytest-timeout's signal cannot break an
+    #    XLA loop) — in a subprocess the 180 s kill turns that into a clean
+    #    failure instead of a wedged suite.
+    # 2. With tensorflow resident in the pytest process (test/conftest.py
+    #    imports it early to dodge the sklearn/TF OpenMP deadlock), this
+    #    specific long-running adaptive while_loop kernel slows down
+    #    unboundedly (observed >50 CPU-minutes vs seconds in a clean
+    #    process; macOS arm64, TF 2.21) — an XLA-runtime interference we
+    #    cannot fix here.  A fresh interpreter has no TF loaded.
+    _BLOWUP_SNIPPET = """
+import json
+import numpy as np
+import jax.numpy as jnp
+from jaxonomy import LeafSystem, SimulatorOptions, simulate
+
+class QuadraticBlowup(LeafSystem):
+    def __init__(self, x0: float = 1.0):
+        super().__init__()
+        self.declare_continuous_state(
+            default_value=jnp.array(float(x0)), ode=self._ode
+        )
+        self.declare_output_port(
+            lambda t, s, **p: s.continuous_state,
+            default_value=jnp.zeros(()),
+        )
+
+    def _ode(self, time, state, **params):
+        x = state.continuous_state
+        return x * x
+
+system = QuadraticBlowup(x0=1.0)
+ctx = system.create_context()
+opts = SimulatorOptions(
+    math_backend="jax", ode_solver_method="{method}",
+    rtol=1e-6, atol=1e-8, max_major_step_length=0.5,
+)
+try:
+    res = simulate(system, ctx, (0.0, 2.0),
+                   recorded_signals={{"x": system.output_ports[0]}},
+                   options=opts)
+except Exception as exc:  # noqa: BLE001 - verdict reported to parent
+    print("VERDICT " + json.dumps({{"raised": True, "exc": repr(exc)}}))
+else:
+    t = np.asarray(res.time)
+    x = np.asarray(res.outputs["x"])
+    xf = np.asarray(res.context.continuous_state)
+    print("VERDICT " + json.dumps({{
+        "raised": False,
+        "t_last": float(t[-1]),
+        "trace_finite": bool(np.all(np.isfinite(x))),
+        "final_finite": bool(np.all(np.isfinite(xf))),
+    }}))
+"""
+
     @pytest.mark.parametrize("method", SOLVERS)
     def test_blowup_reported_or_terminated(self, method):
         """When integrating past the finite-time singularity at t=1,
-        the solver must NOT silently clip the step and pretend success.
+        the solver must NOT silently clip the step and pretend success —
+        and must NOT hang (the pre-guard behavior; see the subprocess
+        rationale above).
 
         Acceptable behaviors:
-          (a) raises an exception (RuntimeError or similar), OR
-          (b) returns with res.time[-1] < 1.0 (early termination).
+          (a) raises an exception, OR
+          (b) returns with res.time[-1] < 1.0 (early termination), OR
+          (c) returns with a non-finite (NaN/Inf) trace past the
+              singularity — the T-005/T-008 guards' designed signal.
 
-        If the solver returns with time reaching past t=1.0 with
-        finite x, that's a silent-clipping bug. Mark xfail in that
-        case (T-005/T-008).
+        Reaching past t=1.0 with entirely finite x is silent step
+        clipping; a subprocess timeout is a hang — both hard failures.
         """
-        system = QuadraticBlowup(x0=1.0)
-        ctx = system.create_context()
-        # Asking for t_end well past the singularity at t=1.
-        opts = _opts(method, rtol=1e-6, atol=1e-8, max_major_step_length=0.5)
-        recorded = {"x": system.output_ports[0]}
-        try:
-            res = simulate(system, ctx, (0.0, 2.0), recorded_signals=recorded, options=opts)
-        except Exception:
-            # Behavior (a): raised — correct.
-            return
+        import json
+        import subprocess
+        import sys
+        from pathlib import Path
 
-        # Behavior (b/c): returned without raising.
-        t = np.asarray(res.time)
-        x = np.asarray(res.outputs["x"])
-        finite_x = np.isfinite(x)
-        if t[-1] < 1.0 - 1e-6:
-            # Behavior (b): early termination — also correct.
-            return
-        if not np.all(finite_x):
-            # Returned a NaN/Inf trace past the singularity — not a
-            # silent-clip but also not a clean failure. Document as
-            # xfail until handled per TODO T-005/T-008.
-            pytest.xfail(
-                "Diverging ODE returned NaN/Inf rather than raising "
-                "or terminating early (T-005/T-008)."
+        repo_root = Path(__file__).resolve().parents[2]
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", self._BLOWUP_SNIPPET.format(method=method)],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                cwd=repo_root,
             )
-        # Reached past t=1 with finite values — silent step clipping.
-        pytest.xfail(
-            f"Diverging ODE: solver reached t={t[-1]:.4f} > 1.0 with "
-            f"finite x_final={x[-1]:.3e} — silent step clipping. "
-            f"Expected fix T-005/T-008."
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                f"Diverging ODE under {method} hung for >180s — the "
+                "T-005/T-008 solver termination guards have regressed."
+            )
+        verdict_lines = [
+            ln for ln in proc.stdout.splitlines() if ln.startswith("VERDICT ")
+        ]
+        assert verdict_lines, (
+            f"subprocess produced no verdict (rc={proc.returncode}):\n"
+            f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
+        )
+        verdict = json.loads(verdict_lines[-1][len("VERDICT "):])
+        if verdict["raised"]:
+            return  # behavior (a)
+        if verdict["t_last"] < 1.0 - 1e-6:
+            return  # behavior (b)
+        assert not (verdict["trace_finite"] and verdict["final_finite"]), (
+            f"Diverging ODE: {method} reached t={verdict['t_last']:.4f} > 1.0 "
+            "with finite state — silent step clipping (T-005/T-008 guard "
+            "regression)."
         )
 
 

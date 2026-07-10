@@ -19,6 +19,7 @@ from __future__ import annotations
 
 
 from typing import TYPE_CHECKING, NamedTuple, Callable, List
+import contextvars
 import dataclasses
 
 from .dependency_graph import (
@@ -40,6 +41,34 @@ __all__ = [
     "SystemCallback",
     "CallbackTracer",
 ]
+
+
+# Transient memo for a single top-level SystemCallback.eval() call tree.
+#
+# Outside of `simulate` (which enables and maintains the context port cache)
+# every `eval()` on an initialized context recomputes its full upstream cone.
+# For diagrams where one output fans out to several consumers that later
+# reconverge — the natural shape of composed reference-submodel models — the
+# recompute count grows exponentially with composition depth (a K-level
+# diamond chain costs 2^(K+2) calls), which in practice hangs
+# `create_context()` / `check_types` / eager `port.eval()` on real composed
+# models (e.g. the DemoAeroRocketEngine app model: 13 submodel instances,
+# 8 nested groups).
+#
+# The memo lives only for the duration of ONE outermost eval() call: the
+# first eval() on the stack installs a fresh dict and always clears it on
+# exit, and nested (recursive) evals within that tree reuse computed values.
+# The context is immutable for the duration of one eval tree, so this is
+# purely an evaluation-count optimization — no value can differ from the
+# recompute path, under eager execution and under JAX tracing alike (within
+# one trace, deduplicating a pure subexpression is semantics-preserving; it
+# also shrinks the traced jaxpr).  Nothing persists across top-level calls,
+# so there is nothing to invalidate.  Keyed on (id(root_context), self) so
+# an exotic callback that evaluates against a *different* context mid-tree
+# simply gets its own memo entries.
+_eval_memo: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "system_callback_eval_memo", default=None
+)
 
 
 @dataclasses.dataclass
@@ -132,6 +161,12 @@ class SystemCallback:
     def eval(self, root_context: ContextBase) -> Array:
         """Evaluate the callback function and return the calculated value.
 
+        Within a single top-level call, repeated evaluations of the same
+        callback against the same context are memoized (see ``_eval_memo``
+        above) — this keeps eager evaluation of diagrams with fan-out /
+        reconvergence linear in graph size instead of exponential in
+        composition depth.  Nothing is cached across top-level calls.
+
         Args:
             root_context: The root context used for the evaluation.
 
@@ -143,6 +178,25 @@ class SystemCallback:
                 self.default_value = self.calc(root_context)
             return self.default_value
 
+        memo = _eval_memo.get()
+        if memo is None:
+            # Outermost eval of this tree: install a fresh memo, always
+            # clear it on exit so nothing leaks across top-level calls
+            # (or across JAX traces).
+            token = _eval_memo.set({})
+            try:
+                return self._eval_initialized(root_context)
+            finally:
+                _eval_memo.reset(token)
+
+        key = (id(root_context), self)
+        if key in memo:
+            return memo[key]
+        result = self._eval_initialized(root_context)
+        memo[key] = result
+        return result
+
+    def _eval_initialized(self, root_context: ContextBase) -> Array:
         try:
             result = self.calc(root_context)
         except ValueError as e:

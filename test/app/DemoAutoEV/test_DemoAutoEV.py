@@ -18,7 +18,6 @@ import pathlib
 pytestmark = pytest.mark.app
 
 
-@pytest.mark.skip(reason="~10 minute JIT compile time")
 def test_DemoCompactEv(request):
     # just running test with failing is the test
     test_paths = test.get_paths(request)
@@ -26,7 +25,14 @@ def test_DemoCompactEv(request):
     test.run(test_paths=test_paths, stop_time=10)
 
 
-@pytest.mark.skip(reason="~10 minute JIT compile time")
+@pytest.mark.skip(
+    reason=(
+        "manual-only duplicate of test_DemoCompactEv (which runs in CI): it "
+        "sets workdir==testdir so it can run without the pytest request "
+        "fixture, which makes test.run's copy step fail with SameFileError "
+        "under pytest. Run via __main__ instead."
+    )
+)
 def test_DemoCompactEv_no_pytest(stop_time=10):
     # manually build testpaths so we dont need pytest request arg passed in.
     # NOTE why not use the pytest_request arg?
@@ -51,13 +57,12 @@ def build_nested(idx, n=2, nest_this=None):
     return diagram
 
 
-@pytest.mark.skip(reason="development test")
 def test_CompactEvLeaf():
     dt = 0.1
     builder = jaxonomy.DiagramBuilder()
     ds = builder.add(
         DataSource(
-            file_name="test/app/DemoCompactEv/ECE.csv",
+            file_name=str(pathlib.Path(__file__).parent / "ECE.csv"),
             interpolation="linear",
             time_samples_as_column=True,
             name="ds",
@@ -80,7 +85,7 @@ def test_CompactEvLeaf():
     diagram = builder.build()
     context = diagram.create_context()
 
-    print(diagram.tree)
+    diagram.pprint()
 
     end_time = 200.0
 
@@ -140,14 +145,12 @@ def plot_compact_ev(results):
     plt.show()
 
 
-@pytest.mark.skip(reason="development test")
 def test_TestHarnessAutoXms(request):
     # thos version is the full test harness, but the controller is implemented
     # using a StateMachine.
     test.run(pytest_request=request, model_json="TestHarness_AutoXms.json")
 
 
-@pytest.mark.skip(reason="development test")
 def test_ControllerAutoXms(request):
     # just the controller, but using the old core block implementation
     # this test is interesting because at creation time, it was causing

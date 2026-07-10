@@ -1,6 +1,6 @@
 # Claims
 
-**Internal document.** Maps every claim made in a shippable surface
+**Internal document — not published.** Maps every claim made in a shippable surface
 (`README.md`, `docs/**`, `examples/**`, `benchmarks/**`, root-level
 `*.ipynb`) to the specific evidence that substantiates it. The full
 list of shippable surfaces and the discipline that governs them lives

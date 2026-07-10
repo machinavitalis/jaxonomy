@@ -370,10 +370,10 @@ def test_state_machine_entry_point_action(use_jax, show_plot=False):
     assert np.allclose(sm_sol, sm)
 
 
-@pytest.mark.skip(reason="Need to implement validation.")
 def test_state_machine_too_many_unguarded_exit():
     # states: off=0, on=1
-    # off has 2 unguarded exits
+    # off has 2 unguarded exits (lambda bodies that are constant True are
+    # detected by the registry and mapped to ALWAYS_TRUE_GUARD_ID).
     registry = StateMachineRegistry()
     off_t0 = registry.make_transition(
         lambda out_0: True,
@@ -389,8 +389,14 @@ def test_state_machine_too_many_unguarded_exit():
     off = StateMachineState(name="off", transitions=[off_t0, off_t1])
     on = StateMachineState(name="on")
 
+    # initial_actions must cover out_0, else the entry-point output-coverage
+    # validation fires before the unguarded-exit validation under test here.
+    initial_action_id = registry.register_action(lambda out_0: {"out_0": 0})
     sm_data = StateMachineData(
-        registry=registry, states={0: off, 1: on}, initial_state=0
+        registry=registry,
+        states={0: off, 1: on},
+        initial_state=0,
+        initial_actions=[initial_action_id],
     )
 
     sm_inputs = []
@@ -407,10 +413,7 @@ def test_state_machine_too_many_unguarded_exit():
             )
         )
     # Success! The test failed as expected.
-    assert (
-        "StateMachine sm state[off,0] has more than one unguarded exit transition."
-        in str(e)
-    )
+    assert "state[off,0] has more than one unguarded exit transition." in str(e)
 
 
 def test_state_machine_no_states():

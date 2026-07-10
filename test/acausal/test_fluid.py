@@ -428,7 +428,6 @@ def test_T_junction_merging(show_plot=False):
 
 
 # Cross domain tests fluid(air)<->thermal
-@pytest.mark.skip(reason="might be flakey")
 @pytest.mark.parametrize("use_heat_source", [True, False])
 def test_heat_tank_pipe_amb(use_heat_source, show_plot=False):
     """
@@ -554,7 +553,6 @@ def test_heat_tank_pipe_amb(use_heat_source, show_plot=False):
 ###########################################################
 
 
-@pytest.mark.skip(reason="might be flakey")
 def test_water_if97_region1():
     """
     Perform the 'computer-program verification' from section 5.1 of

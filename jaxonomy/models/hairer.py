@@ -112,20 +112,22 @@ class Pleiades(LeafSystem):
         m = parameters["m"]
         xc = state.continuous_state
         x, y, dx, dy = xc[:7], xc[7:14], xc[14:21], xc[21:]
-        ddx = npa.zeros(7)
-        ddy = npa.zeros(7)
+        # Backend-neutral accumulation: i, j are static Python ints, so plain
+        # scalar sums work under both numpy and jax (no jnp-only .at[] update).
+        ddx_terms = []
+        ddy_terms = []
         for i in range(7):
+            ax = 0.0
+            ay = 0.0
             for j in range(7):
+                if i == j:
+                    continue
                 r = ((x[i] - x[j]) ** 2 + (y[i] - y[j]) ** 2) ** (3 / 2)
                 r = npa.maximum(r, 1e-6)
-                ddx = npa.where(
-                    i != j,
-                    ddx.at[i].add(m[j] * (x[j] - x[i]) / r),
-                    ddx,
-                )
-                ddy = npa.where(
-                    i != j,
-                    ddy.at[i].add(m[j] * (y[j] - y[i]) / r),
-                    ddy,
-                )
+                ax = ax + m[j] * (x[j] - x[i]) / r
+                ay = ay + m[j] * (y[j] - y[i]) / r
+            ddx_terms.append(ax)
+            ddy_terms.append(ay)
+        ddx = npa.stack(ddx_terms)
+        ddy = npa.stack(ddy_terms)
         return npa.concatenate([dx, dy, ddx, ddy])

@@ -60,6 +60,23 @@
           "segments": []
         },
         "uuid": "b6facb2b-505e-40fd-b9a7-3868a51d6756"
+      },
+      {
+        "dst": {
+          "node": "7573a4fd-e613-4d77-bb7f-0c3f1b48f658",
+          "port": 0
+        },
+        "src": {
+          "node": "5b1a3f6e-8c2d-4e7a-9f10-2d3c4b5a6e7f",
+          "port": 0
+        },
+        "uiprops": {
+          "link_type": {
+            "connection_method": "direct_to_block"
+          },
+          "segments": []
+        },
+        "uuid": "9c8d7e6f-5a4b-4c3d-8e2f-1a0b9c8d7e6f"
       }
     ],
     "nodes": [
@@ -139,6 +156,30 @@
       },
       {
         "inputs": [],
+        "name": "Clock_0",
+        "outputs": [
+          {
+            "kind": "static",
+            "name": "out_0"
+          }
+        ],
+        "parameters": {},
+        "time_mode": "agnostic",
+        "type": "core.Clock",
+        "uiprops": {
+          "port_alignment": "spaced",
+          "x": 96,
+          "y": 104
+        },
+        "uuid": "5b1a3f6e-8c2d-4e7a-9f10-2d3c4b5a6e7f"
+      },
+      {
+        "inputs": [
+          {
+            "kind": "dynamic",
+            "name": "t_in"
+          }
+        ],
         "name": "GenerateNoise",
         "outputs": [
           {
@@ -173,7 +214,7 @@
           },
           "user_statements": {
             "is_string": true,
-            "value": "w = w_interp(time)"
+            "value": "w = w_interp(np.clip(t_in, t[0], t[-1]))"
           }
         },
         "time_mode": "agnostic",

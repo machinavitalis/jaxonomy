@@ -201,10 +201,8 @@ def test_two_acausal_domains_in_one_diagram():
 # 4. Acausal subsystem inside a registered submodel  (T-036).
 
 
-@pytest.mark.xfail(
-    reason="T-036: acausal subsystems inside submodels not yet supported",
-    strict=False,
-)
+# Was xfail("T-036: acausal subsystems inside submodels not yet supported")
+# until 2026-07-09 — the capability landed and the test xpassed silently.
 def test_acausal_inside_submodel_T036():
     """Place an acausal RC inside a ReferenceSubdiagram and simulate."""
 

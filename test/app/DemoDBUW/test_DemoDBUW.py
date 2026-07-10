@@ -32,14 +32,12 @@ def test_simpleESC(request):
     test.run(pytest_request=request, stop_time=0.1, model_json="simpleESC.json")
 
 
-@pytest.mark.skip(reason="compilation never seems to end")
 def test_cartpoleLQG(request):
     test_paths = test.get_paths(request)
     test.copy_to_workdir(test_paths, "cartpole_init_lqg.py")
     test.run(test_paths=test_paths, stop_time=0.1, model_json="cartpoleLQG.json")
 
 
-@pytest.mark.xfail(reason="see pallascat results")
 def test_cartpoleKF(request):
     test_paths = test.get_paths(request)
     test.copy_to_workdir(test_paths, "cartpole_init.py")

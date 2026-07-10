@@ -252,6 +252,14 @@ class MLP(FeedthroughBlock):
         models in a notebook and easily seralizing them for use in the UI.
         """
 
+        if self._mlp is None:
+            # The Equinox network is built lazily in ``initialize()``, which
+            # normally runs on the first ``create_context()`` call. Build it
+            # here from the declared parameters (mirroring
+            # ``LeafContextFactory.create_node_context``) so that a
+            # freshly-constructed block can be serialized directly.
+            self.initialize(**self.parameters)
+
         if mlp_params is None:
             mlp = self._mlp
         else:

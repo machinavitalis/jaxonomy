@@ -11,7 +11,6 @@ from jaxonomy.library import MLP
 pytestmark = pytest.mark.minimal
 
 
-@pytest.mark.skip("this test seems broken now 2025/03")
 def test_mlp(request):
     # create workdir
     test_paths = test.get_paths(request)

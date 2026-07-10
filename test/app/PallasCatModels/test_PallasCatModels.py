@@ -13,7 +13,13 @@ def copy_to_workdir(srcdir, file_name, workdir):
     shutil.copyfile(src, dst)
 
 
-@pytest.mark.skip(reason="for manual use only")
+@pytest.mark.skip(
+    reason=(
+        "manual-only harness: needs a downloaded model project directory "
+        "passed as projdir (None under pytest → TypeError). Run this file "
+        "directly with JAXONOMY_PALLASCAT_PROJDIR set; see __main__ block."
+    )
+)
 def test_pallascat_model(projdir: str = None):
     # get list of all files in the run/*model_name* directory of pallascat download
     model_files = [

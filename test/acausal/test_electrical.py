@@ -7,6 +7,7 @@ import os
 
 # acausal imports
 from jaxonomy.acausal import AcausalCompiler, AcausalDiagram, EqnEnv
+from jaxonomy.acausal.error import AcausalCompilerError
 from jaxonomy.acausal import electrical as elec
 from jaxonomy.acausal import rotational as rot
 from jaxonomy.acausal import thermal as ht
@@ -715,8 +716,16 @@ def test_simple_circuit_act2(show_plot=False):
     run_circuit_act(ev, ad, show_plot=show_plot)
 
 
-@pytest.mark.skip(
-    reason="not clear how diagram processing should handle this. see wc-389"
+@pytest.mark.xfail(
+    strict=True,
+    raises=AcausalCompilerError,
+    reason=(
+        "act3 is the higher-index DAE circuit from dae1.pdf; index reduction "
+        "fails in index_reduction_inputs_f ('equation RHS has no functions', "
+        "verified 2026-07-09). Feature gap in the acausal compiler's index "
+        "reduction — strict xfail so we notice the moment it starts working. "
+        "(Was skipped with a dead pre-fork ticket ref 'wc-389'.)"
+    ),
 )
 def test_simple_circuit_act3(show_plot=False):
     # see commnent in act1 test

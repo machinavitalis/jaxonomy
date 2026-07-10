@@ -104,12 +104,13 @@ class TestHairerSystems:
                 axs[i].plot(t, x[:, i], "--", label="jaxonomy")
             plt.show()
 
-    @pytest.mark.skip(reason="Too slow to be useful as a CI test. Use for dev only")
+    @pytest.mark.slow
+    @pytest.mark.timeout(600)
     def test_pleiades(self, show_plot=False):
         t_span = (0.0, 3.0)
         system = Pleiades()
         t, x, x_scipy = self._run_ode_test(
-            system, t_span, "rk45", rtol=1e-8, atol=1e-10
+            system, t_span, "RK45", rtol=1e-8, atol=1e-10
         )
 
         if show_plot:
@@ -130,21 +131,81 @@ class DivergingODE(jaxonomy.LeafSystem):
         return npa.exp(x)
 
 
-@pytest.mark.skip(
-    reason="Diverging ODE hangs the adaptive inner loop (no step-underflow "
-    "guard) and the RuntimeError path it asserts was removed in T-002b for "
-    "vmap compatibility. Quarantined so it can't wedge CI — see the "
-    "solver-divergence follow-up task."
-)
+# Runs in a fresh subprocess: this guards the T-005/T-008 anti-hang
+# property (a regression hangs uninterruptibly — the 120s subprocess kill
+# converts that into a clean failure), and the long diverging adaptive
+# kernel slows down unboundedly when tensorflow is resident in the parent
+# pytest process (see test/conftest.py's early TF import and the fuller
+# rationale in test_v008_solver_stress.TestDivergingSystem).
+_DIVERGING_SNIPPET = """
+import json
+import numpy as np
+import jax.numpy as jnp
+import jaxonomy
+from jaxonomy import LeafSystem
+from jaxonomy.backend import numpy_api as npa
+
+class DivergingODE(LeafSystem):
+    def __init__(self, name="DivergingODE"):
+        super().__init__(name=name)
+        self.declare_continuous_state(default_value=1.0, ode=self.ode)
+
+    def ode(self, t, state):
+        x = state.continuous_state
+        return npa.exp(x)
+
+system = DivergingODE()
+context = system.create_context()
+options = jaxonomy.SimulatorOptions(ode_solver_method="{method}")
+results = jaxonomy.simulate(system, context, (0.0, 0.5), options=options)
+print("VERDICT " + json.dumps({{
+    "t_final": float(results.context.time),
+    "x_finite": bool(np.all(np.isfinite(np.asarray(results.context.continuous_state)))),
+}}))
+"""
+
+
 @pytest.mark.parametrize("method", ODE_SOLVERS)
 def test_diverging_solution(method):
-    set_backend("jax")
-    system = DivergingODE()  # Blows up in finite time near t=e.
-    context = system.create_context()
-    t_span = (0.0, 0.5)
-    options = jaxonomy.SimulatorOptions(ode_solver_method=method)
-    with pytest.raises(RuntimeError):
-        jaxonomy.simulate(system, context, t_span, options=options)
+    """Was skip-quarantined: this used to hang the adaptive inner loop
+    (no step-underflow guard), and the RuntimeError it originally asserted
+    was removed in T-002b for vmap compatibility. With the T-005/T-008
+    termination guards the solve terminates promptly; the divergence
+    manifests as a non-finite final state (or early termination), never a
+    hang and never a silently-finite answer past the singularity."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    solver = {"RK45": "dopri5", "BDF": "bdf"}[method]
+    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", _DIVERGING_SNIPPET.format(method=solver)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=repo_root,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(
+            f"Diverging ODE under {solver} hung for >120s — the T-005/T-008 "
+            "solver termination guards have regressed."
+        )
+    verdict_lines = [
+        ln for ln in proc.stdout.splitlines() if ln.startswith("VERDICT ")
+    ]
+    assert verdict_lines, (
+        f"subprocess produced no verdict (rc={proc.returncode}):\n"
+        f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
+    )
+    verdict = json.loads(verdict_lines[-1][len("VERDICT "):])
+    terminated_early = verdict["t_final"] < 0.5 - 1e-9
+    assert terminated_early or not verdict["x_finite"], (
+        f"{solver}: reached t={verdict['t_final']} with finite state past "
+        "the finite-time singularity — silent step clipping."
+    )
 
 
 if __name__ == "__main__":
