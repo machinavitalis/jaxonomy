@@ -1,132 +1,127 @@
 {
   "hardware": {
-    "platform": "macOS-26.4-arm64-arm-64bit",
-    "machine": "arm64",
-    "processor": "arm",
+    "platform": "Linux-6.17.0-1018-azure-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "processor": "x86_64",
     "python_version": "3.11.15",
     "jax_version": "0.9.2",
-    "jaxonomy_version": "2.2.0",
-    "ru_maxrss_unit": "bytes",
-    "ram_gb_total": 68.7
+    "jaxonomy_version": "3.0.0",
+    "ru_maxrss_unit": "kilobytes",
+    "ram_gb_total": 16.8
   },
   "regression_threshold": 1.5,
   "cases": {
     "batch_n1": {
-      "peak_mb_median": 322.438,
+      "peak_mb_median": 355.859,
       "peak_mb_samples": [
-        322.438,
-        321.016,
-        326.688
+        355.859,
+        353.594,
+        356.902
       ],
       "n_repeat": 3
     },
     "batch_n10": {
-      "peak_mb_median": 336.594,
+      "peak_mb_median": 357.816,
       "peak_mb_samples": [
-        336.594,
-        337.734,
-        336.312
+        360.883,
+        355.902,
+        357.816
       ],
       "n_repeat": 3
     },
     "batch_n100": {
-      "peak_mb_median": 372.172,
+      "peak_mb_median": 357.66,
       "peak_mb_samples": [
-        373.422,
-        372.0,
-        372.172
+        357.66,
+        360.641,
+        356.047
       ],
       "n_repeat": 3
     },
-    "batch_mb_per_element": 0.4589639639639644,
+    "batch_mb_per_element": 0.01011411411411461,
     "long_horizon_t10": {
-      "peak_mb_median": 317.531,
+      "peak_mb_median": 355.695,
       "peak_mb_samples": [
-        317.531,
-        316.969,
-        317.656
+        355.695,
+        355.59,
+        359.812
       ],
       "n_repeat": 3
     },
     "long_horizon_t100": {
-      "peak_mb_median": 316.5,
+      "peak_mb_median": 357.797,
       "peak_mb_samples": [
-        316.5,
-        317.844,
-        316.375
+        357.797,
+        356.277,
+        357.852
       ],
       "n_repeat": 3
     },
     "long_horizon_t1000": {
-      "peak_mb_median": 318.203,
+      "peak_mb_median": 356.48,
       "peak_mb_samples": [
-        318.859,
-        318.203,
-        317.094
+        354.371,
+        356.48,
+        358.156
       ],
       "n_repeat": 3
     },
-    "long_horizon_mb_per_sim_second": 0.0011707207207206905,
+    "long_horizon_mb_per_sim_second": -0.00012177177177176002,
     "compile_scalar_exponential_decay": {
-      "peak_mb_median": 254.484,
+      "peak_mb_median": 298.148,
       "peak_mb_samples": [
-        254.484,
-        256.25,
-        254.016
+        297.93,
+        298.148,
+        298.328
       ],
       "n_repeat": 3
     },
     "compile_harmonic_oscillator": {
-      "peak_mb_median": 256.547,
+      "peak_mb_median": 300.328,
       "peak_mb_samples": [
-        256.188,
-        256.547,
-        256.562
+        297.922,
+        300.66,
+        300.328
       ],
       "n_repeat": 3
     },
     "compile_pid_first_order_plant": {
-      "peak_mb_median": 384.25,
-      "peak_mb_samples": [
-        385.297,
-        384.25,
-        384.016
-      ],
-      "n_repeat": 3
+      "skipped": true,
+      "reason": "subprocess failed (rc=1): /lazy_loader.py\", line 75, in __getattr__\n    module = self._load()\n             ^^^^^^^^^^^^\n  File \"/home/runner/work/jaxonomy/jaxonomy/jaxonomy/lazy_loader.py\", line 58, in _load\n    raise ImportError(f\"Could not import module {self.__name__}\") from e\nImportError: Could not import module control\n"
     },
     "compile_rc_acausal_dae": {
-      "peak_mb_median": 366.516,
+      "peak_mb_median": 422.195,
       "peak_mb_samples": [
-        367.422,
-        366.25,
-        366.516
+        419.219,
+        422.254,
+        422.195
       ],
       "n_repeat": 3
     },
     "compile_bouncing_ball_zc": {
-      "peak_mb_median": 265.344,
+      "peak_mb_median": 310.531,
       "peak_mb_samples": [
-        265.109,
-        265.344,
-        266.609
+        307.988,
+        310.574,
+        310.531
       ],
       "n_repeat": 3
     },
     "compile_state_machine_three_state": {
-      "peak_mb_median": 255.172,
+      "peak_mb_median": 298.754,
       "peak_mb_samples": [
-        254.312,
-        255.344,
-        255.172
+        298.754,
+        298.828,
+        296.258
       ],
       "n_repeat": 3
     },
     "compile_simulate_batch_decay_n10": {
-      "peak_mb_median": 336.344,
+      "peak_mb_median": 358.379,
       "peak_mb_samples": [
-        336.828,
-        336.344,
-        335.75
+        358.309,
+        359.141,
+        358.379
       ],
       "n_repeat": 3
     }
