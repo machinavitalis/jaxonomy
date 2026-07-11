@@ -302,24 +302,46 @@ def build_fmu(
                 os.remove(fmu_path)
             os.replace(produced, fmu_path)
             produced = fmu_path
-    _ensure_initial_unknowns(produced)
+    _normalize_model_description(produced)
     return os.path.abspath(produced)
 
 
-def _ensure_initial_unknowns(fmu_path: str) -> None:
-    """T-026c — make pythonfmu's modelDescription.xml pass the official
-    validators.
+def _normalize_fmi_datetime(value: str) -> str:
+    """Normalize a timestamp to the FMI-required ``YYYY-MM-DDThh:mm:ssZ``.
 
-    FMI 2.0 requires every output whose ``initial`` is ``calculated`` /
-    ``approx`` (the default for outputs) to be listed under
-    ``ModelStructure/InitialUnknowns``. pythonfmu emits the ``Outputs``
-    unknowns but omits ``InitialUnknowns`` entirely, which
-    ``fmpy.validation.validate_fmu`` flags on every generated FMU.
-    Post-process the archive: mirror the ``Outputs`` ``Unknown`` entries
-    (skipping any whose ScalarVariable declares ``initial="exact"``)
-    into an ``InitialUnknowns`` element, in ascending index order as the
-    schema requires. No-op when ``InitialUnknowns`` already exists or
-    there are no outputs.
+    pythonfmu stamps ``generationDateAndTime`` as ISO-8601 with a numeric
+    offset (e.g. ``2026-07-11T02:22:07+00:00``), which the INTO-CPS
+    VDMCheck validator rejects — the FMI 2.0 spec mandates the ``Z``
+    suffix form with whole seconds. Unparseable values are returned
+    unchanged (the validator will then say so, loudly).
+    """
+    from datetime import datetime, timezone
+
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
+    return dt.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _normalize_model_description(fmu_path: str) -> None:
+    """T-026c — make pythonfmu's modelDescription.xml pass the official
+    validators (``fmpy.validate_fmu`` + INTO-CPS VDMCheck2).
+
+    Two conformance gaps in pythonfmu's generator are patched in place:
+
+    1. FMI 2.0 requires every output whose ``initial`` is ``calculated``
+       / ``approx`` (the default for outputs) to be listed under
+       ``ModelStructure/InitialUnknowns``; pythonfmu omits the element
+       entirely (flagged by fmpy). The ``Outputs`` ``Unknown`` entries
+       are mirrored there (skipping ``initial="exact"`` variables), in
+       the ascending index order the schema requires.
+    2. ``generationDateAndTime`` must be ``YYYY-MM-DDThh:mm:ssZ``;
+       pythonfmu stamps a ``+00:00``-offset form (flagged by VDMCheck).
+
+    No-op when the XML already conforms.
     """
     import io
     import zipfile
@@ -331,25 +353,39 @@ def _ensure_initial_unknowns(fmu_path: str) -> None:
             return
         xml_bytes = zf.read("modelDescription.xml")
         root = ET.fromstring(xml_bytes)
+        changed = False
+
+        gdt = root.attrib.get("generationDateAndTime")
+        if gdt:
+            normalized = _normalize_fmi_datetime(gdt)
+            if normalized != gdt:
+                root.set("generationDateAndTime", normalized)
+                changed = True
+
         structure = root.find("ModelStructure")
-        if structure is None or structure.find("InitialUnknowns") is not None:
+        if structure is not None and structure.find("InitialUnknowns") is None:
+            outputs = structure.find("Outputs")
+            if outputs is not None:
+                variables = root.findall(".//ModelVariables/ScalarVariable")
+                unknown_indices = []
+                for unk in outputs.findall("Unknown"):
+                    idx = int(unk.attrib["index"])
+                    sv = variables[idx - 1]  # FMI variable indices are 1-based
+                    if sv.attrib.get("initial") == "exact":
+                        continue
+                    unknown_indices.append(idx)
+                if unknown_indices:
+                    initial_unknowns = ET.SubElement(
+                        structure, "InitialUnknowns"
+                    )
+                    for idx in sorted(unknown_indices):
+                        ET.SubElement(
+                            initial_unknowns, "Unknown", {"index": str(idx)}
+                        )
+                    changed = True
+
+        if not changed:
             return
-        outputs = structure.find("Outputs")
-        if outputs is None:
-            return
-        variables = root.findall(".//ModelVariables/ScalarVariable")
-        unknown_indices = []
-        for unk in outputs.findall("Unknown"):
-            idx = int(unk.attrib["index"])
-            sv = variables[idx - 1]  # FMI variable indices are 1-based
-            if sv.attrib.get("initial") == "exact":
-                continue
-            unknown_indices.append(idx)
-        if not unknown_indices:
-            return
-        initial_unknowns = ET.SubElement(structure, "InitialUnknowns")
-        for idx in sorted(unknown_indices):
-            ET.SubElement(initial_unknowns, "Unknown", {"index": str(idx)})
         new_xml = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
 
         # Rewrite the archive with the patched XML (zipfile cannot

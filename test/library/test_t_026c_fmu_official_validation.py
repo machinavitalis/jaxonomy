@@ -66,6 +66,18 @@ def test_fmpy_validate_reports_zero_problems(exported_fmu: Path):
     )
 
 
+def test_generation_date_and_time_is_fmi_conformant(exported_fmu: Path):
+    """VDMCheck rejects pythonfmu's ``+00:00``-offset timestamp; the
+    post-processor must normalize to ``YYYY-MM-DDThh:mm:ssZ``."""
+    import re
+
+    with zipfile.ZipFile(exported_fmu) as z:
+        root = ET.fromstring(z.read("modelDescription.xml"))
+    gdt = root.attrib.get("generationDateAndTime")
+    assert gdt is not None
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", gdt), gdt
+
+
 def test_initial_unknowns_mirror_calculated_outputs(exported_fmu: Path):
     """The T-026c conformance fix: ModelStructure/InitialUnknowns lists
     every calculated output (pythonfmu omits the element entirely)."""

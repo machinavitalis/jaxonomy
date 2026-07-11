@@ -200,6 +200,7 @@ jobs:
 
       - name: Run official-validator suite
         run: |
+          set -o pipefail  # pytest's failure must not be masked by tee
           VDMCHECK2="$(find ~/vdmcheck -name 'VDMCheck2.sh' | head -1)"
           export VDMCHECK2
           echo "Using VDMCHECK2=$VDMCHECK2"
