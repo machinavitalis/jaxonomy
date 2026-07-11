@@ -31,6 +31,7 @@ from .objectives import (
 from .pid_autotuning import AutoTuner
 from .training import Trainer
 from .parameter_tuning import tune_parameters, TuningResult
+from .implicit import implicit_solver
 
 # RLEnv requires optional heavy dependencies (flax, brax).
 # Import lazily so missing deps don't break the rest of jaxonomy.optimization.
@@ -54,6 +55,7 @@ __all__ = [
     "AutoTuner",
     "tune_parameters",
     "TuningResult",
+    "implicit_solver",
     "MultiStart",
     "MultiStartResult",
     "compute_sensitivity",

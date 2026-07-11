@@ -646,6 +646,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         requires_inputs: bool = True,
         prerequisites_of_calc: List[DependencyTicket] = None,
         substeps: int = 1,
+        project: Callable = None,
     ):
         """Declare a continuous state component for the system.
 
@@ -696,6 +697,20 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         adjoint's reverse-time primal re-integration further limits
         accuracy. Reduce the outer step when gradients through the
         coupling interface need to be tight.
+
+        Declared state projection (T-132): ``project=fn`` declares that
+        this block's continuous state lives on a manifold and supplies
+        the retraction back onto it — e.g. unit-quaternion
+        renormalization for an attitude state (``nq=4`` integrated
+        componentwise drifts off the unit sphere under any one-step
+        integrator). ``fn(x) -> x`` receives the state in its declared
+        structure, must be shape-preserving and jit-safe, and is applied
+        by the simulator **at the end of every major step** (composing
+        with, and independent of, the T-003a DAE projection). Within-step
+        drift is bounded by the step size; the recorded trajectory and
+        all values other blocks see at major-step boundaries are on the
+        manifold. Differentiable: the projection participates in
+        reverse-mode AD as ordinary traced ops.
         """
         if not isinstance(substeps, (int, np.integer)) or isinstance(
             substeps, bool
@@ -706,6 +721,12 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
                 "loop count and cannot be traced or fractional.)"
             )
         self._continuous_substeps = int(substeps)
+        if project is not None and not callable(project):
+            raise ValueError(
+                f"declare_continuous_state: project must be a callable "
+                f"x -> x (shape-preserving, jit-safe), got {project!r}."
+            )
+        self._continuous_projection = project
 
         self.ode_callback = SystemCallback(
             callback=None,

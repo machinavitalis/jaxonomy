@@ -1367,6 +1367,20 @@ class Simulator:
             options, "dae_drift_threshold", None,
         )
 
+        # T-132: declared per-block state projections
+        # (``declare_continuous_state(project=...)``, e.g. unit-quaternion
+        # renormalization).  Collected once, statically — when empty (the
+        # default), ``_major_step`` skips the block at trace time and the
+        # hot path is byte-equivalent.
+        _leaves = getattr(system, "leaf_systems", None)
+        if _leaves is None:
+            _leaves = [system]
+        self._state_projection_leaves = [
+            s
+            for s in _leaves
+            if getattr(s, "_continuous_projection", None) is not None
+        ]
+
         # T-113 Phase 1: opt-in per-major-step DAE drift trace.
         # ``False`` (default) disables the trace entirely — no monitor
         # constructed and the simulator's ``_major_step`` skips the
@@ -2909,6 +2923,43 @@ class Simulator:
                 tol=self.dae_projection_tol,
                 max_iter=self.dae_projection_max_iter,
             )
+
+        # T-132: declared per-block state projections (manifold
+        # retractions, e.g. unit-quaternion renormalization) at the end
+        # of every major step.  Static python loop over the (usually 0
+        # or 1) declaring blocks; skipped entirely at trace time when no
+        # block declares a projection.  Applied after the DAE projection
+        # so both hooks compose; ordinary traced ops, so reverse-mode AD
+        # flows through.
+        if self._state_projection_leaves:
+
+            def _project_component(proj, xc):
+                # A leaf's context-level continuous state may arrive
+                # wrapped as a single-element LeafStateComponent tuple /
+                # list; the declared projection sees the state in its
+                # ode-callback structure, so unwrap-and-rewrap.
+                if isinstance(xc, (list, tuple)) and len(xc) == 1:
+                    inner = _project_component(proj, xc[0])
+                    return type(xc)((inner,))
+                return proj(xc)
+
+            for _sys in self._state_projection_leaves:
+                if _sys is self.system:
+                    context = context.with_continuous_state(
+                        _project_component(
+                            _sys._continuous_projection,
+                            context.continuous_state,
+                        )
+                    )
+                else:
+                    _sub = context[_sys.system_id]
+                    _sub = _sub.with_continuous_state(
+                        _project_component(
+                            _sys._continuous_projection,
+                            _sub.continuous_state,
+                        )
+                    )
+                    context = context.with_subcontext(_sys.system_id, _sub)
 
         # T-003b: opt-in DAE drift monitor.  Computes ``||f_a||_∞`` and
         # emits a ``UserWarning`` (via ``jax.debug.callback`` so it works

@@ -133,10 +133,83 @@ class RK4Solver(ODESolverImpl):
         # stays in one float width; the zero-crossing bisection cond is dtype-strict.
         dt = jnp.asarray(dt, dtype=jnp.asarray(t0).dtype)
         self._substep_groups = self._collect_substep_groups()
+        # ``initialize_adjoint`` re-enters this method with the *augmented*
+        # adjoint state and its unravel; (re)build the projection closure
+        # only for primal-sized initializations so the adjoint pass never
+        # clobbers it (its guard in ``step`` then correctly skips the
+        # augmented vector by length).
+        n_flat = int(jnp.asarray(xc0).shape[0]) if jnp.asarray(xc0).ndim else 1
+        if n_flat == self._system_state_size():
+            self._state_projection = self._make_state_projection(unravel)
+            self._state_ny = n_flat
+        elif not hasattr(self, "_state_projection"):
+            self._state_projection = None
+            self._state_ny = -1
         f0 = func(xc0, t0, *args)
         return RK4State(
             y=xc0, t=t0, f=f0, dt=dt, t_prev=t0, y_prev=xc0, unravel=unravel,
         )
+
+    def _system_state_size(self) -> int:
+        """Total flat size of the system's (primal) continuous state."""
+        leaves = getattr(self.system, "leaf_systems", None)
+        if leaves is None:
+            leaves = [self.system]
+        total = 0
+        for s in leaves:
+            d = getattr(s, "_default_continuous_state", None)
+            if d is not None:
+                total += sum(
+                    int(np.asarray(x).size)
+                    for x in jax.tree_util.tree_leaves(d)
+                )
+        return total
+
+    def _make_state_projection(self, unravel):
+        """T-132: flat-vector form of the declared per-block projections.
+
+        Blocks may declare a manifold retraction via
+        ``declare_continuous_state(project=fn)`` (e.g. unit-quaternion
+        renormalization). RK4 is a one-step method, so applying the
+        retraction after *every* accepted step is exact and keeps the
+        whole trajectory on the manifold (multistep BDF cannot do this —
+        retracting ``y`` without rewriting its difference history would
+        corrupt the integrator; there the simulator's major-step hook
+        applies instead). Returns ``None`` when no block declares a
+        projection — the byte-equivalent default path.
+        """
+        leaves = getattr(self.system, "leaf_systems", None)
+        bare_leaf = leaves is None
+        if bare_leaf:
+            leaves = [self.system]
+        indexed = [
+            (i, s._continuous_projection)
+            for i, s in enumerate(leaves)
+            if getattr(s, "_continuous_projection", None) is not None
+        ]
+        if not indexed:
+            return None
+
+        def _ravel(x):
+            return jnp.concatenate(
+                [jnp.ravel(e) for e in jax.tree_util.tree_leaves(x)]
+            )
+
+        if bare_leaf:
+            projection = indexed[0][1]
+
+            def project_flat(y):
+                return _ravel(projection(unravel(y)))
+
+        else:
+
+            def project_flat(y):
+                xs = list(unravel(y))
+                for i, proj in indexed:
+                    xs[i] = proj(xs[i])
+                return _ravel(xs)
+
+        return project_flat
 
     def _collect_substep_groups(self):
         """T-133: static ``(N, mask)`` groups for multirate substepping.
@@ -271,6 +344,17 @@ class RK4Solver(ODESolverImpl):
 
                 y_fast = lax.fori_loop(0, n_sub, _substep, y)
                 next_y = jnp.where(mask, y_fast, next_y)
+
+        # T-132: retract onto the declared manifold(s) after every step.
+        # Applied to the primal state vector only — the checkpointed
+        # adjoint's augmented vector (primal ‖ costate ‖ quadrature) has
+        # a different length and is left untouched (the projection's
+        # derivative is already part of the taped forward map).
+        projection = getattr(self, "_state_projection", None)
+        if projection is not None and int(y.shape[0]) == getattr(
+            self, "_state_ny", -1
+        ):
+            next_y = projection(next_y)
 
         next_t = (t + dt_eff).astype(t.dtype)
         next_f = func(next_y, next_t).astype(solver_state.f.dtype)

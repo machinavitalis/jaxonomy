@@ -593,11 +593,20 @@ class BDFSolver(ODESolverImpl):
         # floor. This preserves the T-005/T-008 no-hang guarantee: a
         # genuinely diverging solution fails every retry and reaches the
         # floor after ~60 geometric halvings, then bails out below.
-        retry_nonfinite = nonfinite & (state.dt > dt_floor)
+        #
+        # NaN-dt hazard: a NaN RHS at t0 makes ``initial_step_size``
+        # return dt = NaN, and every comparison against a NaN dt is
+        # False — a naive ``dt <= dt_floor`` bailout can then NEVER fire
+        # and the retry loop spins forever in-kernel. ``dt_above_floor``
+        # is therefore the ONLY dt predicate used here: NaN dt reads as
+        # "not above the floor", which routes straight to the terminal
+        # bailout.
+        dt_above_floor = state.dt > dt_floor
+        retry_nonfinite = nonfinite & dt_above_floor
         factor = jnp.where(
             retry_nonfinite, jnp.asarray(0.5, dtype=dtype), factor
         )
-        force_accept = (would_retry | nonfinite) & (state.dt <= dt_floor)
+        force_accept = (would_retry | nonfinite) & ~dt_above_floor
         factor = jnp.where(
             force_accept, jnp.asarray(-jnp.inf, dtype=dtype), factor
         )
