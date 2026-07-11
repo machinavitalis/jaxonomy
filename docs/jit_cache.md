@@ -1,8 +1,10 @@
 # Persistent JIT compilation cache
 
 Jaxonomy compiles each diagram + solver combination into XLA on first use.
-Single-shot ODE simulations compile in tens of milliseconds; `simulate_batch`
-ensembles take >1 s. JAX provides a persistent on-disk cache that recovers
+Single-shot ODE simulations compile in well under a second (roughly
+60–250 ms, depending on whether the model has zero-crossings or an acausal
+DAE); `simulate_batch` ensembles take longer. JAX provides a persistent
+on-disk cache that recovers
 most of this cost across processes — Jaxonomy ships a one-call helper.
 
 ```python
@@ -40,9 +42,9 @@ For different thresholds, call `jax.config.update(...)` directly afterwards.
 
 Always for interactive work and long-running CI jobs; skip for short-lived
 single-shot scripts where the cache write itself dominates. See
-`benchmarks/compile_time.py` (T-017) for per-case timings.
+`benchmarks/compile_time.py` for per-case timings.
 
-## Repeated gradients: hoist the `jit` (T-129)
+## Repeated gradients: hoist the `jit`
 
 Every bare call to `jaxonomy.simulate` builds a *fresh* traced closure, so
 JAX's in-process jit cache misses on function identity and you pay a full

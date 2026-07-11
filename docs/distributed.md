@@ -67,14 +67,14 @@ the output against a serial `simulate_batch` call.
 For workloads that exceed a single host (long-running ensembles, very large
 `N`, or a mix of pure-JAX and `CustomPythonBlock` diagrams), wrap
 `simulate_batch` in an external orchestrator.  Jaxonomy deliberately does
-**not** ship its own job queue / worker fleet (DEC-018, T-206).  The
+**not** ship its own job queue / worker fleet.  The
 recommended options:
 
 ### Modal
 
 [Modal](https://modal.com) gives a Python-native `@app.function` decorator
 that runs the wrapped function in a managed container with optional GPU.
-Distribute via `.map()` / `.for_each()`:
+Distribute via `.map()` (or `.starmap()` for multi-arg shards):
 
 ```python
 import modal
@@ -110,13 +110,14 @@ native fan-out (`replicate.run`, `sky launch`, Ray's `ray.remote` /
 
 ### Why not in-library cluster orchestration?
 
-DEC-018 cuts in-library worker-fleet / job-queue infrastructure.  It is
-strictly worse than purpose-built tools (Modal, Replicate, SkyPilot, Ray)
+Jaxonomy deliberately omits in-library worker-fleet / job-queue
+infrastructure.  It would be strictly worse than purpose-built tools
+(Modal, Replicate, SkyPilot, Ray)
 on every axis (autoscaling, retries, cost reporting, multi-cloud).  The
 in-library wrapper would only add a thin dispatching layer that those
 tools already provide.
 
-## When to consider extending T-021
+## When to consider extending distributed simulation
 
 `simulate_distributed` covers the multi-device-on-one-host case.  Extend
 the API only if a real workload demonstrates need; candidate follow-ups:
@@ -131,4 +132,4 @@ the API only if a real workload demonstrates need; candidate follow-ups:
   outer, vmap inner; if a more complex mesh is needed, switch to
   `shard_map` with an explicit `Mesh`.
 
-File a follow-up `T-021-followup-<name>` if a concrete workload surfaces.
+File a follow-up if a concrete workload surfaces.

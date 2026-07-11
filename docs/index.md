@@ -2,7 +2,9 @@
 
 **Jaxonomy** is a Python package for simulating **hybrid dynamical systems** described as **block diagrams**: wired blocks (integrators, gains, custom subsystems, acausal networks, and more), continuous and discrete states, and event/zero-crossing logic. The runtime is built around **JAX**, so you get JIT-friendly execution and **automatic differentiation** where the model allows it, while keeping a NumPy-style API for numerics.
 
-The library runs **entirely locally** and emits the Collimator-format JSON for serialised models. There is no hosted cloud service — see the [About](about.md) page for the project's scope.
+The library runs **entirely locally** and can serialise models to Collimator-format JSON. There is no hosted cloud service — see the [About](about.md) page for the project's scope.
+
+The source lives at [github.com/machinavitalis/jaxonomy](https://github.com/machinavitalis/jaxonomy).
 
 ---
 
@@ -46,12 +48,12 @@ pip install -r requirements.docs.txt
 mkdocs serve
 ```
 
-Source for this page: `docs/index.md` (repository root).
+Source for this page: `docs/index.md`.
 
 ---
 
 ## License and attribution
 
-This project is released under the [MIT License](https://mit-license.org/). See the `LICENSE.md` file in the repository for the full text.
+This project is released under the [MIT License](https://mit-license.org/). See the `LICENSE.md` file in the [repository](https://github.com/machinavitalis/jaxonomy) for the full text.
 
 **Provenance:** This library is derived from the MIT-licensed open-source Python package **pycollimator**, developed by **Collimator, Inc.**

@@ -10,4 +10,4 @@ mkdocs build --clean
 # or: mkdocs serve
 ```
 
-General project information may appear on [www.jaxonomy.com](https://www.jaxonomy.com).
+General project information is at [www.jaxonomy.com](https://www.jaxonomy.com), and the source code at [github.com/machinavitalis/jaxonomy](https://github.com/machinavitalis/jaxonomy).
