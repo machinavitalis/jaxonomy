@@ -1227,6 +1227,11 @@ _fcn_map = MappingProxyType(
         "core.WhiteNoise": WhiteNoiseBlock,
         "core.ZeroOrderHold": _wrap_discrete(library.ZeroOrderHold),
         # Acausal electrical blocks
+        # "BLDC" is the legacy Collimator-era JSON type name for the
+        # combined motor-inverter model that was ported as IntegratedMotor
+        # (T-135) — same contract: trq_req_norm causal input, pos/neg pins,
+        # shaft flange, optional heat port.
+        "acausal.electrical.BLDC": _wrap(electrical.IntegratedMotor),
         "acausal.electrical.Battery": _wrap(electrical.Battery),
         "acausal.electrical.Capacitor": _wrap(electrical.Capacitor),
         "acausal.electrical.CurrentSensor": _wrap(electrical.CurrentSensor),

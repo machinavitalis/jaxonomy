@@ -288,11 +288,18 @@ class Diode(ElecTwoPin):
         Note this only hardens against overflow/NaN. The diode is still a *stiff*
         device: a hard-switching AC rectifier (e.g. a sine source through a small
         series resistor into a capacitor) forces the integrator into very small
-        steps around each forward/reverse transition, and a long run with many
-        cycles is correspondingly expensive (the capacitor charges so conduction
-        narrows to brief peak spikes). Prefer the stiff ``ode_solver_method=
-        "bdf"`` and a duration of a few cycles; it integrates correctly, just not
-        cheaply, over hundreds of cycles.
+        steps around each forward/reverse transition (the capacitor charges so
+        conduction narrows to brief peak spikes).
+
+        **Multi-cycle recipe (T-134)**: use ``ode_solver_method="bdf"`` AND cap
+        the step with ``max_minor_step_size`` below the switching-transition
+        width — around 1/300 of the source period works for the reference
+        rectifier (e.g. ``3e-4`` s at 10 Hz), completing a 100-cycle run in
+        ~1 s wall-clock. Without the cap, BDF's error controller can *accept*
+        a step that leaps across a conduction transition, driving the state
+        unphysical and ending the run with a non-finite state (the solver
+        terminates rather than hangs; transiently failed steps retry at
+        half-step before terminating).
     """
 
     def __init__(self, ev, name=None, Ids=1e-6, Rp=1e8, Vt=0.04):

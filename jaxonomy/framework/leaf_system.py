@@ -645,6 +645,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         as_array: bool = True,
         requires_inputs: bool = True,
         prerequisites_of_calc: List[DependencyTicket] = None,
+        substeps: int = 1,
     ):
         """Declare a continuous state component for the system.
 
@@ -669,7 +670,42 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         the state during integration. A common error is declaring a scalar
         state but returning ``jnp.array([xdot])`` (shape ``(1,)``) from the
         ode — keep both scalar or both vector.
+
+        Multirate substepping (T-133): ``substeps=N`` declares that this
+        block's continuous dynamics have a fast time constant needing ``N``
+        inner integration steps per outer solver step (e.g. a motor's
+        electrical winding inside a 1 kHz control loop). Honored by the
+        fixed-step ``rk4`` solver (``SimulatorOptions(ode_solver_method=
+        "rk4")``): the block's states advance with ``N`` RK4 substeps of
+        ``h/N`` while the rest of the diagram takes one step of ``h``,
+        with first-order (zero-order-hold) coupling at the boundary —
+        each side sees the other's start-of-step values, matching the
+        semantics of a hand-rolled JIT-safe substep loop. Adaptive solvers
+        (``dopri5``/``bdf``) ignore the declaration — they control
+        stiffness through global step adaptation. ``N`` must be a static
+        Python ``int >= 1``; the default 1 is byte-equivalent to the
+        pre-T-133 behavior.
+
+        Reverse-mode autodiff (``enable_autodiff=True``) is supported —
+        the substep loop has a static trip count and the checkpointed
+        adjoint substeps the costates alongside their primals. Gradient
+        accuracy carries the scheme's first-order coupling error: the
+        adjoint converges to the true sensitivity linearly in the outer
+        step ``h`` (exact FD agreement is only recovered as ``h`` is
+        refined), and for dynamics *unstable at the outer step* the
+        adjoint's reverse-time primal re-integration further limits
+        accuracy. Reduce the outer step when gradients through the
+        coupling interface need to be tight.
         """
+        if not isinstance(substeps, (int, np.integer)) or isinstance(
+            substeps, bool
+        ) or substeps < 1:
+            raise ValueError(
+                f"declare_continuous_state: substeps must be a static Python "
+                f"int >= 1, got {substeps!r}. (It sets a compile-time inner "
+                "loop count and cannot be traced or fractional.)"
+            )
+        self._continuous_substeps = int(substeps)
 
         self.ode_callback = SystemCallback(
             callback=None,
@@ -870,6 +906,32 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         # continuous state creation in the case where the mass matrix is
         # the identity.
         return self._mass_matrix is not None
+
+    @property
+    def continuous_substep_vector(self):
+        """T-133: per-entry multirate substep factors for this block.
+
+        Returns pytree-structured int vectors aligned with the flattened
+        continuous state (same leaves-concatenation ordering the ODE
+        solvers use for ``mass_matrix``), or ``None`` when the block has
+        no continuous state. Every entry carries the block-level factor
+        declared via ``declare_continuous_state(substeps=N)`` (default 1).
+        """
+        if self._default_continuous_state is None:
+            return None
+        factor = int(getattr(self, "_continuous_substeps", 1))
+        return jax.tree.map(
+            lambda x: np.full((np.asarray(x).size,), factor, dtype=np.int32),
+            self._default_continuous_state,
+        )
+
+    @property
+    def has_multirate_substeps(self) -> bool:
+        """True when this block declared ``substeps > 1`` (T-133)."""
+        return (
+            self._default_continuous_state is not None
+            and int(getattr(self, "_continuous_substeps", 1)) > 1
+        )
 
     def declare_discrete_state(
         self,

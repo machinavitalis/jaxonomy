@@ -386,6 +386,17 @@ class Diagram(SystemBase):
     def has_mass_matrix(self) -> bool:
         return any(sys.has_mass_matrix for sys in self.leaf_systems)
 
+    @property
+    def continuous_substep_vector(self) -> List[Array]:
+        """T-133: per-leaf multirate substep vectors, in ``leaf_systems``
+        order (the same ordering ``mass_matrix`` relies on for alignment
+        with the flattened continuous state)."""
+        return [sys.continuous_substep_vector for sys in self.leaf_systems]
+
+    @property
+    def has_multirate_substeps(self) -> bool:
+        return any(sys.has_multirate_substeps for sys in self.leaf_systems)
+
     #
     # Event handling
     #

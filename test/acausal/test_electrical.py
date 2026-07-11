@@ -1479,6 +1479,69 @@ def test_shockley_diode_rectifies():
     assert np.min(np.abs(I)) < 1e-3
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(300)
+def test_shockley_diode_rectifies_multi_cycle():
+    """T-134 (the original "hang"): 100 rectifier cycles complete, finite
+    and physical, with the documented recipe — bdf + max_minor_step_size
+    capped below the switching-transition width (~1/300 of the period).
+
+    Without the cap, BDF's error controller can accept a step that leaps
+    a conduction transition, driving the state unphysical (currents
+    ~1e9 A) and terminating the run with a non-finite state around
+    t≈1.3 s. With the cap, the full 10 s / 100-cycle run completes in
+    ~1 s wall-clock (measured 2026-07-11).
+    """
+    from jaxonomy.simulation.types import SimulatorOptions
+
+    ev = EqnEnv()
+    ad = AcausalDiagram()
+    v1 = elec.VoltageSource(ev, name="v1", enable_voltage_port=True)
+    r1 = elec.Resistor(ev, name="r1", R=1)
+    c1 = elec.Capacitor(ev, name="c1", initial_voltage=0.0, initial_voltage_fixed=True)
+    d1 = elec.Diode(ev, name="d1")
+    sensI = elec.CurrentSensor(ev, name="sensI")
+    ref1 = elec.Ground(ev, name="ref1")
+    ad.connect(v1, "p", d1, "p")
+    ad.connect(d1, "n", sensI, "n")
+    ad.connect(sensI, "p", r1, "n")
+    ad.connect(r1, "p", c1, "p")
+    ad.connect(c1, "n", v1, "n")
+    ad.connect(v1, "n", ref1, "p")
+
+    asys = AcausalCompiler(ev, ad, verbose=False)()
+    builder = jaxonomy.DiagramBuilder()
+    asys = builder.add(asys)
+    vin = builder.add(lib.Sine(frequency=10.0, amplitude=10.0))
+    builder.connect(vin.output_ports[0], asys.input_ports[0])
+    diagram = builder.build()
+    context = diagram.create_context(check_types=True)
+
+    I_idx = asys.outsym_to_portid[sensI.get_sym_by_port_name("i")]
+    opts = SimulatorOptions(
+        ode_solver_method="bdf",
+        buffer_length=400_000,
+        max_major_steps=40_000,
+        max_minor_step_size=3e-4,
+    )
+    results = jaxonomy.simulate(
+        diagram, context, (0.0, 10.0),
+        recorded_signals={"I": asys.output_ports[I_idx]}, options=opts,
+    )
+    t = np.asarray(results.time)
+    I = np.asarray(results.outputs["I"])
+
+    assert np.all(np.isfinite(I)), "multi-cycle rectifier produced non-finite current"
+    assert t[-1] > 9.99, f"run terminated early at t={t[-1]:.3f}"
+    # Physical current scale: conduction peaks of a few amps, never the
+    # ~1e9 excursions the uncapped run produced.
+    assert 1.0 < np.max(np.abs(I)) < 50.0
+    # Steady-state rectification: late-run current still shows the
+    # cut-off half-cycles.
+    late = I[t > 9.0]
+    assert np.min(np.abs(late)) < 1e-3
+
+
 def test_ac_voltage_source_with_resistor(show_plot=False):
     ev = EqnEnv()
     src = elec.ACVoltageSource(ev, name="src", amplitude=2.0, frequency=2.0, bias=1.0)

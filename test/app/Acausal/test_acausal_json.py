@@ -356,12 +356,6 @@ def test_wc415(request):
     test.run(request, model_json="wc415_error_in_in.json", stop_time=1.0)
 
 
-@pytest.mark.skip(
-    reason="bldc.json references acausal.electrical.BLDC, which is not "
-    "implemented in jaxonomy (no class, not registered in block_interface). "
-    "Loading raises KeyError, not a hang. Blocked on T-135 (port the BLDC "
-    "acausal component). The original 'hangs in CI / WC-434' reason was stale."
-)
 def test_bldc(request):
     # just the fact that they dont raise any errors is a pass :)
     test.run(request, model_json="bldc.json", stop_time=1.0)
@@ -372,13 +366,6 @@ def test_friction(request):
     test.run(request, model_json="friction.json", stop_time=1.0)
 
 
-@pytest.mark.skip(
-    reason="hybrid.json references acausal.electrical.BLDC, which is not "
-    "implemented in jaxonomy (no class, not registered in block_interface). "
-    "Loading raises KeyError on the BLDC node, not a hang. Blocked on T-135 "
-    "(port the BLDC acausal component). The original 'causes CI to hang' "
-    "reason was stale — verified 2026-05-31 that load fails before any sim."
-)
 def test_hybrid(request):
     # just the fact that they dont raise any errors is a pass :)
     test.run(request, model_json="hybrid.json", stop_time=1.0)

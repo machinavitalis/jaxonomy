@@ -17,6 +17,8 @@ Pure internal refactors live in commits, not here.
 
 ### Added
 
+- **Per-block multirate substepping** (T-133): `declare_continuous_state(substeps=N)` advances a stiff block's continuous states with N inner RK4 steps per outer fixed step (zero-order-hold coupling at the interface), honored by `ode_solver_method="rk4"`. Replaces the JIT-safe substep loops stiff blocks previously hand-rolled (motor windings, series-elastic joints); jit-, vmap-, and reverse-AD-compatible (JAX backend; adaptive solvers ignore the declaration).
+- **`acausal.electrical.BLDC`** (T-135): the legacy JSON type name now resolves to `IntegratedMotor` (the ported Collimator BLDC), re-enabling models saved with the old block name.
 - **FMU official-validator gate** (T-026c): every FMU produced by `build_fmu` passes `fmpy.validate_fmu` with zero findings (CI also runs the INTO-CPS VDMCheck2 static checker). `build_fmu` now adds the FMI-2.0-required `ModelStructure/InitialUnknowns` to the generated XML. New `fmu` extra installs pythonfmu + fmpy.
 
 ### Changed
@@ -27,6 +29,7 @@ Pure internal refactors live in commits, not here.
 
 ### Fixed
 
+- **BDF retries transient non-finite steps instead of terminating** (T-134): a Newton blowup on a hard-switching transition (e.g. a diode turning on) now rejects the step and halves `dt`, terminating only once `dt` reaches the floor — the no-hang bound on true divergences is preserved. Long multi-cycle rectifier runs now complete with the documented recipe (`bdf` + `max_minor_step_size` below the switching-transition width: 100 cycles in ~1s wall).
 - **Shared top-level parameter aliases propagate again** (T-141): `Diagram.with_parameters({"alias": v})` now updates blocks that reference the alias — previously a silent no-op, both on live diagrams (the alias `Parameter` was swapped out instead of mutated) and after a `model_json` round-trip (deserialized expression parameters lost their dependency links and namespace identity on deepcopy). Affects `fit_parameters` and every MCP/dashboard flow that sets model-level parameters on a loaded model.
 
 ## [3.0.0] - 2026-07-05

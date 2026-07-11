@@ -585,7 +585,19 @@ class BDFSolver(ODESolverImpl):
             jnp.finfo(dtype).eps
             * jnp.maximum(jnp.abs(state.t), jnp.abs(boundary_time))
         ).astype(dtype)
-        force_accept = would_retry & (nonfinite | (state.dt <= dt_floor))
+        # T-134: a non-finite trial step at a healthy dt is a *failed*
+        # step, not a terminal one — a Newton blowup on a hard-switching
+        # transition (e.g. a diode turning on) is routinely recoverable at
+        # half the step. Route it through the normal rejection path
+        # (retry at dt/2) and terminate only once dt has collapsed to the
+        # floor. This preserves the T-005/T-008 no-hang guarantee: a
+        # genuinely diverging solution fails every retry and reaches the
+        # floor after ~60 geometric halvings, then bails out below.
+        retry_nonfinite = nonfinite & (state.dt > dt_floor)
+        factor = jnp.where(
+            retry_nonfinite, jnp.asarray(0.5, dtype=dtype), factor
+        )
+        force_accept = (would_retry | nonfinite) & (state.dt <= dt_floor)
         factor = jnp.where(
             force_accept, jnp.asarray(-jnp.inf, dtype=dtype), factor
         )
