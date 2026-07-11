@@ -312,12 +312,26 @@ def _signal_fired_this_step(
 # Inherits docstring from `AbstractResultsData`
 @dataclasses.dataclass
 class JaxResultsData(AbstractResultsData):
-    n_steps: int = 0  # Number of saved time stamps
+    n_steps: int = 0  # Number of update() calls (== simulator save points)
 
-    # Index of the current buffer position. Will get reset when buffer is full and
-    # the contents are dumped to NumPy arrays.
+    # Index of the next free buffer slot.  With the T-138 decimation
+    # strategy this only moves forward within [0, buffer_length]; on
+    # overflow the buffer is compacted in place and the index drops back
+    # to the surviving-sample count (it no longer wraps to 0).
     buffer_index: int = 0
     buffer_length: int = None  # Maximum number of time stamps to save
+
+    # T-138 — graceful overflow via uniform decimation.  ``record_stride``
+    # is the current keep-every-Nth-sample stride (starts at 1 == keep
+    # everything); ``step_count`` counts update() calls.  A sample is
+    # recorded iff ``step_count % record_stride == 0``.  When the buffer
+    # fills, the even-position samples are compacted into the lower half
+    # and the stride doubles, so the recorded trajectory always spans
+    # [t0, <latest>] at uniform (in step count) reduced resolution
+    # instead of silently dropping the head (the pre-T-138 ring-wrap).
+    # Both are traced (pytree children) so the scheme is jit/vmap-safe.
+    record_stride: int = 1
+    step_count: int = 0
 
     # Data stored in numpy arrays as the buffer fills up
     np_data: _NumpyData = dataclasses.field(default_factory=_NumpyData)
@@ -385,31 +399,61 @@ class JaxResultsData(AbstractResultsData):
         # initialize the time buffer
         self.time = jnp.where(index == 0, jnp.full_like(self.time, jnp.inf), self.time)
 
+        # T-138 decimation: only every ``record_stride``-th update call
+        # consumes a buffer slot.  Unfired calls write to an out-of-bounds
+        # index with mode="drop" — an O(1) no-op — so the hot path stays
+        # at legacy cost while stride == 1 (the pre-overflow common case).
+        fired = (self.step_count % self.record_stride) == 0
+
         # In this case we only need to get the signal at the current step,
         # since there are no intermediate steps from the ODE solver.
         y = self.eval_sources(context)
 
+        write_idx = jnp.where(fired, index, self.buffer_length)
         outputs = {
-            key: self.outputs[key].at[index].set(y[key]) for key in self.source_dict
+            key: self.outputs[key].at[write_idx].set(y[key], mode="drop")
+            for key in self.source_dict
         }
 
-        # Set the first entry of the time vector to the current time.
-        # The rest will still be inf, indicating unused buffer entries.
-        time = self.time.at[index].set(context.time)
+        # Set the current entry of the time vector to the current time.
+        # Unused entries stay inf, indicating unused buffer slots.
+        time = self.time.at[write_idx].set(context.time, mode="drop")
 
-        buffer_index = index + 1
+        buffer_index = index + jnp.where(fired, 1, 0)
 
-        # If the buffer is full we historically dumped it to NumPy arrays via
-        # ``io_callback(self.np_data.dump_buffer, ...)``.  That IO effect broke
-        # ``simulate_batch(use_vmap=True)`` (T-002b) — JAX's vmap-of-cond rule
-        # cannot lift IO effects.  The callback has been removed; users whose
-        # simulation exceeds ``buffer_length`` now silently lose the trailing
-        # samples rather than having them streamed into ``np_data``.  Set
-        # ``buffer_length`` >= expected number of recorded samples to avoid
-        # this.  The ``_NumpyData`` merge path in ``finalize`` is preserved
-        # for backward compatibility but will be a no-op.
+        # T-138 — graceful overflow.  Historically the buffer wrapped to 0
+        # here (after T-002b removed the io_callback dump that broke
+        # ``simulate_batch(use_vmap=True)``), silently keeping only the
+        # trajectory *tail*.  Now, when the buffer fills, the even-position
+        # samples are compacted into the lower half, the write index drops
+        # to the surviving count, and the stride doubles — a uniform
+        # decimation that always spans [t0, <latest>].  ``results.time[0]``
+        # is therefore guaranteed to be the simulation start time
+        # regardless of horizon, at the cost of resolution (each overflow
+        # halves the sampling density).
+        #
+        # lax.cond keeps the O(buffer_length) compaction off the hot path
+        # under plain jit (one branch executes).  Under vmap the cond
+        # lowers to a select that evaluates both branches every step —
+        # a bandwidth cost proportional to the buffer size; size
+        # ``buffer_length`` to the expected sample count if recording
+        # throughput matters in large ensembles.
         buffer_full = buffer_index >= self.buffer_length
-        buffer_index = jnp.where(buffer_full, 0, buffer_index)
+        half = (self.buffer_length + 1) // 2  # static: surviving-sample count
+
+        def _compact(operand):
+            t, outs = operand
+            new_t = jnp.full_like(t, jnp.inf).at[:half].set(t[::2])
+            new_outs = {k: v.at[:half].set(v[::2]) for k, v in outs.items()}
+            return new_t, new_outs
+
+        time, outputs = lax.cond(
+            buffer_full, _compact, lambda operand: operand, (time, outputs)
+        )
+        buffer_index = jnp.where(buffer_full, half, buffer_index)
+        record_stride = jnp.where(
+            buffer_full, self.record_stride * 2, self.record_stride
+        )
 
         # T-013a-followup-mode-a-buffers: when per-signal buffers are
         # active, ALSO append to each signal's own ring conditional on
@@ -473,6 +517,8 @@ class JaxResultsData(AbstractResultsData):
             time=time,
             n_steps=self.n_steps + 1,
             buffer_index=buffer_index,
+            record_stride=record_stride,
+            step_count=self.step_count + 1,
             per_signal_buffers=new_per_signal,
             interpolant_buffer=new_interp_buf,
         )
@@ -548,6 +594,8 @@ def _solution_flatten(solution: JaxResultsData):
         solution.outputs,
         solution.n_steps,
         solution.buffer_index,
+        solution.record_stride,
+        solution.step_count,
         solution.per_signal_buffers,
         solution.interpolant_buffer,
     )
@@ -567,6 +615,8 @@ def _solution_unflatten(aux_data, children):
         outputs,
         n_steps,
         buffer_index,
+        record_stride,
+        step_count,
         per_signal_buffers,
         interpolant_buffer,
     ) = children
@@ -577,6 +627,8 @@ def _solution_unflatten(aux_data, children):
         outputs=outputs,
         n_steps=n_steps,
         buffer_index=buffer_index,
+        record_stride=record_stride,
+        step_count=step_count,
         buffer_length=buffer_length,
         np_data=np_data,
         per_signal_buffers=per_signal_buffers,

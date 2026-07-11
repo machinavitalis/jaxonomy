@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: MIT
 
-"""Regression test for the ``simulate_batch(use_vmap=True)`` CPU caveat.
+"""T-019-followup: the vmap path emits no CPU advisory anymore.
 
-Before this followup, users running ``use_vmap=True`` on a CPU laptop hit
-a counter-intuitive perf regression: the vmap path is 4-5× slower than
-the kernel path because the per-row finalize is host-side ``O(N)``. The
-docstring claimed vmap was always faster. The followup ships:
-
-1. A docstring section explaining the CPU caveat.
-2. A runtime ``UserWarning`` when ``use_vmap=True`` is requested on a
-   CPU device with ``N < 10^4`` — the regime where the kernel path
-   typically wins.
+Historical context: an earlier follow-up added a ``UserWarning`` when
+``use_vmap=True`` ran on a CPU device with ``N < 10^4``, because the
+post-vmap per-row host-side finalize made the vmap path 4-5× slower than
+the kernel path in that regime. T-019-followup vectorised the finalize
+(batched trim + batched binary-search resampling), removing the penalty
+(0.41 s vs 0.33 s at N=1000 on the reference sweep) — and the warning
+with it. This file pins the new contract: **no** CPU advisory fires on
+either path, and the vmap path returns well-formed results at small N
+on CPU.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import warnings
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import jaxonomy
@@ -28,7 +29,7 @@ from jaxonomy.simulation import simulate_batch
 
 pytestmark = pytest.mark.skipif(
     jax.default_backend() != "cpu",
-    reason="CPU-specific warning; ignored on GPU/TPU runners.",
+    reason="CPU-specific contract; ignored on GPU/TPU runners.",
 )
 
 
@@ -54,44 +55,33 @@ class _TrivialPlant(jaxonomy.LeafSystem):
         return -params["k"] * state.continuous_state
 
 
-def test_use_vmap_true_cpu_small_batch_emits_warning():
-    diag, osc = _build_diagram()
-    opts = jaxonomy.SimulatorOptions(math_backend="jax", max_major_steps=20)
-    n = 8  # small batch (< 10^4)
-    param_batches = {"osc.k": jnp.linspace(0.5, 2.0, n)}
-    recorded_signals = {"y": diag.output_ports[0]}
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        simulate_batch(
-            diag,
-            (0.0, 0.1),
-            param_batches=param_batches,
-            options=opts,
-            recorded_signals=recorded_signals,
-            use_vmap=True,
-        )
-    msgs = [str(w.message) for w in caught]
-    assert any("use_vmap=True" in m and "CPU" in m for m in msgs), msgs
-
-
-def test_use_vmap_false_cpu_silent():
-    """The default ``use_vmap=False`` path must not emit the CPU warning."""
-    diag, osc = _build_diagram()
+def _run(use_vmap: bool):
+    diag, _osc = _build_diagram()
     opts = jaxonomy.SimulatorOptions(math_backend="jax", max_major_steps=20)
     n = 8
     param_batches = {"osc.k": jnp.linspace(0.5, 2.0, n)}
     recorded_signals = {"y": diag.output_ports[0]}
-
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        simulate_batch(
+        results = simulate_batch(
             diag,
             (0.0, 0.1),
             param_batches=param_batches,
             options=opts,
             recorded_signals=recorded_signals,
-            # use_vmap defaults to False
+            use_vmap=use_vmap,
         )
-    cpu_warnings = [w for w in caught if "use_vmap=True" in str(w.message)]
-    assert not cpu_warnings
+    return results, [str(w.message) for w in caught]
+
+
+def test_use_vmap_true_cpu_small_batch_is_silent_and_correct():
+    results, msgs = _run(use_vmap=True)
+    assert not any("use_vmap=True" in m and "CPU" in m for m in msgs), msgs
+    y = np.asarray(results.outputs["y"])
+    assert y.shape[0] == 8
+    assert np.all(np.isfinite(y))
+
+
+def test_use_vmap_false_cpu_silent():
+    _results, msgs = _run(use_vmap=False)
+    assert not any("use_vmap=True" in m for m in msgs), msgs

@@ -163,6 +163,28 @@ ArrayLikeTypes = (
 )
 
 
+def _expr_parameter_refs(python_expr: str, env: dict) -> set["Parameter"]:
+    """Parameters referenced by name inside a Python-expression value.
+
+    Unlike :func:`resolve_parameters` this does not call ``get()`` on the
+    referenced parameters, so it is safe to run at construction/copy time
+    before the parameters are necessarily computable.
+    """
+    try:
+        tree = ast.parse(python_expr, mode="eval")
+    except SyntaxError:
+        # A malformed expression surfaces with a useful error at compute
+        # time (ParameterCache.__compute__); don't fail construction here.
+        return set()
+    var_recorder = _VarRecorder()
+    var_recorder.visit(tree.body)
+    return {
+        env[var]
+        for var in var_recorder.vars
+        if isinstance(env.get(var), Parameter)
+    }
+
+
 def resolve_parameters(python_expr: str, env: dict, mode="eval"):
     # look for variables used in the expression
     tree = ast.parse(python_expr, mode=mode)
@@ -707,6 +729,15 @@ class Parameter:
                     ParameterCache.add_dependent(val, self)
         if isinstance(self.value, (list, tuple)):
             _add_dependents(self.value, self)
+        if self.is_python_expr and isinstance(self.value, str) and self.py_namespace:
+            # A string expression like "k" or "np.eye(p)" depends on the
+            # Parameter objects it names in its evaluation scope. Registering
+            # them here (not only at deserialization time) means the links
+            # survive deepcopy — __deepcopy__ re-runs __post_init__ — so
+            # set() on a copied alias still invalidates copied referencing
+            # blocks (T-141).
+            for dep in _expr_parameter_refs(self.value, self.py_namespace):
+                ParameterCache.add_dependent(dep, self)
 
         _record_parameter_creation(self)
 
@@ -721,6 +752,9 @@ class Parameter:
                     ParameterCache.add_dependent(val, self)
         if isinstance(self.value, (list, tuple)):
             _add_dependents(self.value, self)
+        if self.is_python_expr and isinstance(self.value, str) and self.py_namespace:
+            for dep in _expr_parameter_refs(self.value, self.py_namespace):
+                ParameterCache.add_dependent(dep, self)
 
     def __deepcopy__(self, memo):
         """Copy fields and re-run post-init so :class:`ParameterCache` bookkeeping matches."""
@@ -733,11 +767,20 @@ class Parameter:
                 # py_namespace is the evaluation scope for a string-valued
                 # parameter expression: {**globals, **locals}, which includes
                 # imported modules. Modules are un-deep-copyable singletons
-                # (deepcopy raises "cannot pickle 'module' object"), so shallow-
-                # copy the scope — a fresh dict that shares the same module/global
-                # references. This keeps deepcopy of JSON-loaded diagrams (e.g. via
-                # Diagram.with_parameters) working.
-                setattr(result, field.name, dict(value))
+                # (deepcopy raises "cannot pickle 'module' object"), so the
+                # scope dict itself is rebuilt shallow — sharing module/global
+                # references. Parameter entries are the exception: they must
+                # go through the memo so a copied expression evaluates against
+                # the *copied* aliases (the ones with_parameters mutates), not
+                # the originals (T-141).
+                setattr(
+                    result,
+                    field.name,
+                    {
+                        k: copy.deepcopy(v, memo) if isinstance(v, Parameter) else v
+                        for k, v in value.items()
+                    },
+                )
             else:
                 setattr(result, field.name, copy.deepcopy(value, memo))
         result.__post_init__()

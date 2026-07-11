@@ -800,11 +800,15 @@ class Diagram(SystemBase):
                     f"{e} (parameter {pname!r} on {new.name!r})"
                 ) from None
             if isinstance(old_p, Parameter):
-                new._dynamic_parameters[pname] = dataclasses.replace(
-                    old_p,
-                    value=val,
-                    name=pname,
-                )
+                # Mutate the (copied) Parameter in place rather than swapping
+                # in a fresh object: blocks that reference this parameter as a
+                # shared alias (directly, or via a deserialized string
+                # expression) are registered as ParameterCache dependents of
+                # *this* object, and set() is what invalidates them. Replacing
+                # the dict entry would update the diagram-level name only and
+                # silently leave every referencing block at its stale value
+                # (T-141).
+                old_p.set(val)
             else:
                 new._dynamic_parameters[pname] = Parameter(value=val, name=pname)
 

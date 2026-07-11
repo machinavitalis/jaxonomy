@@ -819,10 +819,10 @@ def test_heat_acc_pipe_amb(use_heat_source, show_plot=False):
     that h_outflow should *decrease* reversed the temperature gradient (it
     assumed the fluid was warmer than the heat element).
 
-    (This test is currently blocked before it can run by a separate bug — the
-    Accumulator does not declare the ``T_fluid_out`` / ``sens_h_inStream`` output
-    ports this test records, so ``get_sym_by_port_name`` returns None →
-    KeyError. Tracked as T-136.)
+    (Historical note: this test was blocked until T-136 exposed the
+    Accumulator's ``T_fluid_out`` / ``sens_h_inStream`` output ports. This
+    model is also reused as the T-113 phase-4 long-horizon fluids fixture in
+    ``test/simulation/test_t_113_phase4_long_horizon.py``.)
     """
     # build acausal model
     p_ic = P_DEFAULT

@@ -84,6 +84,7 @@ plugins:
 nav:
   - index.md
   - installation.md
+  - Scope — PINNs & PDEs: scope/pinn.md
   - API Reference:
       - framework.md
       - library.md

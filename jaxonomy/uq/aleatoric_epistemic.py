@@ -308,9 +308,15 @@ def decompose_variance_sobol(
     epistemic separation called out in the T-126 task statement.
 
     Args:
-        qoi_fn: Callable taking a dict ``{name: (N,) array}`` over the union
-            of aleatoric and epistemic parameter names and returning a scalar
-            QoI of shape ``(N,)``.
+        qoi_fn: Callable taking a dict ``{name: (N,) array}`` and returning a
+            scalar QoI of shape ``(N,)``. **Contract:** the dict holds the
+            *union* of aleatoric and epistemic parameter names — every key,
+            even when one group has a single parameter — and ``qoi_fn`` must
+            index it by name (``params["k"]``), not by position or by
+            assuming only one group's keys are present. A ``qoi_fn`` written
+            for one group only typically fails with a ``KeyError`` or a
+            broadcasting error; the wrapper re-raises those with the key list
+            attached so the mismatch is attributable at this boundary.
         aleatoric_dists: Mapping ``name -> Distribution`` for the aleatoric
             group. May be empty (then ``var_aleatoric`` is reported as
             ``0.0`` and the decomposition collapses to ``var_epistemic ==
@@ -383,11 +389,23 @@ def decompose_variance_sobol(
         name: jnp.concatenate([A[name], B[name], AB_a[name], AB_e[name]])
         for name in all_dists
     }
-    y = jnp.asarray(qoi_fn(stacked))
+    try:
+        y = jnp.asarray(qoi_fn(stacked))
+    except (KeyError, TypeError, ValueError) as err:
+        raise ValueError(
+            "decompose_variance_sobol: qoi_fn raised while evaluating the "
+            f"stacked sample dict (keys {sorted(stacked)}, each of shape "
+            f"({4 * N},)). qoi_fn must consume the union of aleatoric and "
+            "epistemic parameter names by key — a qoi_fn written for only "
+            "one group's keys (or assuming positional order) is the usual "
+            "cause."
+        ) from err
     if y.shape != (4 * N,):
         raise ValueError(
             "decompose_variance_sobol: qoi_fn returned shape "
-            f"{y.shape}; expected ({4 * N},)."
+            f"{y.shape}; expected ({4 * N},). qoi_fn must reduce each "
+            "sample row to one scalar while consuming every parameter in "
+            f"{sorted(stacked)}."
         )
     yA = y[:N]
     yB = y[N:2 * N]

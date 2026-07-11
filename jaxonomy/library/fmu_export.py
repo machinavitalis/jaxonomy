@@ -223,6 +223,14 @@ def build_fmu(
     generated ``.fmu`` is still structurally valid (XML + win64 +
     linux64 binaries) but cannot be re-imported on darwin.
 
+    .. warning:: FMUs produced this way inherit pythonfmu's
+        **one-instance-per-process** limitation: the embedded-Python
+        wrapper holds a process-wide ``Py_Initialize`` singleton, so
+        the same ``.fmu`` cannot be instantiated twice in one Python
+        process (multi-start / batched co-simulation must
+        subprocess-isolate each instance). See the matching warning on
+        :class:`jaxonomy.library.ModelicaFMU` for the workaround.
+
     Args:
         slave_script: Path to a Python file that defines exactly one
             :class:`pythonfmu.Fmi2Slave` subclass. Variable
@@ -294,7 +302,70 @@ def build_fmu(
                 os.remove(fmu_path)
             os.replace(produced, fmu_path)
             produced = fmu_path
+    _ensure_initial_unknowns(produced)
     return os.path.abspath(produced)
+
+
+def _ensure_initial_unknowns(fmu_path: str) -> None:
+    """T-026c — make pythonfmu's modelDescription.xml pass the official
+    validators.
+
+    FMI 2.0 requires every output whose ``initial`` is ``calculated`` /
+    ``approx`` (the default for outputs) to be listed under
+    ``ModelStructure/InitialUnknowns``. pythonfmu emits the ``Outputs``
+    unknowns but omits ``InitialUnknowns`` entirely, which
+    ``fmpy.validation.validate_fmu`` flags on every generated FMU.
+    Post-process the archive: mirror the ``Outputs`` ``Unknown`` entries
+    (skipping any whose ScalarVariable declares ``initial="exact"``)
+    into an ``InitialUnknowns`` element, in ascending index order as the
+    schema requires. No-op when ``InitialUnknowns`` already exists or
+    there are no outputs.
+    """
+    import io
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    with zipfile.ZipFile(fmu_path, "r") as zf:
+        names = zf.namelist()
+        if "modelDescription.xml" not in names:
+            return
+        xml_bytes = zf.read("modelDescription.xml")
+        root = ET.fromstring(xml_bytes)
+        structure = root.find("ModelStructure")
+        if structure is None or structure.find("InitialUnknowns") is not None:
+            return
+        outputs = structure.find("Outputs")
+        if outputs is None:
+            return
+        variables = root.findall(".//ModelVariables/ScalarVariable")
+        unknown_indices = []
+        for unk in outputs.findall("Unknown"):
+            idx = int(unk.attrib["index"])
+            sv = variables[idx - 1]  # FMI variable indices are 1-based
+            if sv.attrib.get("initial") == "exact":
+                continue
+            unknown_indices.append(idx)
+        if not unknown_indices:
+            return
+        initial_unknowns = ET.SubElement(structure, "InitialUnknowns")
+        for idx in sorted(unknown_indices):
+            ET.SubElement(initial_unknowns, "Unknown", {"index": str(idx)})
+        new_xml = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
+
+        # Rewrite the archive with the patched XML (zipfile cannot
+        # replace a member in place).
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+            for item in zf.infolist():
+                data = (
+                    new_xml
+                    if item.filename == "modelDescription.xml"
+                    else zf.read(item.filename)
+                )
+                out.writestr(item, data)
+
+    with open(fmu_path, "wb") as f:
+        f.write(buf.getvalue())
 
 
 def write_model_description(

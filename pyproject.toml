@@ -59,6 +59,11 @@ units = ["pint>=0.20"]
 # work unchanged.
 streaming-export = ["h5py>=3.0", "zarr>=2.10"]
 
+# Optional: FMU export/import + official validation (T-025/T-026).
+# ``build_fmu`` needs pythonfmu; import and ``fmpy.validation.validate_fmu``
+# (the T-026c conformance gate) need fmpy.
+fmu = ["pythonfmu>=0.6", "fmpy>=0.3.20"]
+
 # Optional: quasi-Monte-Carlo sampling via Sobol low-discrepancy
 # sequences (T-126-followup-quasi-mc). ``jaxonomy.uq.quasi_monte_carlo``
 # and ``jaxonomy.uq.sobol_sequence`` route through

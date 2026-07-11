@@ -91,10 +91,17 @@ Each entry has the same shape:
 - **What works**: FMI 2.0 / 3.0 co-simulation import including
   mixed-type and array I/O; pythonfmu-based FMU export with
   auto-exposed `Constant` block inputs via `build_fmu` (see
-  `AGENTS/DECISIONS.md` DEC-031, DEC-032)
+  `AGENTS/DECISIONS.md` DEC-031, DEC-032). Exported FMUs pass the
+  official `fmpy.validate_fmu` checker with zero findings (T-026c —
+  `build_fmu` post-processes pythonfmu's XML to add the
+  FMI-2.0-required `InitialUnknowns`), and CI additionally runs the
+  strict INTO-CPS VDMCheck2 static checker on every generated FMU
+  (`test/library/test_t_026c_fmu_official_validation.py`).
 - **What doesn't**: no model-exchange import; no FMI 3
   scheduledExecution; macOS arm64 export requires a one-line
-  pythonfmu patch (documented in `build_fmu`'s docstring)
+  pythonfmu patch (documented in `build_fmu`'s docstring); validator
+  coverage is FMI 2.0 export only (imports are exercised by round-trip
+  tests, not the static checkers)
 
 ### State machines
 

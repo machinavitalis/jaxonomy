@@ -41,3 +41,60 @@ For different thresholds, call `jax.config.update(...)` directly afterwards.
 Always for interactive work and long-running CI jobs; skip for short-lived
 single-shot scripts where the cache write itself dominates. See
 `benchmarks/compile_time.py` (T-017) for per-case timings.
+
+## Repeated gradients: hoist the `jit` (T-129)
+
+Every bare call to `jaxonomy.simulate` builds a *fresh* traced closure, so
+JAX's in-process jit cache misses on function identity and you pay a full
+re-trace + XLA compile **per call** — the numeric solve itself is
+milliseconds. This dominates design loops that differentiate through the
+simulator repeatedly:
+
+```python
+# SLOW — each value_and_grad call re-traces + recompiles the whole
+# forward + adjoint (seconds per call; ~30 s on a 24-state acausal pack):
+def objective(theta):
+    ctx = base_context.with_parameter("g0", theta)
+    res = jaxonomy.simulate(model, ctx, (0.0, tf), options=opts)
+    return res.context.continuous_state[1]
+
+for step in range(5):
+    J, dJ = jax.value_and_grad(objective)(theta)   # re-traces every time
+    ...
+```
+
+The fix is to define the objective **once** as a pure function of
+`(theta, context)` and wrap the *outer* `value_and_grad` in `jax.jit`, so
+tracing happens exactly once:
+
+```python
+# FAST — one compile, then ~milliseconds per call:
+@jax.jit
+def value_and_grad_fn(theta, context):
+    def objective(theta):
+        ctx = context.with_parameter("g0", theta)
+        res = jaxonomy.simulate(model, ctx, (0.0, tf), options=opts)
+        return res.context.continuous_state[1]
+    return jax.value_and_grad(objective)(theta)
+
+for step in range(5):
+    J, dJ = value_and_grad_fn(theta, base_context)  # cached after call 1
+    ...
+```
+
+This works for the implicit **BDF/DAE** path too (with
+`SimulatorOptions(enable_autodiff=True)`): the simulation context and BDF
+solver state are ordinary pytrees and trace cleanly. Measured on the
+index-2 pendulum DAE (9 states, BDF, 2 s horizon, CPU): unjitted
+~1.8 s **per call**; jitted 1.8 s once, then **~10 ms per call** (~180×).
+Cost envelope: per-call cost of the naive pattern is almost entirely
+trace+compile and scales with model size (states, blocks, solver
+machinery), not with the horizon; the compiled kernel's runtime scales
+with horizon and stiffness. Combine with the persistent cache above to
+also amortise the one-time compile across processes.
+
+Requirements for the pattern: pass the context (and any other
+non-differentiated inputs) as *arguments* of the jitted function rather
+than closing over mutable state, keep `t_span` and options static, and
+don't rebuild the diagram inside the traced function (acausal
+compilation is not jit-safe — build once, outside).

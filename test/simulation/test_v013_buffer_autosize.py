@@ -46,8 +46,11 @@ def _simulate(options):
             options=options,
             recorded_signals={"x": integ.output_ports[0]},
         )
-    overflow = [w for w in caught if "overflow" in str(w.message)]
-    return results, overflow
+    buffer_warns = [
+        w for w in caught
+        if "overflow" in str(w.message) or "reduced resolution" in str(w.message)
+    ]
+    return results, buffer_warns
 
 
 def test_default_buffer_holds_more_than_old_1000_sample_default():
@@ -64,12 +67,16 @@ def test_default_buffer_holds_more_than_old_1000_sample_default():
 
 
 def test_explicit_small_buffer_is_honoured_and_warns():
-    results, overflow = _simulate(
+    """T-138 updated this contract: an overflowing buffer now degrades to
+    uniform decimation (whole-trajectory coverage at reduced resolution)
+    instead of keeping only the tail — so ``time[0]`` stays at t0 and the
+    warning says "reduced resolution" rather than "overflow"."""
+    results, buffer_warns = _simulate(
         SimulatorOptions(rtol=1e-10, atol=1e-12, buffer_length=64)
     )
-    assert len(overflow) == 1
-    assert float(results.time[0]) > 0.0, (
-        "an explicit 64-sample buffer must truncate the front of a ~1.8k-"
-        "sample recording"
+    assert len(buffer_warns) == 1
+    assert "reduced resolution" in str(buffer_warns[0].message)
+    assert float(results.time[0]) == 0.0, (
+        "T-138 decimation must preserve the trajectory head on overflow"
     )
     assert len(results.time) <= 64
