@@ -160,6 +160,52 @@ results = jx.simulate(
 
 ---
 
+## 📚 Documentation
+
+- **Online docs & tutorials:** [py.jaxonomy.com](https://py.jaxonomy.com)
+- **Local docs:**
+  ```bash
+  pip install -r requirements.docs.txt
+  mkdocs serve   # → http://127.0.0.1:8000
+  ```
+- **Example notebooks:** [`docs/examples/`](docs/examples/)
+
+---
+
+## 🤖 Driving Jaxonomy from an AI agent (MCP)
+
+Jaxonomy ships an [MCP](https://modelcontextprotocol.io) server that exposes the
+engine as tools an AI agent can call directly — it can enumerate library blocks,
+build and validate a model, run a simulation, fit parameters to data, and
+linearize a system, then reason over the actual results. This is worth wiring up
+if you drive Jaxonomy from an agent (Claude Desktop/Code, Cursor, …); if you're
+writing Python by hand, the `pip install` above is all you need and you can skip
+this.
+
+```bash
+pip install jaxonomy[mcp]
+```
+
+Then register the server with your agent client. For Claude Desktop, add to
+`claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "jaxonomy": {
+      "command": "python",
+      "args": ["-m", "jaxonomy.mcp.server"]
+    }
+  }
+}
+```
+
+Use the interpreter where `jaxonomy[mcp]` is installed (or the `jaxonomy-mcp`
+entry point). Full tool reference and configuration notes:
+[`jaxonomy/mcp/README.md`](jaxonomy/mcp/README.md).
+
+---
+
 ## 📖 Examples
 
 ### 1 · Hybrid Dynamics: The Bouncing Ball
@@ -522,18 +568,6 @@ graph TD
     style C2 fill:#f0fdf4,stroke:#16a34a
     style C3 fill:#f0fdf4,stroke:#16a34a
 ```
-
----
-
-## 📚 Documentation
-
-- **Online docs & tutorials:** [py.jaxonomy.com](https://py.jaxonomy.com)
-- **Local docs:**
-  ```bash
-  pip install -r requirements.docs.txt
-  mkdocs serve   # → http://127.0.0.1:8000
-  ```
-- **Example notebooks:** [`docs/examples/`](docs/examples/)
 
 ---
 
