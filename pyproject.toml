@@ -28,6 +28,9 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://www.jaxonomy.com"
 "Documentation" = "https://py.jaxonomy.com"
+"Repository" = "https://github.com/machinavitalis/jaxonomy"
+"Issues" = "https://github.com/machinavitalis/jaxonomy/issues"
+"Changelog" = "https://github.com/machinavitalis/jaxonomy/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

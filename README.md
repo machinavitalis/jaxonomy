@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/examples/media/hero_triptych.gif" width="100%" alt="Jaxonomy — compose, simulate, control">
+<img src="https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/hero_triptych.gif" width="100%" alt="Jaxonomy — compose, simulate, control">
 
 # Jaxonomy
 
@@ -8,7 +8,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/jaxonomy?color=blue&label=PyPI)](https://pypi.org/project/jaxonomy/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/machinavitalis/jaxonomy/blob/main/LICENSE.md)
 [![Docs](https://img.shields.io/badge/docs-py.jaxonomy.com-blue)](https://py.jaxonomy.com)
 
 *Block diagrams meet automatic differentiation. Model physical systems, close the loop with LQR/MPC/Kalman, and differentiate through everything.*
@@ -168,8 +168,8 @@ results = jx.simulate(
   pip install -r requirements.docs.txt
   mkdocs serve   # → http://127.0.0.1:8000
   ```
-- **Example notebooks:** [`docs/examples/`](docs/examples/)
-- **Scope notes:** [PINNs & PDE surrogates](docs/scope/pinn.md) — classical
+- **Example notebooks:** [`docs/examples/`](https://github.com/machinavitalis/jaxonomy/tree/main/docs/examples)
+- **Scope notes:** [PINNs & PDE surrogates](https://github.com/machinavitalis/jaxonomy/blob/main/docs/scope/pinn.md) — classical
   PDE PINNs are out of scope; physics-informed *dynamics* learning (UDE /
   Neural DAE / Neural ODE / SINDy) is core.
 
@@ -205,7 +205,7 @@ Then register the server with your agent client. For Claude Desktop, add to
 
 Use the interpreter where `jaxonomy[mcp]` is installed (or the `jaxonomy-mcp`
 entry point). Full tool reference and configuration notes:
-[`jaxonomy/mcp/README.md`](jaxonomy/mcp/README.md).
+[`jaxonomy/mcp/README.md`](https://github.com/machinavitalis/jaxonomy/blob/main/jaxonomy/mcp/README.md).
 
 ---
 
@@ -215,7 +215,7 @@ entry point). Full tool reference and configuration notes:
 
 <div align="center">
 
-<img src="docs/examples/media/grid_bouncing_ball.gif" width="45%" alt="Bouncing ball — hybrid contact events">
+<img src="https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/grid_bouncing_ball.gif" width="45%" alt="Bouncing ball — hybrid contact events">
 
 </div>
 
@@ -286,7 +286,7 @@ Zero-crossing events are located with **40-step bisection** on the solver's dens
 
 <div align="center">
 
-![LQR Pendulum Block Diagram](docs/examples/media/lqr_pendulum_block_diagram.png)
+![LQR Pendulum Block Diagram](https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/lqr_pendulum_block_diagram.png)
 
 </div>
 
@@ -347,7 +347,7 @@ results = jx.simulate(
 
 <div align="center">
 
-![Differentiable parameter identification](docs/examples/media/battery_optimization.gif)
+![Differentiable parameter identification](https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/battery_optimization.gif)
 
 </div>
 
@@ -402,7 +402,7 @@ for _ in range(300):
 
 <div align="center">
 
-![Acausal RC circuit schematic](docs/examples/media/rc_circuit_acausal.png)
+![Acausal RC circuit schematic](https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/rc_circuit_acausal.png)
 
 </div>
 
@@ -452,7 +452,7 @@ Available acausal domains: `electrical` · `rotational` · `translational` · `t
 
 <div align="center">
 
-![Differentiable sensitivity and batch simulation of a spring–mass system](docs/examples/media/sensitivity_batch.png)
+![Differentiable sensitivity and batch simulation of a spring–mass system](https://raw.githubusercontent.com/machinavitalis/jaxonomy/main/docs/examples/media/sensitivity_batch.png)
 
 </div>
 
@@ -596,12 +596,12 @@ joints, actuators, contacts, and kinematic chains belongs in Jaxterity;
 embedded codegen, targets, and attestation belong in Jaxility.
 
 What Jaxonomy does **not** yet do (or does only partially) is tracked in
-[`KNOWN_GAPS.md`](KNOWN_GAPS.md) — the public inverse of the internal evidence
+[`KNOWN_GAPS.md`](https://github.com/machinavitalis/jaxonomy/blob/main/KNOWN_GAPS.md) — the public inverse of the internal evidence
 ledger in `CLAIMS.md`.
 
 ## License
 
-Released under the [MIT License](LICENSE.md) from version 2.2.0 onward.
+Released under the [MIT License](https://github.com/machinavitalis/jaxonomy/blob/main/LICENSE.md) from version 2.2.0 onward.
 
 Derived from the MIT-licensed open-source package **pycollimator** by **Collimator, Inc.**
 </content>
