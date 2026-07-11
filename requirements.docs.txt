@@ -3,6 +3,10 @@ mkdocs-jupyter
 mkdocs-material
 mkdocstrings[python]
 
+# Required to render the marimo example notebooks under docs/examples/
+# (jupytext >=1.17 detects the marimo format and errors without it).
+marimo>=0.16.3
+
 # Snyk pinning
 ipython>=8.10.0
 requests>=2.32.0
