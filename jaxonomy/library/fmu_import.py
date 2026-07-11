@@ -149,6 +149,20 @@ class ModelicaFMU(LeafSystem):
     ):
         """Load and execute an FMU for Co-Simulation.
 
+        .. warning:: **One instance per FMU per process** for FMUs built
+            with pythonfmu (e.g. via :func:`jaxonomy.library.build_fmu`).
+            The embedded-Python wrapper holds a process-wide
+            ``Py_Initialize`` singleton, so instantiating the same
+            ``.fmu`` dylib twice in one Python process fails. For
+            multi-start or batched co-simulation, isolate each instance
+            in its own process (``multiprocessing`` /
+            ``concurrent.futures.ProcessPoolExecutor`` with the *spawn*
+            start method, or a ``subprocess`` running a small driver
+            script) and aggregate results afterwards. This is an
+            upstream pythonfmu limitation, not a Jaxonomy one; FMUs from
+            other exporters (OpenModelica, Dymola, Reference-FMUs) do
+            not carry it.
+
         Args:
             file_name (str): path to FMU file
             dt (float): stepsize for FMU simulation

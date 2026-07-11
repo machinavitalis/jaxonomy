@@ -1,21 +1,17 @@
 # SPDX-License-Identifier: MIT
 
-"""T-002b-followup-buffer-overflow-warning — Python-side detection of
-recording-buffer truncation.
+"""Recording-buffer-full diagnostics (T-002b-followup, updated by T-138).
 
-When the simulator's recording buffer fills up before the requested
-``t_final`` is reached, the trimmed ``results.time`` / ``results.outputs``
-silently carry only the last ``buffer_length`` samples. The original
-IO-effect log that warned the user was removed in T-002b to make
-``simulate_batch(use_vmap=True)`` compilable. This test covers the
-Python-side post-simulation check that emits a clear ``UserWarning``
-on the single-simulation path without disturbing the vmap-clean
-inner kernel.
+When the simulator's recording buffer fills before the requested
+``t_final``, the JAX backend now degrades to uniform decimation (T-138):
+the recorded time-series keeps every Nth sample spanning the whole
+trajectory instead of silently keeping only the tail. The Python-side
+post-simulation check (running once after the JIT'd kernel returns, so
+it does not disturb the vmap-clean inner kernel) emits a ``UserWarning``
+saying the results were recorded at reduced resolution.
 
-Detection signature:
-* recording was on (``time`` is non-None),
-* ``len(time) == options.buffer_length`` exactly (buffer wrapped),
-* ``time[-1] < t_span[1]`` (truncation actually happened).
+Detection signature: the backend's ``record_stride`` ends > 1 iff at
+least one buffer compaction ran.
 """
 
 from __future__ import annotations
@@ -44,13 +40,14 @@ def _build_recorded_sine_diagram():
 
 
 def test_warning_emitted_when_buffer_fills_before_t_final():
-    """Force the truncation signature with a tight buffer + small
-    max_minor_step + long horizon; warning must fire."""
+    """Force an overflow with a tight buffer + small max_minor_step +
+    long horizon; the reduced-resolution warning must fire and the
+    recording must still start at t0 (T-138)."""
     diag, sine = _build_recorded_sine_diagram()
     ctx = diag.create_context()
 
     options = jaxonomy.SimulatorOptions(
-        buffer_length=20,           # tiny ring buffer — easy to fill
+        buffer_length=20,           # tiny buffer — easy to fill
         max_minor_step_size=0.01,   # force many minor steps
         rtol=1e-3,
         atol=1e-5,
@@ -58,7 +55,7 @@ def test_warning_emitted_when_buffer_fills_before_t_final():
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        jaxonomy.simulate(
+        results = jaxonomy.simulate(
             diag, ctx, (0.0, 10.0),
             options=options,
             recorded_signals={"y": sine.output_ports[0]},
@@ -66,16 +63,18 @@ def test_warning_emitted_when_buffer_fills_before_t_final():
 
     buffer_warnings = [
         w for w in caught
-        if "recording buffer overflow" in str(w.message)
+        if "reduced resolution" in str(w.message)
     ]
     assert buffer_warnings, (
-        f"expected a buffer-overflow UserWarning; got {[str(w.message) for w in caught]}"
+        f"expected a reduced-resolution UserWarning; got {[str(w.message) for w in caught]}"
     )
-    # Message should cite the configured length and the gap kwarg
-    # name so the user has a one-line fix.
+    # Message should cite the configured length and the kwarg name so
+    # the user has a one-line fix.
     msg = str(buffer_warnings[0].message)
     assert "buffer_length=20" in msg
     assert "buffer_length" in msg
+    # T-138 head guarantee: decimation, not tail-keeping.
+    assert float(results.time[0]) == 0.0
 
 
 def test_no_warning_when_buffer_is_large_enough():

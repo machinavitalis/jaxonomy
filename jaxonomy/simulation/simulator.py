@@ -854,27 +854,62 @@ def simulate(
     if _bdf_cond_monitor is not None:
         _bdf_cond_monitor.maybe_warn()
 
-    # T-002b-followup-buffer-overflow-warning: when the recording
-    # ring-buffer fills up during a non-vmap simulation, the original
-    # IO-effect callback that warned the user was removed in T-002b
-    # to make ``simulate_batch(use_vmap=True)`` compilable. That left
-    # the single-simulation path silently truncating the recorded
-    # time-series to the last ``buffer_length`` samples — surprising
-    # to the user, who sees a plot starting mid-trajectory with no
-    # diagnostic. This Python-side check runs once after the JIT'd
-    # kernel returns (so it doesn't disturb vmap) and emits a clear
-    # UserWarning when truncation is detected by signature.
-    #
-    # Detection signature: ``time[0] > t_span[0]`` by a meaningful
-    # amount. The simulator's ring buffer wraps in place, and
-    # ``finalize`` then trims to the live region — so an overflow
-    # surfaces not as ``len(time) == buffer_length`` (the trimmed
-    # tail can be much shorter) but as the *start* of the recorded
-    # trajectory being well past the requested ``t_span[0]``. That
-    # behaviour is unambiguous: a non-overflowed run always records
-    # the first sample at ``t_span[0]``.
+    # T-138 — decimated-recording diagnostic.  When the recording buffer
+    # filled, the JAX backend now degrades to uniform decimation (keep
+    # every Nth sample spanning the whole trajectory) instead of the old
+    # ring-wrap that kept only the tail.  Detection is exact: the
+    # backend's ``record_stride`` ends > 1 iff at least one compaction
+    # ran.  This Python-side check runs once after the JIT'd kernel
+    # returns (so it doesn't disturb vmap) and tells the user the
+    # results are complete but at reduced resolution.
+    _final_stride = None
+    _total_steps = None
+    if results_data is not None:
+        _inner_rd = getattr(results_data, "_solution_data", results_data)
+        _stride_attr = getattr(_inner_rd, "record_stride", None)
+        if _stride_attr is not None:
+            try:
+                _final_stride = int(np.max(np.asarray(_stride_attr)))
+                _total_steps = int(np.max(np.asarray(_inner_rd.step_count)))
+            except (TypeError, ValueError):
+                _final_stride = None
     if (
-        time is not None
+        _final_stride is not None
+        and _final_stride > 1
+        and time is not None
+        and not getattr(options, "enable_autodiff", False)
+    ):
+        n_kept = len(time)
+        resolved_buffer = options.buffer_length
+        buf_str = (
+            f"buffer_length={resolved_buffer}"
+            if resolved_buffer is not None
+            else "buffer_length=None (auto)"
+        )
+        warnings.warn(
+            f"jaxonomy.simulate: the recording buffer ({buf_str}) filled; "
+            f"the trajectory was recorded at reduced resolution "
+            f"({n_kept} of {_total_steps} samples, keeping every "
+            f"{_final_stride}th). The recorded time-series still starts at "
+            f"t0 and covers the whole trajectory (the head is no longer "
+            f"dropped; the last kept sample may precede tf by up to "
+            f"{_final_stride} steps). Set SimulatorOptions(buffer_length="
+            f"{max(int(_total_steps or 0) + 1, 4000)}) or larger to capture "
+            f"every sample, loosen rtol/atol, or reduce the number of "
+            f"recorded signals.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    # T-002b-followup-buffer-overflow-warning (legacy signature, kept as a
+    # backstop for backends without the T-138 decimation fields): a
+    # ring-wrapped buffer surfaces as the *start* of the recorded
+    # trajectory being well past the requested ``t_span[0]``; a
+    # non-overflowed (or decimated) run always records its first sample
+    # at ``t_span[0]``.
+    if (
+        _final_stride in (None, 1)
+        and time is not None
         and len(time) >= 1
         and not getattr(options, "enable_autodiff", False)
         and t_span is not None

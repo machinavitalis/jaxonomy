@@ -877,6 +877,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         default_value: Array | Parameter = None,
         dtype: DTypeLike = None,
         as_array: bool = True,
+        name: str = None,
     ):
         """Declare a discrete state component for the system.
 
@@ -900,6 +901,12 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
             as_array (bool, optional):
                 If True, treat the default_value as an array-like (cast if necessary).
                 Otherwise, it will be stored as the default state without modification.
+            name (str, optional):
+                Readability label for the discrete state (parity with
+                ``declare_continuous_state_output(name=...)``). Stored as
+                ``self.discrete_state_name`` for diagnostics/debugging; it
+                does not change runtime behaviour, and the state is still
+                read as ``state.discrete_state``.
 
         Raises:
             AssertionError:
@@ -914,6 +921,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
             (2) Use `declare_periodic_update` to declare an update event that
             modifies the discrete state at a recurring interval.
         """
+        self.discrete_state_name = name
         if as_array:
             default_value = utils.make_array(default_value, dtype=dtype, shape=shape)
 

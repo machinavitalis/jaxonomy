@@ -115,7 +115,10 @@ class Uniform:
 
     low: float
     high: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.high > self.low:
@@ -156,7 +159,10 @@ class Normal:
 
     loc: float
     scale: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.scale <= 0:
@@ -195,7 +201,10 @@ class LogNormal:
 
     mu: float
     sigma: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.sigma <= 0:
@@ -244,7 +253,10 @@ class Triangular:
     low: float
     mode: float
     high: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if not (self.low <= self.mode <= self.high) or self.high <= self.low:
@@ -371,7 +383,10 @@ class Exponential:
     """
 
     rate: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.rate <= 0:
@@ -428,7 +443,10 @@ class Poisson:
     """
 
     rate: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.rate <= 0:
@@ -555,7 +573,10 @@ class Categorical:
 
     values: Sequence
     probs: Sequence
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         values_arr = jnp.asarray(self.values)
@@ -797,7 +818,10 @@ class Bernoulli:
     """
 
     p: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         # ``p`` must be a probability — reject anything outside [0, 1].
@@ -963,7 +987,10 @@ class Beta:
 
     alpha: float
     beta: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.alpha <= 0:
@@ -1078,7 +1105,10 @@ class Gamma:
 
     shape_param: float
     scale: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.shape_param <= 0:
@@ -1224,7 +1254,10 @@ class Weibull:
 
     shape_param: float
     scale: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.shape_param <= 0:
@@ -1367,7 +1400,10 @@ class Pareto:
 
     scale: float
     alpha: float
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         if self.scale <= 0:
@@ -1469,7 +1505,10 @@ class MultivariateNormal:
 
     means: jnp.ndarray
     cov: jnp.ndarray
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         means = jnp.asarray(self.means)
@@ -1663,7 +1702,10 @@ class CorrelatedMarginals:
 
     marginals: Sequence
     corr_matrix: jnp.ndarray
-    kind: DistributionKind = "aleatoric"
+    # Keyword-only: a positional third/fourth argument silently landing in
+    # `kind` is an easy mistake in dict-comprehension construction of mixed
+    # aleatoric/epistemic distribution sets (T-130).
+    kind: DistributionKind = dataclasses.field(default="aleatoric", kw_only=True)
 
     def __post_init__(self) -> None:
         corr = jnp.asarray(self.corr_matrix)

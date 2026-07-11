@@ -54,6 +54,7 @@ haven't proven yet. Both ship.
 | C-002 | DPC training reduces the two-tank tracking loss ~1570x (59.97 → 0.038) and bottom-level tracking RMS 12.8x (1.271 m → 0.099 m), trained policy settles within 24 mm of a 0.6 m setpoint. | `docs/examples/dpc_two_tank_reference_tracking.ipynb` (training + result cells) | same notebook — executed outputs (cells run live, no checkpoint) | green |
 | C-003 | `jax.grad` of a terminal cost flows through `simulate_closed_loop` and matches central finite differences to relative error ~5.9e-6. | `docs/examples/dpc_two_tank_reference_tracking.ipynb` (AD-vs-FD cell) | same notebook cell + `test/control/test_t_040_diagram.py::test_gradient_through_simulate_matches_fd` | green |
 | C-004 | The trained DPC policy recovers the analytic steady-state command u* = (c2/kp)√r (0.461 vs 0.452 at r=0.6; 0.407 vs 0.369 at r=0.4). | `docs/examples/dpc_two_tank_reference_tracking.ipynb` (steady-state validation cell) | same notebook — executed outputs | green |
+| C-005 | Exported FMUs pass the official `fmpy.validate_fmu` checker with zero findings; CI additionally runs INTO-CPS VDMCheck2 on every generated FMU. | `KNOWN_GAPS.md` (FMU support) | `test/library/test_t_026c_fmu_official_validation.py` (fmpy gate runs everywhere; VDMCheck2 via the `fmu-validators` CI job) | green |
 
 *Pre-existing claims are covered by the adversarial-review pass in
 `AGENTS/RULES.md`; rows get added here as shippable-surface edits

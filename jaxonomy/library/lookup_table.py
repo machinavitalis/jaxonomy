@@ -303,8 +303,12 @@ def interp_1d(
     fp,
     method: Literal[
         "linear", "pchip", "akima", "cubic", "nearest", "flat"
-    ] = "linear",
+    ] = None,
     extrapolation: Literal["clip", "linear", "nan"] = "clip",
+    *,
+    mode: Literal[
+        "linear", "pchip", "akima", "cubic", "nearest", "flat"
+    ] = None,
 ):
     """1-D interpolation backend.
 
@@ -331,10 +335,22 @@ def interp_1d(
             boundary value (matches :func:`jnp.interp` and the
             standard lookup-table default); ``"linear"`` extends the boundary slope;
             ``"nan"`` returns NaN outside ``[xp[0], xp[-1]]``.
+        mode: Keyword-only alias for ``method`` (consistent with
+            ``Quantizer`` / ``Saturate``, which spell it ``mode=``).
+            Passing both ``method`` and ``mode`` raises ``TypeError``.
 
     Returns:
         Interpolated value(s) with the same shape as ``x``.
     """
+    if mode is not None:
+        if method is not None:
+            raise TypeError(
+                "interp_1d: pass either method= or its alias mode=, not both "
+                f"(got method={method!r}, mode={mode!r})"
+            )
+        method = mode
+    if method is None:
+        method = "linear"
     if method not in _INTERP_METHODS:
         raise ValueError(
             f"interp_1d: unknown method {method!r}; expected one of "

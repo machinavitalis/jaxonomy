@@ -223,6 +223,14 @@ def build_fmu(
     generated ``.fmu`` is still structurally valid (XML + win64 +
     linux64 binaries) but cannot be re-imported on darwin.
 
+    .. warning:: FMUs produced this way inherit pythonfmu's
+        **one-instance-per-process** limitation: the embedded-Python
+        wrapper holds a process-wide ``Py_Initialize`` singleton, so
+        the same ``.fmu`` cannot be instantiated twice in one Python
+        process (multi-start / batched co-simulation must
+        subprocess-isolate each instance). See the matching warning on
+        :class:`jaxonomy.library.ModelicaFMU` for the workaround.
+
     Args:
         slave_script: Path to a Python file that defines exactly one
             :class:`pythonfmu.Fmi2Slave` subclass. Variable
@@ -294,7 +302,106 @@ def build_fmu(
                 os.remove(fmu_path)
             os.replace(produced, fmu_path)
             produced = fmu_path
+    _normalize_model_description(produced)
     return os.path.abspath(produced)
+
+
+def _normalize_fmi_datetime(value: str) -> str:
+    """Normalize a timestamp to the FMI-required ``YYYY-MM-DDThh:mm:ssZ``.
+
+    pythonfmu stamps ``generationDateAndTime`` as ISO-8601 with a numeric
+    offset (e.g. ``2026-07-11T02:22:07+00:00``), which the INTO-CPS
+    VDMCheck validator rejects — the FMI 2.0 spec mandates the ``Z``
+    suffix form with whole seconds. Unparseable values are returned
+    unchanged (the validator will then say so, loudly).
+    """
+    from datetime import datetime, timezone
+
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
+    return dt.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _normalize_model_description(fmu_path: str) -> None:
+    """T-026c — make pythonfmu's modelDescription.xml pass the official
+    validators (``fmpy.validate_fmu`` + INTO-CPS VDMCheck2).
+
+    Two conformance gaps in pythonfmu's generator are patched in place:
+
+    1. FMI 2.0 requires every output whose ``initial`` is ``calculated``
+       / ``approx`` (the default for outputs) to be listed under
+       ``ModelStructure/InitialUnknowns``; pythonfmu omits the element
+       entirely (flagged by fmpy). The ``Outputs`` ``Unknown`` entries
+       are mirrored there (skipping ``initial="exact"`` variables), in
+       the ascending index order the schema requires.
+    2. ``generationDateAndTime`` must be ``YYYY-MM-DDThh:mm:ssZ``;
+       pythonfmu stamps a ``+00:00``-offset form (flagged by VDMCheck).
+
+    No-op when the XML already conforms.
+    """
+    import io
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    with zipfile.ZipFile(fmu_path, "r") as zf:
+        names = zf.namelist()
+        if "modelDescription.xml" not in names:
+            return
+        xml_bytes = zf.read("modelDescription.xml")
+        root = ET.fromstring(xml_bytes)
+        changed = False
+
+        gdt = root.attrib.get("generationDateAndTime")
+        if gdt:
+            normalized = _normalize_fmi_datetime(gdt)
+            if normalized != gdt:
+                root.set("generationDateAndTime", normalized)
+                changed = True
+
+        structure = root.find("ModelStructure")
+        if structure is not None and structure.find("InitialUnknowns") is None:
+            outputs = structure.find("Outputs")
+            if outputs is not None:
+                variables = root.findall(".//ModelVariables/ScalarVariable")
+                unknown_indices = []
+                for unk in outputs.findall("Unknown"):
+                    idx = int(unk.attrib["index"])
+                    sv = variables[idx - 1]  # FMI variable indices are 1-based
+                    if sv.attrib.get("initial") == "exact":
+                        continue
+                    unknown_indices.append(idx)
+                if unknown_indices:
+                    initial_unknowns = ET.SubElement(
+                        structure, "InitialUnknowns"
+                    )
+                    for idx in sorted(unknown_indices):
+                        ET.SubElement(
+                            initial_unknowns, "Unknown", {"index": str(idx)}
+                        )
+                    changed = True
+
+        if not changed:
+            return
+        new_xml = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
+
+        # Rewrite the archive with the patched XML (zipfile cannot
+        # replace a member in place).
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+            for item in zf.infolist():
+                data = (
+                    new_xml
+                    if item.filename == "modelDescription.xml"
+                    else zf.read(item.filename)
+                )
+                out.writestr(item, data)
+
+    with open(fmu_path, "wb") as f:
+        f.write(buf.getvalue())
 
 
 def write_model_description(

@@ -19,7 +19,7 @@ pip install jaxonomy
 
 - **Windows:** for double precision in JAX you may need  
   `set JAX_ENABLE_X64=True` (cmd) or `$env:JAX_ENABLE_X64="True"` (PowerShell) before importing JAX.  
-- **macOS:** some optional builds (e.g. pieces of the NMPC stack) need **cmake** (`brew install cmake`). Apple Silicon users often need cmake for certain compiled dependencies.  
+- **macOS:** some optional builds (e.g. pieces of the NMPC stack, and other compiled dependencies on Apple Silicon) need **cmake** (`brew install cmake`).  
 
 ## Optional dependency groups
 
@@ -27,9 +27,9 @@ Install extras in brackets:
 
 | Command | Typical use |
 |---------|-------------|
-| `pip install jaxonomy[safe]` | Extra scientific / ML libraries **without** NMPC (no IPOPT). |
-| `pip install jaxonomy[nmpc]` | Nonlinear MPC blocks — requires **IPOPT** on the system. |
-| `pip install jaxonomy[all]` | Large optional set (MPC, Mujoco-related pieces, etc.). |
+| `pip install jaxonomy[safe]` | Scientific / ML extras, **no** NMPC/IPOPT. Note this is a **large, multi-GB** install: it pulls in PyTorch, TensorFlow, pandas, SymPy, python-control, PySINDy, pyTwin, Matplotlib, OpenCV, evosax, and nlopt. |
+| `pip install jaxonomy[nmpc]` | Nonlinear MPC blocks (cyipopt + OSQP) — requires **IPOPT** on the system. |
+| `pip install jaxonomy[all]` | Everything: the `[safe]` and `[nmpc]` sets **plus** MuJoCo / MJX / Brax. Largest install. |
 
 ### Nonlinear MPC (IPOPT)
 

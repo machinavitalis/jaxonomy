@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 site_name: jaxonomy
+site_url: https://py.jaxonomy.com
 site_description: >-
   Jaxonomy — block-diagram simulation for hybrid dynamical systems (JAX, NumPy API,
   tutorials, examples, and API reference).
@@ -84,6 +85,7 @@ plugins:
 nav:
   - index.md
   - installation.md
+  - Scope — PINNs & PDEs: scope/pinn.md
   - API Reference:
       - framework.md
       - library.md

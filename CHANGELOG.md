@@ -13,6 +13,22 @@ Pure internal refactors live in commits, not here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **FMU official-validator gate** (T-026c): every FMU produced by `build_fmu` passes `fmpy.validate_fmu` with zero findings (CI also runs the INTO-CPS VDMCheck2 static checker). `build_fmu` now adds the FMI-2.0-required `ModelStructure/InitialUnknowns` to the generated XML. New `fmu` extra installs pythonfmu + fmpy.
+
+### Changed
+
+- **Recording-buffer overflow degrades to uniform decimation** (T-138): a full buffer compacts to every-other sample and doubles its keep-stride instead of ring-wrapping — `results.time` always starts at `t0` and spans the whole trajectory at reduced resolution, with memory bounded by `buffer_length`. jit- and vmap-safe; the overflow warning now reads "recorded at reduced resolution (N of M samples)".
+- **`simulate_batch(use_vmap=True)` finalize is vectorised** (T-019-followup): CPU sweep at N=1000 improves 1.28 s → 0.41 s; the CPU+small-batch `UserWarning` is gone.
+- **Breaking: `jaxonomy.uq` distribution `kind` is keyword-only** (T-130): `Uniform(0, 1, "epistemic")` now raises `TypeError`; write `kind="epistemic"`.
+
+### Fixed
+
+- **Shared top-level parameter aliases propagate again** (T-141): `Diagram.with_parameters({"alias": v})` now updates blocks that reference the alias — previously a silent no-op, both on live diagrams (the alias `Parameter` was swapped out instead of mutated) and after a `model_json` round-trip (deserialized expression parameters lost their dependency links and namespace identity on deepcopy). Affects `fit_parameters` and every MCP/dashboard flow that sets model-level parameters on a loaded model.
+
 ## [3.0.0] - 2026-07-05
 
 Everything accumulated since the v2.2.0 open source release, consolidated into a single major release and grouped by area rather than by development order.

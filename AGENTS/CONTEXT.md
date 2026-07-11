@@ -63,6 +63,13 @@ improves end-to-end differentiability.
   should use Diffrax directly. Jaxonomy adds block-diagram composition, hybrid
   (discrete + continuous) dynamics, event handling, state machines, and acausal
   modeling on top of that foundation.
+- It is not a PINN / PDE-surrogate library. Classical physics-informed neural
+  networks (spatial collocation over PDE residuals — Burgers, Navier–Stokes,
+  heat-equation fields) are explicitly out of scope; point users at DeepXDE /
+  NVIDIA PhysicsNeMo / Neuromancer. What Jaxonomy *does* own is
+  physics-informed **dynamics** learning through the differentiable simulator:
+  UDE, Neural DAE, Neural ODE blocks, SINDy. The full argument lives in
+  `docs/scope/pinn.md` (T-045).
 - It is not a deployment/codegen tool. Embedded codegen is out of
   scope for Jaxonomy itself. That said, two codegen paths are architecturally
   supported and documented as integration points: (1) MISRA-compliant C code

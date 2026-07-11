@@ -150,6 +150,76 @@ jobs:
       - name: Run compile-time benchmark with --check
         run: python benchmarks/compile_time.py --check
 
+  # ── FMU official-validator gate (T-026c) ──────────────────────────────────
+  # Validates every FMU produced by build_fmu with the official checkers:
+  # fmpy.validate_fmu (hard gate, zero findings) and VDMCheck2 (the strict
+  # INTO-CPS static VDM-SL checker of modelDescription.xml — JVM-based, so
+  # it runs here with a cached distribution rather than in the quick suite).
+  fmu-validators:
+    name: FMU official validators
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' && !inputs.rebaseline
+    env:
+      VDMCHECK_VERSION: "1.1.3"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Java 17 (for VDMCheck)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache VDMCheck distribution
+        id: vdmcheck-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/vdmcheck
+          key: vdmcheck2-${{ env.VDMCHECK_VERSION }}
+
+      - name: Download VDMCheck2
+        if: steps.vdmcheck-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/vdmcheck
+          curl -sSL -o ~/vdmcheck/vdmcheck2.zip \
+            "https://github.com/INTO-CPS-Association/FMI-VDM-Model/releases/download/Release/${VDMCHECK_VERSION}/vdmcheck2-${VDMCHECK_VERSION}-distribution-rules.zip"
+          unzip -o ~/vdmcheck/vdmcheck2.zip -d ~/vdmcheck
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,fmu]"
+
+      - name: Run official-validator suite
+        run: |
+          set -o pipefail  # pytest's failure must not be masked by tee
+          VDMCHECK2="$(find ~/vdmcheck -name 'VDMCheck2.sh' | head -1)"
+          export VDMCHECK2
+          echo "Using VDMCHECK2=$VDMCHECK2"
+          pytest -q --tb=short \
+            test/library/test_t_026c_fmu_official_validation.py \
+            | tee fmu_validation.log
+
+      - name: Publish validation summary
+        if: always()
+        run: |
+          {
+            echo "## FMU official-validator results (T-026c)"
+            echo ""
+            echo '| Check | Result |'
+            echo '|---|---|'
+            tail -3 fmu_validation.log | head -1 | \
+              sed 's/^/| pytest summary | /; s/$/ |/'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ── memory regression gate ────────────────────────────────────────────────
   # Re-runs the memory benchmark and fails if any case's peak RSS regresses
   # beyond the threshold encoded in benchmarks/memory.py (currently +50 %).

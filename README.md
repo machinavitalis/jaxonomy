@@ -169,6 +169,9 @@ results = jx.simulate(
   mkdocs serve   # → http://127.0.0.1:8000
   ```
 - **Example notebooks:** [`docs/examples/`](https://github.com/machinavitalis/jaxonomy/tree/main/docs/examples)
+- **Scope notes:** [PINNs & PDE surrogates](https://github.com/machinavitalis/jaxonomy/blob/main/docs/scope/pinn.md) — classical
+  PDE PINNs are out of scope; physics-informed *dynamics* learning (UDE /
+  Neural DAE / Neural ODE / SINDy) is core.
 
 ---
 

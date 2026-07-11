@@ -216,6 +216,75 @@ def _interp_on_time_np(y: Any, t_from: Any, t_to: Any) -> np.ndarray:
     return out.reshape((t_to.shape[0],) + y.shape[1:])
 
 
+def _batched_searchsorted(t_rows: np.ndarray, tq: np.ndarray) -> np.ndarray:
+    """Row-wise ``np.searchsorted(t_rows[i], tq, side="right")``, vectorised.
+
+    T-019-followup: numpy has no batched searchsorted, but each row of the
+    recorded time buffer is sorted ascending with an ``inf`` tail (unused
+    slots), so a manual binary search vectorised over ``(N, M)`` replaces
+    the per-row Python loop. ``O(N·M·log T)`` fully in C.
+
+    Args:
+        t_rows: ``(N, T)`` per-row sorted times (``inf``-padded tails).
+        tq: ``(M,)`` query grid.
+
+    Returns:
+        ``(N, M)`` int64 insertion indices (``side="right"`` convention).
+    """
+    n, t_len = t_rows.shape
+    m = tq.shape[0]
+    lo = np.zeros((n, m), dtype=np.int64)
+    hi = np.full((n, m), t_len, dtype=np.int64)
+    rows = np.arange(n)[:, None]
+    for _ in range(int(np.ceil(np.log2(max(t_len, 2)))) + 1):
+        mid = (lo + hi) >> 1
+        go_right = t_rows[rows, mid] <= tq[None, :]
+        lo = np.where(go_right, mid + 1, lo)
+        hi = np.where(go_right, hi, mid)
+    return lo
+
+
+def _batched_interp_rows(
+    t_rows: np.ndarray,
+    y_rows: np.ndarray,
+    counts: np.ndarray,
+    tq: np.ndarray,
+) -> np.ndarray:
+    """Linearly resample every batch row onto ``tq`` in one vectorised pass.
+
+    Equivalent to ``np.stack([np.interp(tq, t_rows[i, :counts[i]],
+    y_rows[i, :counts[i]]) for i in range(N)])`` (with trailing signal
+    dims handled by broadcasting), including the endpoint-clamp
+    extrapolation semantics of :func:`np.interp`.
+
+    Args:
+        t_rows: ``(N, T)`` per-row times, sorted, ``inf``-padded.
+        y_rows: ``(N, T, *sig)`` recorded values.
+        counts: ``(N,)`` number of valid samples per row (each ``>= 2``).
+        tq: ``(M,)`` reference grid.
+
+    Returns:
+        ``(N, M, *sig)`` resampled values.
+    """
+    n = t_rows.shape[0]
+    rows = np.arange(n)[:, None]
+    # Bracket [j0, j1] fully inside each row's valid region.
+    j1 = np.clip(_batched_searchsorted(t_rows, tq), 1, counts[:, None] - 1)
+    j0 = j1 - 1
+    x0 = t_rows[rows, j0]
+    x1 = t_rows[rows, j1]
+    denom = x1 - x0
+    denom = np.where(denom == 0.0, 1.0, denom)
+    # Clamp to [0, 1]: queries left of the first sample take it verbatim,
+    # queries right of the last valid sample take that one (np.interp
+    # endpoint semantics).
+    w = np.clip((tq[None, :] - x0) / denom, 0.0, 1.0)
+    y0 = y_rows[rows, j0]
+    y1 = y_rows[rows, j1]
+    w = w.reshape(w.shape + (1,) * (y_rows.ndim - 2))
+    return y0 + w * (y1 - y0)
+
+
 def _infer_batch_size(param_batches: dict[str, Any]) -> int:
     if not param_batches:
         raise ValueError("param_batches must be non-empty")
@@ -420,21 +489,16 @@ def simulate_batch(
       single XLA call.  Requires that all parameter values have compatible shapes
       and that the simulation fits in device memory N-fold.
 
-      **CPU caveat (follow-up finding, 2026-05-16).** The vmap path wins
-      decisively on GPU / TPU, where the parallel XLA launch is the
-      bottleneck and the per-row finalize is a fixed-cost host loop.
-      On *CPU*, the per-row ``finalize`` (host-side trim + numpy interp
-      onto the reference time grid) runs ``O(N)`` after the vmapped
-      kernel returns, and that host loop is typically slower than the
-      kernel path's sequential JIT-cached re-launches for ``N`` up to
-      ~10⁴. Concrete numbers on a CPU damped-oscillator sweep at
-      ``N=1000``: naive loop ~130 s, FastRestart ~0.30 s, kernel path
-      ~0.31 s, vmap path ~1.28 s. ``simulate_batch`` therefore emits a
-      one-time ``UserWarning`` when ``use_vmap=True`` is requested on a
-      CPU device with a small batch (``N < 10⁴`` is the rough
-      threshold) so users don't conclude vmap is broken; set
-      ``use_vmap=False`` (the default, which selects the kernel path)
-      to silence the warning on CPU sweeps.
+      **CPU note (updated by T-019-followup, 2026-07-10).** The
+      post-vmap finalize is now fully vectorised (batched trim +
+      batched binary-search linear resampling instead of a per-row
+      host loop), which removed the old CPU penalty: on the CPU
+      damped-oscillator sweep at ``N=1000`` the vmap path improved
+      from ~1.28 s to ~0.41 s against ~0.33 s for the kernel path
+      (naive loop ~130 s, FastRestart ~0.30 s). CPU kernel-path wins
+      are now marginal; on GPU / TPU vmap wins decisively. The old
+      CPU+small-batch ``UserWarning`` was removed along with the
+      penalty it warned about.
 
     * **Loop path** (forced when ``CustomPythonBlock`` or FMU blocks are present,
       or when ``_force_loop=True``): the safe fallback — N independent calls to
@@ -495,28 +559,11 @@ def simulate_batch(
             "loop path."
         )
 
-    # Follow-up finding (2026-05-16) — flag the CPU+small-batch case where
-    # ``use_vmap=True`` is typically slower than the kernel path because
-    # the post-vmap per-row finalize is a host-side ``O(N)`` loop that
-    # outweighs the parallel XLA launch. Probe the default JAX backend;
-    # only fire when it's CPU and the batch is below ~10⁴.
-    if use_vmap:
-        try:
-            default_backend = jax.default_backend()
-        except Exception:
-            default_backend = ""
-        if default_backend == "cpu" and n < 10_000:
-            warnings.warn(
-                f"simulate_batch(use_vmap=True) on CPU with N={n}: the vmap "
-                f"path is typically slower than the kernel path (the default) "
-                f"on CPU at N < ~10^4, because the per-row finalize after the "
-                f"vmapped kernel runs O(N) on the host. The kernel path's "
-                f"JIT-cached sequential launches usually win in this regime. "
-                f"Drop use_vmap=False (or unset it) to silence this warning. "
-                f"GPU/TPU users should ignore — vmap wins there.",
-                UserWarning,
-                stacklevel=2,
-            )
+    # T-019-followup (2026-07-10): the CPU+small-batch UserWarning that
+    # used to fire here was removed together with the per-row host-loop
+    # finalize it warned about — the finalize is now vectorised and the
+    # vmap path is within ~25% of the kernel path on CPU at N=1000
+    # (0.41 s vs 0.33 s on the reference damped-oscillator sweep).
 
     use_kernel = vmap_safe and not _force_loop
 
@@ -725,38 +772,62 @@ def _vmap_path(
             used_vmap=True,
         )
 
-    # T-019-followup-batched-vmap-finalize: vectorise/batch D2H transfers.
-    # Materialise the entire batch to numpy in one step.
+    # T-019-followup-batched-vmap-finalize: the finalize is fully
+    # vectorised — one D2H transfer per array, then batched numpy ops.
+    # The previous per-row Python loop (trim + per-column np.interp per
+    # element) cost O(N) host time and reversed the vmap advantage on
+    # CPU at moderate N.
     np_time = np.asarray(results_data_batch.time)
     np_outputs = {k: np.asarray(results_data_batch.outputs[k]) for k in recorded_signals}
 
-    time_ref = None
-    out_lists: dict[str, list] = {k: [] for k in recorded_signals}
+    valid = np.isfinite(np_time)  # (N, T)
+    valid0 = valid[0]
+    time_ref = np_time[0][valid0]
 
-    # Slice and finalize per element on host-side arrays.
-    for i in range(n):
-        time_i = np_time[i]
-        valid_idx = np.isfinite(time_i)
-        time_i_trimmed = time_i[valid_idx]
+    # Fast path: every row recorded the identical grid (fixed-step
+    # solvers, or adaptive runs that happened to step identically).
+    # Pure slicing — bit-equivalent to the old loop's same_grid branch.
+    same_grid = bool((valid == valid0).all()) and bool(
+        (np_time[:, valid0] == time_ref).all()
+    )
+    if same_grid:
+        stacked_out = {k: v[:, valid0] for k, v in np_outputs.items()}
+        return BatchSimulationResults(
+            time=time_ref, outputs=stacked_out, used_vmap=True
+        )
 
-        if time_ref is None:
-            time_ref = time_i_trimmed
+    counts = valid.sum(axis=1)
+    if int(counts.min()) < 2 or time_ref.shape[0] < 1:
+        # Degenerate rows (a single recorded sample) can't be linearly
+        # resampled by the batched kernel; keep the safe per-row loop.
+        out_lists: dict[str, list] = {k: [] for k in recorded_signals}
+        for i in range(n):
+            valid_i = valid[i]
+            time_i = np_time[i][valid_i]
             for sig_name in recorded_signals:
-                out_lists[sig_name].append(np_outputs[sig_name][i][valid_idx])
-        else:
-            same_grid = (
-                time_i_trimmed.shape == time_ref.shape and np.array_equal(time_i_trimmed, time_ref)
-            )
-            for sig_name in recorded_signals:
-                val_i = np_outputs[sig_name][i][valid_idx]
-                if same_grid:
+                val_i = np_outputs[sig_name][i][valid_i]
+                if time_i.shape == time_ref.shape and np.array_equal(
+                    time_i, time_ref
+                ):
                     out_lists[sig_name].append(val_i)
                 else:
                     out_lists[sig_name].append(
-                        _interp_on_time_np(val_i, time_i_trimmed, time_ref)
+                        _interp_on_time_np(val_i, time_i, time_ref)
                     )
+        stacked_out = {k: np.stack(vs, axis=0) for k, vs in out_lists.items()}
+        return BatchSimulationResults(
+            time=time_ref, outputs=stacked_out, used_vmap=True
+        )
 
-    stacked_out = {k: np.stack(vs, axis=0) for k, vs in out_lists.items()}
+    # General (ragged) path: batched binary search + linear interpolation,
+    # vectorised over rows, query points, and trailing signal dims.
+    # NOTE the recorder guarantees each row's valid samples occupy a
+    # sorted prefix with an inf tail, which is exactly the layout
+    # _batched_searchsorted requires.
+    stacked_out = {
+        k: _batched_interp_rows(np_time, v, counts, time_ref)
+        for k, v in np_outputs.items()
+    }
     return BatchSimulationResults(time=time_ref, outputs=stacked_out, used_vmap=True)
 
 
