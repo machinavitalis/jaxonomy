@@ -86,6 +86,7 @@ nav:
   - index.md
   - installation.md
   - Scope — PINNs & PDEs: scope/pinn.md
+  - Scope — ROM & surrogates: scope/rom.md
   - API Reference:
       - framework.md
       - library.md
@@ -147,6 +148,10 @@ nav:
           - Reproducibility manifest: examples/reproducibility_manifest.ipynb
           - Hybrid trajopt through events: examples/hybrid_trajopt_through_events.ipynb
           - Multi-domain HVAC: examples/multi_domain_hvac.ipynb
+      - Reduced-order modeling & surrogates:
+          - Balanced truncation (thermal LTI): examples/rom_balanced_truncation_thermal.ipynb
+          - POD–Galerkin + DEIM (reaction–diffusion): examples/rom_pod_deim_reaction_diffusion.ipynb
+          - DMDc & Koopman for linear MPC: examples/rom_dmdc_koopman_mpc.ipynb
       - Interoperability (FMI / co-simulation):
           - FMI export round-trip: examples/fmi_export_roundtrip.ipynb
           - Modelica plant FMU co-sim: examples/openmodelica_plant_fmu_cosim.ipynb

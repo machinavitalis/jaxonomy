@@ -1490,6 +1490,65 @@ can't be fixed upstream, reconsider.
 
 ---
 
+## DEC-033: ROM & surrogates live in one `library/rom/` subpackage
+
+**Status**: Accepted
+
+### Context
+
+T-143..T-151 added reduced-order modeling (linear MOR, POD–Galerkin/DEIM,
+DMD/DMDc/ERA, Koopman/eDMD) and statistical surrogates (GP, PCE, RBF). Two
+placement questions arose. First, PATTERNS.md had established that "new
+analytical helpers on `LinearizedSystem` live in
+`library/linearization_workflow.py`" — which would put linear MOR there.
+Second, the data-driven and projection methods, plus the statistical
+surrogates, needed a home, and the notebook-only DMDc/eDMDc code
+(`battery_part_4/5`) needed promotion to a real library surface.
+
+### Decision
+
+Group the whole capability under a single `jaxonomy/library/rom/` subpackage:
+`linear_mor.py`, `snapshots.py`, `pod.py`, `dmd.py`, `koopman.py`,
+`surrogates.py`, and `framework.py` (the `reduce()` front door +
+`ReducedOrderModel`). The package re-exports a flat public API, surfaced at
+`jaxonomy.library` under the existing `if not IS_JAXLITE` guard (linear MOR
+pulls in `scipy.linalg`; the reduced/surrogate blocks are JAX `LeafSystem`s).
+
+### Rationale
+
+The methods share plumbing (snapshots, projection bases, quality metrics, the
+`reduce()` dispatcher) and read as one initiative; co-locating them beats
+scattering across `linearization_workflow.py`, a `surrogates.py`, and a `rom.py`.
+This deliberately supersedes the "helpers live in `linearization_workflow.py`"
+convention *for this feature only* — that rule still governs LTI *analysis*
+helpers (Bode/Nyquist/step). Linear MOR consumes `LinearizedSystem` (produced by
+`linearize`/`linearization_workflow.py`) and returns a reduced `LTISystem`, so
+the boundary stays clean.
+
+### Alternatives considered
+
+- **Linear MOR in `linearization_workflow.py`, ROM in `rom.py`, surrogates in
+  `surrogates.py`**: rejected — splits one initiative across three files and
+  buries the shared `reduce()`/metrics plumbing.
+- **A top-level `jaxonomy/rom/` package** (peer of `uq/`): rejected — the
+  deliverables are diagram blocks + helpers, which belong under `library/`.
+
+### Consequences
+
+- `from jaxonomy.library import reduce, balred, dmd, fit_gp, ...` all resolve;
+  `jaxonomy.library.rom` is the discoverable namespace.
+- PDE-field surrogates remain out of scope (DEC-aligned with `docs/scope/pinn.md`);
+  `docs/scope/rom.md` records the in/out boundary and method-selection guide.
+- Krylov/IRKA (large-scale linear MOR) and TPWL are deferred to Tier 3
+  (T-152/T-153); the subpackage layout already has room for them.
+
+### References
+
+`jaxonomy/library/rom/`, `docs/scope/rom.md`, PATTERNS.md (analysis-helper
+convention this narrows).
+
+---
+
 ## Template for new decisions
 
 Copy this template when adding a new entry.

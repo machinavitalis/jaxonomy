@@ -182,11 +182,23 @@ Jaxonomy may not be the right tool.
 - **Real-time collaborative editing, version history, project
   permissions, requirements traceability.** Platform features outside
   scope per DEC-018.
-- **Classical-PDE PINNs** (spatial collocation, Burgers /
-  Navier–Stokes / heat-equation surrogates). Use DeepXDE, NVIDIA
-  Modulus, or Neuromancer. Jaxonomy supports physics-informed
-  residual learning on ODEs / DAEs (Neural ODE, SINDy, UDE, Neural
-  DAE) but not PDE surrogates.
+- **Classical-PDE PINNs and neural-operator *field* surrogates**
+  (spatial collocation of `u(x, t)`; Burgers / Navier–Stokes /
+  heat-equation neural fields). Use DeepXDE, NVIDIA PhysicsNeMo, or
+  Neuromancer. Jaxonomy covers the *dynamical-system* side instead:
+  physics-informed residual learning on ODEs / DAEs (Neural ODE, SINDy,
+  UDE, Neural DAE); reduced-order modeling of ODE/DAE systems (linear
+  MOR, POD–Galerkin/DEIM, DMD/DMDc/ERA, Koopman/eDMD — `jaxonomy.library.rom`);
+  and statistical surrogates of input→output maps (Gaussian process,
+  polynomial chaos, RBF). A spatially *discretized* PDE (method of lines)
+  is a large ODE and **can** be reduced with POD–DEIM here. See
+  `docs/scope/rom.md` and `docs/scope/pinn.md` for the in/out boundary.
+- **Large-scale Krylov/moment-matching linear MOR (IRKA) and
+  trajectory-piecewise-linear (TPWL) ROM.** The linear-MOR path is
+  SVD/gramian-based (dense Lyapunov solves), which is fine to moderate
+  order; Krylov/IRKA for very large sparse LTI systems, and TPWL for
+  weakly-nonlinear reduction, are scoped but not yet implemented. Reduce
+  in the supported families until a model needs these.
 
 ---
 

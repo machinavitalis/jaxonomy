@@ -159,6 +159,13 @@ scope includes:
     (fallback), PyTorch (limited). Imported throughout the codebase as
     `numpy_api as npa` (see PATTERNS.md).
   - ML block wrappers for MLP (native), PyTorch, TensorFlow, Equinox, SINDy
+- **Reduced-order modeling & surrogates** (`jaxonomy.library.rom`, DEC-033)
+  - Linear MOR (balanced truncation / `minreal` / modal / residualization),
+    POD–Galerkin with DEIM hyper-reduction, data-driven operator ROM
+    (DMD / DMDc / ERA, Koopman / eDMD), and statistical surrogates
+    (Gaussian process, polynomial chaos, RBF). One `reduce(...)` front door;
+    every reduced model is a differentiable, simulatable block. Scope
+    boundary vs PDE-field surrogates in `docs/scope/rom.md`.
 - **Interop**
   - FMU import for FMI 2.0 / 3.0 co-simulation, including mixed-type
     and array/vector I/O; FMU export via `build_fmu` (pythonfmu-based).
