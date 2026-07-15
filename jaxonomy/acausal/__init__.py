@@ -56,9 +56,16 @@ Supported physical domains (component libraries):
   temperature/heat-flow; HeatCapacitor, Insulator, TemperatureSource,
   HeatFlowSource, RadiativeHeatTransfer, sensors.
 - :mod:`~jaxonomy.acausal.component_library.fluid` —
-  pressure/mass-flow; Accumulator, Pump, Valve, Pipe, sensors (experimental).
+  pressure/mass-flow with thermal effects; ClosedVolume, Accumulator, OpenTank,
+  StaticPipe, SimplePipe, ThermalPipe, MassflowSource, Boundary_pT, sensors
+  (experimental).
 - :mod:`~jaxonomy.acausal.component_library.hydraulic` —
-  incompressible hydraulic oil; Pump, Motor, Accumulator, Valve, Pipe.
+  incompressible hydraulic oil; Pump, Accumulator, Pipe, PressureSource,
+  MassflowSource, HydraulicActuatorLinear, sensors.
+
+There is no valve component yet in either fluid domain: model orifices/valves
+with a resistive ``Pipe(R=...)`` (optionally with ``enable_resistance_port``)
+or a small custom component.
 
 Numerical tips:
 

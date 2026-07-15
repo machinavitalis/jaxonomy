@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT
 
+import warnings
 from typing import TYPE_CHECKING
 from jaxonomy.lazy_loader import LazyLoader
 
@@ -914,8 +915,12 @@ class OpenTank(FluidOnePort):
             Ambiant pressure acting on the tank.
         area (number):
             The cross sectional area of the tank.
-        H_ic (number):
-            Initial height of fluid in the tank.
+        h_ic (number):
+            Initial height of fluid in the tank. Cannot be zero.
+        enable_h_sensor (bool):
+            When True, expose the fluid height as a causal output port.
+            (The misspelled 'enabble_h_sensor' is accepted for backwards
+            compatibility and emits a DeprecationWarning.)
 
     """
 
@@ -928,8 +933,17 @@ class OpenTank(FluidOnePort):
         T_ic_fixed=False,
         area=1.0,
         h_ic=1.0,  # cannot be zero
-        enabble_h_sensor=False,
+        enable_h_sensor=False,
+        enabble_h_sensor=None,  # deprecated misspelling of enable_h_sensor
     ):
+        if enabble_h_sensor is not None:
+            warnings.warn(
+                "OpenTank argument 'enabble_h_sensor' is a deprecated "
+                "misspelling; use 'enable_h_sensor' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            enable_h_sensor = enabble_h_sensor
         self.name = self.__class__.__name__ if name is None else name
 
         super().__init__(ev, self.name, P_ic=P_amb, P_ic_fixed=True)
@@ -978,8 +992,10 @@ class OpenTank(FluidOnePort):
         )
         self.U.der_sym = self.dU
 
-        self.enabble_h_sensor = enabble_h_sensor
-        if enabble_h_sensor:
+        self.enable_h_sensor = enable_h_sensor
+        # back-compat alias for the old misspelled attribute name
+        self.enabble_h_sensor = enable_h_sensor
+        if enable_h_sensor:
             self.height_output = self.declare_symbol(
                 ev, "height_output", self.name, kind=SymKind.outp
             )

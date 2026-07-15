@@ -63,7 +63,7 @@ def test_dae_projection_disabled_by_default():
     assert opts.dae_projection_enabled is False
     # The numerical fields exist with sane defaults.
     assert opts.dae_projection_tol == 1e-8
-    assert opts.dae_projection_max_iter == 3
+    assert opts.dae_projection_max_iter == 20
 
 
 @requires_jax()

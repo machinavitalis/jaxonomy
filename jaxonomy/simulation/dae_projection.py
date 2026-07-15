@@ -103,25 +103,75 @@ def _full_residual(system: "SystemBase", context: "ContextBase") -> jnp.ndarray:
     return jnp.concatenate([jnp.ravel(l) for l in leaves])
 
 
+def _emit_projection_warning(norm_val, tol_val, iters_val, max_iter_val):
+    """Host-side ``UserWarning`` for non-converged projection.
+
+    Invoked via ``jax.debug.callback`` so ``warnings.warn`` runs on the
+    host; gated here so converged solves stay silent.
+    """
+    import warnings
+    norm = float(norm_val)
+    tol = float(tol_val)
+    if not (norm <= tol):  # also fires on NaN
+        warnings.warn(
+            f"project_constraints did not converge: ||f_a||_inf = {norm:.3e} "
+            f"> tol = {tol:.3e} after {int(iters_val)}/{int(max_iter_val)} "
+            f"Newton iterations. The returned algebraic state may be "
+            f"inconsistent and a subsequent implicit solve may fail; "
+            f"increase max_iter or improve the starting guess (e.g. build "
+            f"input sources near the operating point).",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
 def project_constraints(
     system: "SystemBase",
     context: "ContextBase",
     *,
     tol: float = 1e-8,
-    max_iter: int = 3,
+    max_iter: int = 20,
+    gradient: str = "stop",
+    warn_on_nonconvergence: bool = True,
 ) -> "ContextBase":
     """Newton-project the algebraic state onto the constraint manifold.
 
     Solves ``J · Δx_a = -f_a`` for the algebraic sub-vector ``x_a``
     using ``J = ∂f_a / ∂x_a``, holding the differential states fixed.
-    Iterates up to ``max_iter`` Newton steps, exiting early once the
-    max-abs residual drops below ``tol``.
+    Iterates up to ``max_iter`` Newton steps (a ``lax.while_loop``, so
+    unused iterations cost nothing), exiting once the max-abs residual
+    drops below ``tol``.
+
+    Differentiation — pick the mode by what consumes the result:
+
+    * ``gradient="stop"`` (default): the projected algebraic values carry
+      no gradient.  This is the *correct* semantics when the projected
+      context is handed to an implicit integrator (the reset-then-simulate
+      pattern, and this function's own in-simulator per-step use): the
+      trajectory's true sensitivity to the algebraic initial values is
+      zero — the solver re-enforces ``f_a = 0`` at every step — while
+      AD through the integrator w.r.t. off-manifold algebraic
+      perturbations produces spurious large gradients (verified against
+      finite differences: "stop" matches FD to ~1e-8; propagating
+      algebraic-IC sensitivity into a BDF solve was off by orders of
+      magnitude).
+    * ``gradient="implicit"``: reverse- and forward-mode derivatives of
+      the projected state itself are computed via the implicit function
+      theorem (``jax.lax.custom_root``): ``∂x_a*/∂θ = -J⁻¹ ∂f_a/∂θ``.
+      Use this when the projected values are consumed *directly* (outputs,
+      losses on the manifold) — validated against FD to ~1e-11.  Never
+      differentiate through the Newton iterations themselves; the unrolled
+      path yields wrong gradients.
 
     Args:
         system: The system whose algebraic constraints will be enforced.
         context: Current context (post-ODE-step).
         tol: Convergence threshold on ``||f_a||_∞``.
         max_iter: Maximum Newton iterations.
+        gradient: ``"stop"`` (default; projected values carry no gradient)
+            or ``"implicit"`` (IFT via ``lax.custom_root``).
+        warn_on_nonconvergence: Emit a host-side ``UserWarning`` when the
+            final residual exceeds ``tol`` (or is non-finite).
 
     Returns:
         A new context with the algebraic sub-vector corrected.  The
@@ -129,11 +179,16 @@ def project_constraints(
         mass matrix (no algebraic constraints), the input context is
         returned unmodified.
     """
+    if gradient not in ("implicit", "stop"):
+        raise ValueError(
+            f"project_constraints: gradient must be 'implicit' or 'stop', "
+            f"got {gradient!r}."
+        )
+
     mask_np = algebraic_row_mask(system)
     if mask_np is None or not mask_np.any():
         return context
 
-    mask = jnp.asarray(mask_np)
     alg_idx = jnp.asarray(np.where(mask_np)[0])
 
     flat_x, unflatten = _flatten_continuous_state(context)
@@ -150,40 +205,54 @@ def project_constraints(
         new_ctx = unflatten(flat)
         return _full_residual(system, new_ctx)
 
-    def _residual_alg(x_a, x_d_full):
-        # Reconstruct flat state from differential baseline + candidate algebraic.
-        flat = x_d_full.at[alg_idx].set(x_a)
+    def _residual_alg(x_a):
+        # Reconstruct flat state from the differential baseline (closed
+        # over — gradients w.r.t. it flow via custom_root's IFT rule)
+        # plus the candidate algebraic sub-vector.
+        flat = flat_x.at[alg_idx].set(x_a)
         return _residual_full(flat)[alg_idx]
 
-    x_d_full = flat_x  # carries the differential entries unchanged
+    def _newton_solve(f, x0):
+        max_it = jnp.asarray(int(max_iter))
 
-    def newton_body(carry):
-        flat, _converged = carry
-        x_a = flat[alg_idx]
-        f_a = _residual_alg(x_a, flat)
-        # Jacobian ∂f_a / ∂x_a — small (n_alg × n_alg) square block.
-        J = jax.jacfwd(_residual_alg, argnums=0)(x_a, flat)
-        # Solve J · dx = -f_a.  jnp.linalg.solve raises on singular J;
-        # we catch via a pseudo-inverse fallback to keep the step bounded.
-        dx = jnp.linalg.solve(J, -f_a)
-        new_flat = flat.at[alg_idx].set(x_a + dx)
-        new_norm = jnp.max(jnp.abs(_residual_alg(new_flat[alg_idx], new_flat)))
-        return new_flat, new_norm < tol
+        def cond(carry):
+            x, it, norm = carry
+            return jnp.logical_and(norm > tol, it < max_it)
 
-    # Pure Python loop — `max_iter` is small and static, and the Newton
-    # body uses jacfwd which is fine inside lax control flow but simpler
-    # to unroll here.  Each iteration short-circuits once converged.
-    converged = jnp.array(False)
-    for _ in range(int(max_iter)):
-        flat_x, just_converged = jax.lax.cond(
-            converged,
-            lambda c: c,                          # already converged: no-op
-            newton_body,                          # else: take a Newton step
-            (flat_x, converged),
+        def body(carry):
+            x, it, _ = carry
+            f_x = f(x)
+            # Jacobian ∂f_a / ∂x_a — small (n_alg × n_alg) dense block.
+            J = jax.jacfwd(f)(x)
+            dx = jnp.linalg.solve(J, -f_x)
+            x_new = x + dx
+            return x_new, it + 1, jnp.max(jnp.abs(f(x_new)))
+
+        norm0 = jnp.max(jnp.abs(f(x0)))
+        x, it, norm = jax.lax.while_loop(
+            cond, body, (x0, jnp.asarray(0), norm0)
         )
-        converged = converged | just_converged
+        if warn_on_nonconvergence:
+            jax.debug.callback(
+                _emit_projection_warning, norm, tol, it, int(max_iter)
+            )
+        return x
 
-    return unflatten(flat_x)
+    def _tangent_solve(g, y):
+        # Linear solve for custom_root's IFT rule: J_g · x = y.
+        return jnp.linalg.solve(jax.jacfwd(g)(jnp.zeros_like(y)), y)
+
+    x_a0 = flat_x[alg_idx]
+    if gradient == "implicit":
+        x_a_star = jax.lax.custom_root(
+            _residual_alg, x_a0, _newton_solve, _tangent_solve
+        )
+    else:  # "stop": value-only projection
+        x_a_star = jax.lax.stop_gradient(
+            _newton_solve(_residual_alg, jax.lax.stop_gradient(x_a0))
+        )
+
+    return unflatten(flat_x.at[alg_idx].set(x_a_star))
 
 
 # ----------------------------------------------------------------------

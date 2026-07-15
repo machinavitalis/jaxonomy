@@ -35,6 +35,15 @@ class PyTorch(LeafSystem):
     If casting is specified through `cast_outputs_to_dtype` parameter, all the outputs,
     of the block will be casted to this specific `jax.numpy` dtype.
 
+    .. note:: **float32 models under jaxonomy's global x64.**
+       ``import jaxonomy`` enables JAX 64-bit mode (``jax_enable_x64``)
+       for the whole process, so upstream signals are float64 by
+       default.  A TorchScript model traced in ``torch.float32``
+       therefore receives float64 inputs (a dtype error or a silent
+       arithmetic change) unless you cast at the block boundary.
+       One-line idiom: pass ``cast_outputs_to_dtype="float32"`` and
+       feed the block ``x.astype(jnp.float32)`` inputs.
+
     Input ports:
         (i) The ith input to the model.
 
@@ -188,6 +197,15 @@ class TensorFlow(LeafSystem):
 
     If casting is specified through `cast_outputs_to_dtype` parameter, all the outputs,
     of the block will be casted to this specific `jax.numpy` dtype.
+
+    .. note:: **float32 models under jaxonomy's global x64.**
+       ``import jaxonomy`` enables JAX 64-bit mode (``jax_enable_x64``)
+       for the whole process, so upstream signals are float64 by
+       default.  A SavedModel with ``tf.float32`` signatures therefore
+       receives float64 inputs (a dtype error or a silent arithmetic
+       change) unless you cast at the block boundary.  One-line idiom:
+       pass ``cast_outputs_to_dtype="float32"`` and feed the block
+       ``x.astype(jnp.float32)`` inputs.
 
     Input ports:
         (i) The ith input to the model.

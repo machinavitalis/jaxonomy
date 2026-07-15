@@ -18,6 +18,14 @@ use unsupported ops fail to ``prepare`` with an explicit error
 message; consider falling back to the host-callback :class:`ONNX`
 block in that case.
 
+.. warning:: **x64 at import.** ``import jaxonomy`` enables JAX 64-bit
+   mode (``jax_enable_x64``) for the whole process.  A float32 ONNX
+   artifact wired into a diagram therefore sees float64 inputs: un-cast
+   literals promote, and a policy trained/exported/parity-checked in
+   float32 silently computes in different arithmetic.  Cast explicitly
+   at the block boundaries — ``cast_outputs_to_dtype="float32"`` on
+   this block, and ``x.astype(jnp.float32)`` on upstream signals.
+
 Usage::
 
     from jaxonomy.library import ONNXJax
@@ -65,6 +73,26 @@ class ONNXJax(LeafSystem):
     For models that use ops outside ``jaxonnxruntime``'s coverage,
     fall back to :class:`ONNX` — same constructor signature, runs via
     ``onnxruntime`` host callback (no autodiff).
+
+    .. note:: **float32 artifacts under jaxonomy's global x64.**
+       ``import jaxonomy`` enables ``jax_enable_x64`` process-wide, so a
+       float32 model here computes against float64 inputs unless you
+       cast at the block boundary.  One-line idiom: pass
+       ``cast_outputs_to_dtype="float32"`` and feed the block
+       ``x.astype(jnp.float32)`` inputs.
+
+    .. note:: **Imported discrete-time policies need a ZeroOrderHold.**
+       A sample-and-hold controller exported from a discrete-time
+       training loop (torch / NEUROMANCER-style: compute :math:`u_k`
+       once per sample, hold for ``ts``) is re-evaluated at every ODE
+       solver stage (e.g. all four RK4 stages) when wired directly into
+       a continuous plant — continuous-feedback semantics.  Both loops
+       "work", but step-for-step parity with the exporting framework is
+       silently destroyed.  Follow the block with
+       ``ZeroOrderHold(dt=ts)`` and pin the step grid with
+       ``SimulatorOptions(max_major_step_length=ts,
+       max_minor_step_size=ts)``; with that, closed-loop parity is
+       ~4e-8 over 400 steps on the two-tank benchmark.
     """
 
     @parameters(

@@ -365,13 +365,23 @@ class SimulatorOptions:
     # effect on systems without a mass matrix; the simulator skips the
     # projection cleanly in that case.  `dae_projection_tol` is the
     # max-abs threshold above which the corrector iterates;
-    # `dae_projection_max_iter` caps the Newton loop at 3 iterations by
-    # default — the algebraic constraint is typically linear or
-    # mildly-nonlinear in the algebraic unknowns and converges in 1–2
-    # steps.  See ``jaxonomy.simulation.dae_projection`` for details.
+    # `dae_projection_max_iter` caps the Newton loop.  The loop is a
+    # ``lax.while_loop`` with an early exit, so unused iterations cost
+    # nothing at runtime; the default of 20 covers cold starts far from
+    # the manifold (near-manifold post-step corrections converge in 1-2
+    # iterations regardless).  A non-converged projection emits a
+    # ``UserWarning``.  See ``jaxonomy.simulation.dae_projection``.
+    #
+    # ``dae_initial_projection`` projects the *caller-supplied* context
+    # once, before stepping begins.  Use it whenever the initial
+    # continuous state was constructed rather than produced by a prior
+    # solve — e.g. ``with_continuous_state`` on a DAE system leaves the
+    # algebraic rows inconsistent and the first implicit step fails
+    # (NaN) without this.
     dae_projection_enabled: bool = False
     dae_projection_tol: float = 1e-8
-    dae_projection_max_iter: int = 3
+    dae_projection_max_iter: int = 20
+    dae_initial_projection: bool = False
 
     # T-113-followup-baumgarte-and-ssp: opt-in Baumgarte stabilization of
     # the algebraic constraint residual.  When ``baumgarte_alpha`` and/or

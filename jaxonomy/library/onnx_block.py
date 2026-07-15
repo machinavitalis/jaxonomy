@@ -63,6 +63,14 @@ class ONNX(LeafSystem):
         not define a VJP, so reverse-mode autodiff through the block
         raises.  For end-to-end gradients, look at the T-023a follow-up
         on a JAX-traceable conversion (``onnx2jax`` or similar).
+
+    .. note:: **float32 artifacts under jaxonomy's global x64.**
+       ``import jaxonomy`` enables ``jax_enable_x64`` process-wide, so a
+       float32 ONNX model receives float64 inputs unless you cast at the
+       block boundary — a silent arithmetic change relative to the
+       framework the model was exported and validated in.  One-line
+       idiom: pass ``cast_outputs_to_dtype="float32"`` and feed the
+       block ``x.astype(jnp.float32)`` inputs.
     """
 
     @parameters(

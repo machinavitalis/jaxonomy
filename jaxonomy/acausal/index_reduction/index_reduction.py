@@ -182,6 +182,10 @@ class IndexReduction:
         self.verbose = verbose
         self.index_reduction_done = False
         self.ic_computed = False
+        # Whether the caller requested variable scaling (set by __call__ before
+        # the IC checks run, so conditioning warnings can word their advice
+        # correctly when scale=True is already active).
+        self._scale_requested = False
         # T-038: stash for later assignment (the original `self.condition_number_threshold = 1e4`
         # below is preserved if no override is provided so existing models behave unchanged).
         self._condition_number_threshold_override = condition_number_threshold
@@ -243,6 +247,7 @@ class IndexReduction:
             )
 
     def __call__(self, scale: bool = False):
+        self._scale_requested = bool(scale)
         # T-017b-followup: short-circuit on cache hit.  See class docstring for
         # the safety argument; the symbolic pipeline is deterministic in its
         # inputs, so identical inputs yield identical SEDs.
@@ -270,6 +275,7 @@ class IndexReduction:
         self.index_reduction_done = True
         self.convert_to_semi_explicit()
 
+        X_ic_mapping = None
         if scale:
             X_ic_mapping = compute_initial_conditions(
                 self.t,
@@ -280,6 +286,9 @@ class IndexReduction:
                 self.knowns,
                 verbose=self.verbose,
             )
+        self._warn_declared_weak_ics_overridden(X_ic_mapping)
+
+        if scale:
             self.scale_se_equations(X_nom_mapping={}, X_ic_mapping=X_ic_mapping)
             sed = SemiExplicitDAE(
                 self.t,
@@ -986,6 +995,108 @@ class IndexReduction:
             for idx, x in enumerate(self.X_free):
                 print(f"Variable {idx}: {x}")
 
+    def _ic_conditioning_hint(self):
+        """Actionable advice appended to ill-conditioned-Jacobian warnings.
+
+        The condition-number checks run on the raw (pre-scaling) equations --
+        scaling factors are derived from the solved ICs, which do not exist yet
+        at this point in the pipeline -- so when ``scale=True`` was already
+        requested, recommending it again would be contradictory advice.
+        """
+        if self._scale_requested:
+            return (
+                "Note: scale=True is already set; this check runs on the raw "
+                "(pre-scaling) equations, so scaling may still improve "
+                "conditioning at solve time. If the simulation is unstable, "
+                "consider providing stronger initial conditions (declare more "
+                "ICs as fixed) or raising condition_number_threshold to "
+                "silence this warning."
+            )
+        return (
+            "Consider passing scale=True to AcausalCompiler() to improve "
+            "conditioning."
+        )
+
+    def _warn_declared_weak_ics_overridden(self, X_ic_mapping=None):
+        """Warn when a declared (non-default) weak IC is overridden by the
+        consistent-initialization solve.
+
+        Weak ICs are only starting guesses for the IC solve: when the strong
+        (fixed) ICs and the model equations determine a different consistent
+        value, the declared value is silently discarded. That failure mode is
+        easy to miss -- e.g. a tank level state declared with ``ic=0.4``
+        initializes to 0.0 unless the port pressure IC is also declared fixed
+        -- so name the symbols and the values they actually received.
+
+        Only weak ICs with non-default (non-zero) declared values are checked:
+        diagram processing applies a 0.0 default to every undeclared IC, and
+        the two are indistinguishable here.
+
+        ``X_ic_mapping`` is reused when the caller already solved the ICs
+        (the ``scale=True`` path); otherwise the ICs are solved here with the
+        compile-time knowns. Solve failures are ignored -- the authoritative
+        IC solve happens again at system creation with resolved input values
+        and reports its own errors.
+        """
+        declared = {}
+        for var, val in self.ics_weak.items():
+            try:
+                val_f = float(val)
+            except (TypeError, ValueError):
+                continue
+            if val_f != 0.0:
+                declared[var] = val_f
+        if not declared:
+            return
+
+        if X_ic_mapping is None:
+            try:
+                X_ic_mapping = compute_initial_conditions(
+                    self.t,
+                    self.eqs,
+                    self.X,
+                    self.ics,
+                    self.ics_weak,
+                    self.knowns,
+                    verbose=False,
+                )
+            except Exception:
+                return
+
+        overridden = []
+        for var, declared_val in declared.items():
+            solved = X_ic_mapping.get(var)
+            if solved is None:
+                continue
+            try:
+                solved_f = float(solved)
+            except (TypeError, ValueError):
+                continue
+            # 5% relative threshold: the solve routinely *refines* declared
+            # guesses by a fraction of a percent (that is its job and not
+            # worth a warning); a discarded IC lands somewhere unrelated
+            # (e.g. 0.4 -> 0.0, or at another component's fixed value).
+            if abs(solved_f - declared_val) > max(0.05 * abs(declared_val), 1e-6):
+                overridden.append((var, declared_val, solved_f))
+
+        if overridden:
+            details = "; ".join(
+                f"{var}: declared ic={dv:.6g}, initialized to {sv:.6g}"
+                for var, dv, sv in overridden
+            )
+            warnings.warn(
+                "Initial-condition resolution overrode declared (non-fixed) "
+                f"initial conditions: {details}. Non-fixed ICs are only "
+                "starting guesses for the consistent-initialization solve; "
+                "the strong (fixed) ICs and model equations determined "
+                "different values. To enforce a declared value, mark it fixed "
+                "(ic_fixed=True on the symbol, or the component's "
+                "*_ic_fixed=True argument), or fix a related port variable "
+                "to a value consistent with it.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     def handle_overdetermined_ics(self, num_ics_to_remove):
         """
         The number of strong ICs is larger than the number of free variables
@@ -1157,7 +1268,7 @@ class IndexReduction:
                 f"(condition number={condition_number:.3e}, "
                 f"threshold={self.condition_number_threshold:.3e}). "
                 "Simulation may be numerically unstable. "
-                "Consider passing scale=True to AcausalCompiler() to improve conditioning.",
+                + self._ic_conditioning_hint(),
                 UserWarning,
                 stacklevel=2,
             )
@@ -1218,8 +1329,8 @@ class IndexReduction:
                 "No combination of initial conditions yielded a well-conditioned Jacobian "
                 f"at t=0 (best condition number={sorted(condition_numbers)[0]:.3e}, "
                 f"threshold={self.condition_number_threshold:.3e}). "
-                "Consider supplying more specific initial conditions, or pass scale=True "
-                "to AcausalCompiler() to improve numerical conditioning.",
+                "Consider supplying more specific initial conditions. "
+                + self._ic_conditioning_hint(),
                 UserWarning,
                 stacklevel=2,
             )

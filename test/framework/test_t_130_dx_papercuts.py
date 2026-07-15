@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""T-130: DX API papercuts surfaced by tutorial authors via FOUND_BY_USE."""
+"""T-130: DX API papercuts surfaced by tutorial authors."""
 
 import jax.numpy as jnp
 import numpy as np

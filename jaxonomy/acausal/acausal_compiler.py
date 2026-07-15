@@ -122,6 +122,45 @@ class AcausalSystem(LeafSystem):
 
         self.insym_to_portid = insym_to_portid
 
+    def continuous_state_layout(self) -> list[dict]:
+        """Describe each row of this system's continuous-state vector.
+
+        The compiled state vector is ``[x; y]``: ``n_ode`` differential
+        rows (the integrated states) followed by ``n_alg`` algebraic
+        rows (constraint unknowns such as node potentials and flows).
+        This mapping is otherwise only recoverable by inspecting the
+        compiler's internals — use it when setting or reading the state
+        directly (e.g. ``context.with_continuous_state`` for episodic
+        resets; pair with ``SimulatorOptions(dae_initial_projection=True)``
+        so the algebraic rows are re-solved).
+
+        Returns:
+            One dict per row, in state-vector order:
+            ``{"row": int, "kind": "differential"|"algebraic",
+            "name": str, "scaled_name": str | None}``.  ``name`` is the
+            physical variable name; when the system was compiled with
+            ``scale=True`` the state itself holds the *scaled* quantity
+            and ``scaled_name`` is its symbol name.
+        """
+        sed = self.sed
+        scaled_to_var = getattr(sed, "scaled_vars_to_vars", None) or {}
+
+        def _describe(sym):
+            if sed.is_scaled and sym in scaled_to_var:
+                return str(scaled_to_var[sym]), str(sym)
+            return str(sym), (str(sym) if sed.is_scaled else None)
+
+        layout = []
+        for i, sym in enumerate(list(sed.x) + list(sed.y)):
+            name, scaled_name = _describe(sym)
+            layout.append({
+                "row": i,
+                "kind": "differential" if i < self.n_ode else "algebraic",
+                "name": name,
+                "scaled_name": scaled_name,
+            })
+        return layout
+
     def initialize(self, *args, **kwargs):
         # presently, this is unused.
         # resolved_args = [

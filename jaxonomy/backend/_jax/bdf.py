@@ -214,6 +214,66 @@ def _update_D(D, order, factor):
     return jnp.dot(RU.T, D).astype(D.dtype)
 
 
+def _emit_bdf_nonfinite_warning(bailed, t_val, dt_val, row_mask):
+    """Host-side ``UserWarning`` emitter for the BDF terminal NaN bailout.
+
+    Invoked from inside the jit'd ``step`` via ``jax.debug.callback`` —
+    that primitive lifts the call out of the XLA computation onto the
+    host so ``warnings.warn`` works (same idiom as
+    ``_emit_dae_drift_warning`` in ``simulation/simulator.py``).  Gated
+    host-side on ``bailed`` so healthy steps stay silent.
+
+    Handles both the plain and the ``vmap``-batched case: under
+    ``vmap`` the arguments arrive with a leading batch dimension and a
+    single aggregated warning is emitted listing the failing lanes.
+
+    A negative reported time indicates the failure occurred in the
+    reverse-time *adjoint* solve of the autodiff backward pass (the
+    adjoint system is integrated in negated time).
+    """
+    import warnings
+
+    bailed = np.atleast_1d(np.asarray(bailed))
+    if not bailed.any():
+        return
+
+    t_val = np.broadcast_to(np.asarray(t_val), bailed.shape)
+    dt_val = np.broadcast_to(np.asarray(dt_val), bailed.shape)
+    row_mask = np.atleast_2d(np.asarray(row_mask))
+
+    msgs = []
+    for lane in np.flatnonzero(bailed):
+        t_f = float(t_val[lane])
+        dt_f = float(dt_val[lane])
+        rows = np.flatnonzero(row_mask[lane])
+        if rows.size:
+            detail = (
+                f"non-finite state rows {rows.tolist()} "
+                f"(of {row_mask.shape[-1]})"
+            )
+        else:
+            detail = (
+                "error test could not be satisfied at the minimum step "
+                "size (state still finite but not converging)"
+            )
+        lane_tag = f"[batch element {lane}] " if bailed.size > 1 else ""
+        msgs.append(f"{lane_tag}t={t_f:.6g}, dt={dt_f:.3e}: {detail}")
+
+    warnings.warn(
+        "BDF solver aborted: the corrector/step loop went non-finite and "
+        "the adaptive step size could not recover ("
+        + "; ".join(msgs)
+        + "). The state is NaN from this time onward. Common causes: an "
+        "inconsistent algebraic initial state (for DAEs, project the "
+        "initial conditions to the constraint manifold before "
+        "simulating), an ill-conditioned component equation, or a "
+        "genuinely diverging solution. A negative time indicates the "
+        "failure occurred in the reverse-time adjoint solve.",
+        UserWarning,
+        stacklevel=2,
+    )
+
+
 def _solve_newton_system_impl(func, t, y, c, psi, LU, M, scale, tol):
     """Module-scope Newton inner loop; pure (no closure over solver state).
 
@@ -522,6 +582,7 @@ class BDFSolver(ODESolverImpl):
 
     def attempt_bdf_step(self, func, boundary_time, carry):
         state = carry[0]
+        fail_diag = carry[5]
 
         converged, n_iter, y_new, d, state = self.newton_iteration(
             state, func, boundary_time
@@ -610,6 +671,18 @@ class BDFSolver(ODESolverImpl):
         factor = jnp.where(
             force_accept, jnp.asarray(-jnp.inf, dtype=dtype), factor
         )
+        # Capture failure diagnostics BEFORE the trial state is poisoned
+        # with NaN below (which erases the which-rows information).  The
+        # bailout force-accepts and exits the retry loop, so the values
+        # written on the bailing attempt are the ones that survive the
+        # loop; ``step`` forwards them to a host-side warning emitter.
+        _fail_bailed, fail_t, fail_dt, fail_rows = fail_diag
+        fail_diag = (
+            force_accept,
+            jnp.where(force_accept, jnp.asarray(state.t, dtype=fail_t.dtype), fail_t),
+            jnp.where(force_accept, jnp.asarray(state.dt, dtype=fail_dt.dtype), fail_dt),
+            jnp.where(force_accept, ~jnp.isfinite(y_new), fail_rows),
+        )
         y_new = jnp.where(force_accept, jnp.full_like(y_new, jnp.nan), y_new)
         bailout_state = dataclasses.replace(
             state, dt=jnp.asarray(boundary_time - state.t, dtype=dtype)
@@ -626,7 +699,7 @@ class BDFSolver(ODESolverImpl):
             (state, True),
         )
 
-        return state, accepted, y_new, d, n_iter
+        return state, accepted, y_new, d, n_iter, fail_diag
 
     def _update_difference_matrix(self, state, d):
         D, order = state.D, state.order
@@ -703,16 +776,47 @@ class BDFSolver(ODESolverImpl):
         )
 
         def cond_fun(carry):
-            _, accepted, _, _, _ = carry
+            accepted = carry[1]
             return ~accepted
 
         y = jnp.zeros_like(solver_state.y)
         d = jnp.zeros_like(solver_state.y)
-        (solver_state, _accepted, y_new, d, n_iter) = lax.while_loop(
+        # Failure-diagnostic carry slot: (bailed, t_fail, dt_fail, row_mask).
+        # Written by ``attempt_bdf_step`` on the terminal NaN/step-underflow
+        # bailout (T-005/T-008/T-134) and forwarded to a host-side
+        # ``UserWarning`` below.  ``dtype`` matches the state so the pytree
+        # structure is loop-invariant.
+        dtype = solver_state.y.dtype
+        fail_diag = (
+            False,
+            jnp.asarray(jnp.nan, dtype=dtype),
+            jnp.asarray(jnp.nan, dtype=dtype),
+            jnp.zeros_like(solver_state.y, dtype=bool),
+        )
+        (solver_state, _accepted, y_new, d, n_iter, fail_diag) = lax.while_loop(
             cond_fun,
             partial(self.attempt_bdf_step, func, boundary_time),
-            (solver_state, False, y, d, -1),
+            (solver_state, False, y, d, -1, fail_diag),
         )
+
+        # T-005/T-008/T-134 diagnosability: if the retry loop exited through
+        # the terminal bailout (state poisoned with NaN), surface a host-side
+        # ``UserWarning`` with the failure time, the collapsed step size, and
+        # which state rows went non-finite.  ``jax.debug.callback`` lifts the
+        # emitter onto the host; wrapping it in ``lax.cond`` keeps the healthy
+        # path free of host round-trips (an unconditional per-step callback
+        # measured ~17% wall overhead on a stiff Van der Pol run; the cond
+        # branch is ~free).  jit/vmap-safe on current JAX — the historical
+        # "IO effect not supported in vmap-of-cond" limitation (T-002b) that
+        # removed ``error_step_size_too_small`` no longer applies (verified
+        # on jax 0.9.2); under ``vmap`` the cond lowers to a form where the
+        # callback may run for non-bailing batches too, so the emitter
+        # re-checks ``bailed`` host-side and stays silent for those.
+        def _warn_branch(diag):
+            jax.debug.callback(_emit_bdf_nonfinite_warning, *diag)
+            return 0
+
+        lax.cond(fail_diag[0], _warn_branch, lambda diag: 0, fail_diag)
 
         # Occasionally floating point precision loss will mean that the next
         # time step will be less than machine epsilon from the boundary time.

@@ -711,6 +711,22 @@ def simulate(
         system = flatten_diagram(system)
         context = system.create_context(time=t_span[0])
 
+    # Opt-in initial-consistency projection: a caller-supplied context
+    # whose algebraic entries are stale (e.g. after
+    # ``with_continuous_state`` on a DAE system) makes the first implicit
+    # step fail; this Newton-projects them onto the constraint manifold
+    # before stepping begins.  No-op for systems without a mass matrix.
+    if getattr(options, "dae_initial_projection", False) and getattr(
+        system, "has_mass_matrix", False,
+    ):
+        from .dae_projection import project_constraints
+        context = project_constraints(
+            system,
+            context,
+            tol=options.dae_projection_tol,
+            max_iter=options.dae_projection_max_iter,
+        )
+
     if results_options is None:
         results_options = ResultsOptions()
 

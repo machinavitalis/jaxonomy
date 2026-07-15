@@ -681,7 +681,7 @@ def test_acc_pipe_compX(compX, show_plot=False, use_simple_water=True):
             T_ic=fluid_T_ic,
             T_ic_fixed=True,
             area=0.05,
-            enabble_h_sensor=True,
+            enable_h_sensor=True,
         )
     sensPT = fld.PTSensor(ev, name="sensPT", enable_port_b=False)
     ad.connect(accum1, "port", pipe, "port_a")

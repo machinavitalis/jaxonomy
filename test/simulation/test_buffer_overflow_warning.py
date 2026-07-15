@@ -122,6 +122,73 @@ def test_no_warning_when_recording_disabled():
     assert not buffer_warnings
 
 
+# ---------------------------------------------------------------------------
+# Follow-up: ``simulate_batch`` kernel / vmap paths materialize results
+# without going through ``simulate``'s post-JIT check, so they need their own
+# host-side overflow warning (``maybe_warn_recording_truncation``).
+# ---------------------------------------------------------------------------
+
+def _build_gain_integrator_diagram():
+    b = jaxonomy.DiagramBuilder()
+    src = b.add(Constant(1.0, name="src"))
+    from jaxonomy.library import Gain
+    gain = b.add(Gain(gain=1.0, name="gain"))
+    integ = b.add(Integrator(0.0, name="integ"))
+    b.connect(src.output_ports[0], gain.input_ports[0])
+    b.connect(gain.output_ports[0], integ.input_ports[0])
+    return b.build(name="batch_overflow")
+
+
+def _run_batch(buffer_length, t_final, use_vmap):
+    from jaxonomy.simulation.batch import simulate_batch
+
+    diagram = _build_gain_integrator_diagram()
+    options = jaxonomy.SimulatorOptions(
+        math_backend="jax",
+        max_major_steps=2000,
+        buffer_length=buffer_length,
+        max_minor_step_size=0.01,
+        ode_solver_method="rk4",
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        simulate_batch(
+            diagram,
+            t_span=(0.0, t_final),
+            param_batches={"gain.gain": jnp.array([0.5, 1.0, 1.5])},
+            options=options,
+            recorded_signals={"y": diagram["integ"].output_ports[0]},
+            use_vmap=use_vmap,
+        )
+    return [w for w in caught if "recording buffer" in str(w.message)]
+
+
+@pytest.mark.parametrize("use_vmap", [False, True])
+def test_batch_warns_once_on_buffer_overflow(use_vmap):
+    """Tiny buffer + long horizon on the batch kernel/vmap paths: exactly
+    one reduced-resolution warning fires for the whole batch, naming the
+    configured buffer_length."""
+    buffer_warnings = _run_batch(buffer_length=20, t_final=10.0, use_vmap=use_vmap)
+    assert len(buffer_warnings) == 1, (
+        f"expected exactly one buffer warning, got "
+        f"{[str(w.message) for w in buffer_warnings]}"
+    )
+    msg = str(buffer_warnings[0].message)
+    assert "buffer_length=20" in msg
+    assert "reduced resolution" in msg
+
+
+@pytest.mark.parametrize("use_vmap", [False, True])
+def test_batch_silent_when_buffer_large_enough(use_vmap):
+    """No-overflow batch runs stay silent."""
+    buffer_warnings = _run_batch(
+        buffer_length=10_000, t_final=1.0, use_vmap=use_vmap
+    )
+    assert not buffer_warnings, (
+        f"unexpected buffer warning: {[str(w.message) for w in buffer_warnings]}"
+    )
+
+
 def test_no_warning_when_exact_buffer_fill_matches_t_final():
     """Boundary case: the simulation legitimately consumes exactly
     ``buffer_length`` major steps and finishes at t_final. The

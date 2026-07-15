@@ -300,6 +300,7 @@ _RECORDED_OPTION_FIELDS: tuple[str, ...] = (
     "dae_projection_enabled",
     "dae_projection_tol",
     "dae_projection_max_iter",
+    "dae_initial_projection",
     "dae_drift_threshold",
     "bdf_condition_warning_threshold",
     "zeno_protection_enabled",

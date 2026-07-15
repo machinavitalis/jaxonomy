@@ -9,10 +9,10 @@ matters:
    well-formed ``.fmu`` zip with the right ``modelDescription.xml``
    and platform binaries inside.
 
-2. **Round-trip** (linux64 / win64 only — pythonfmu doesn't ship a
-   darwin-prebuilt wrapper): re-import the generated FMU via fmpy and
-   confirm its ``do_step`` matches the in-process Python slave's
-   logic.
+2. **Round-trip** (any platform whose wrapper binary pythonfmu ships —
+   win64 + linux64 always, darwin64 since pythonfmu 0.7.0): re-import
+   the generated FMU via fmpy and confirm its ``do_step`` matches the
+   in-process Python slave's logic.
 
 The tests use a pythonfmu-style slave embedded as a temp file so they
 can run without depending on any external FMU corpus, and they
@@ -22,6 +22,7 @@ exercise both a hand-rolled arithmetic slave and a
 
 from __future__ import annotations
 
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -35,11 +36,27 @@ pythonfmu = pytest.importorskip("pythonfmu")
 from jaxonomy.library.fmu_export import build_fmu, FmuBuildError  # noqa: E402
 
 
+# When the master process is itself Python (this test run), the FMU
+# wrapper's Py_Initialize is a no-op and the slave shares our
+# interpreter — it sees the same jaxonomy these tests import. A
+# non-Python master initializes a fresh embedded interpreter whose
+# sys.path comes from the environment instead, so also prepend this
+# checkout's root to PYTHONPATH: the round-trip tests then exercise
+# this checkout either way (not whatever an editable install happens
+# to point at).
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+    os.environ["PYTHONPATH"] = (
+        _REPO_ROOT + os.pathsep + os.environ.get("PYTHONPATH", "")
+    ).rstrip(os.pathsep)
+
+
 # Round-trip tests need the host platform's wrapper binary inside
 # pythonfmu's resources/binaries/ tree. pythonfmu's wheel ships
-# linux64 + win64 by default; darwin requires building from source
-# (T-025b). We probe at import time so a one-time install of a
-# darwin wrapper enables the round-trip path automatically.
+# win64 + linux64 always and darwin64 since 0.7.0; on older pythonfmu
+# darwin needs a one-time source build (T-025b). We probe at import
+# time so whatever wrapper is installed enables the round-trip path
+# automatically.
 def _runtime_host_ok() -> bool:
     import os
     import pythonfmu
@@ -64,8 +81,8 @@ def _runtime_host_ok() -> bool:
 _RUNTIME_HOST_OK = _runtime_host_ok()
 _RUNTIME_REASON = (
     f"no pythonfmu wrapper binary installed for sys.platform={sys.platform!r}; "
-    f"on darwin run T-025b's source build to install one. Structural "
-    f"checks still apply."
+    f"upgrade to pythonfmu >= 0.7.0 (ships darwin64) or run T-025b's "
+    f"source build to install one. Structural checks still apply."
 )
 
 
@@ -241,8 +258,9 @@ _DIAGRAM_SLAVE = dedent(
 
 def test_diagram_slave_export_structural(tmp_path: Path):
     """A diagram with one Constant block exports cleanly: the FMU has
-    a single output named after the constant and no inputs. We can't
-    re-run the FMU here (darwin) so we only check structure."""
+    a single output named after the constant and no inputs. This test
+    only checks structure (round-trip runs are gated separately on the
+    host wrapper binary)."""
     script = tmp_path / "diag.py"
     script.write_text(_DIAGRAM_SLAVE)
     fmu = build_fmu(script, tmp_path / "ConstSlave.fmu")
@@ -423,3 +441,87 @@ def test_t025c_round_trip_through_fmu(tmp_path: Path):
         import shutil
         shutil.rmtree(unzipdir, ignore_errors=True)
     assert out == pytest.approx(8.0, abs=1e-9)
+
+
+# ── 5. Initialization priming, exported input ports, x0 parameters ────
+
+_FULL_SURFACE_SLAVE = dedent(
+    """
+    import jaxonomy
+    from jaxonomy.library import Gain, Integrator
+    from jaxonomy.library.fmu_slave import JaxonomyDiagramSlave
+
+    def _build():
+        bld = jaxonomy.DiagramBuilder()
+        g = bld.add(Gain(2.0, name="g"))
+        integ = bld.add(Integrator(1.5, name="integ"))
+        bld.connect(g.output_ports[0], integ.input_ports[0])
+        bld.export_input(g.input_ports[0], name="u")
+        bld.export_output(integ.output_ports[0], name="x")
+        return bld.build()
+
+    class FullSurface(JaxonomyDiagramSlave):
+        DIAGRAM_FACTORY = staticmethod(_build)
+        DT = 0.1
+        EXPOSE_INITIAL_STATES = {"x0": "integ"}
+    """
+).strip()
+
+
+@pytest.mark.skipif(not _RUNTIME_HOST_OK, reason=_RUNTIME_REASON)
+def test_round_trip_init_priming_exported_input_and_x0(tmp_path: Path):
+    """End-to-end conformance across the FMI boundary:
+
+    - an exported diagram input port ("u") is honored (setReal on it
+      actually drives the diagram);
+    - the EXPOSE_INITIAL_STATES parameter ("x0") is applied at
+      exitInitializationMode;
+    - outputs are primed at initialization — getReal on "x" right
+      after exitInitializationMode returns the true t=0 value, before
+      any doStep (FMI 2.0 masters read initial outputs this way).
+    """
+    fmpy = pytest.importorskip("fmpy")
+    script = tmp_path / "full_surface.py"
+    script.write_text(_FULL_SURFACE_SLAVE)
+    fmu_path = build_fmu(script, tmp_path / "FullSurface.fmu")
+
+    md = fmpy.read_model_description(fmu_path)
+    by_name = {v.name: v for v in md.modelVariables}
+    assert by_name["u"].causality == "input"
+    assert by_name["x0"].causality == "parameter"
+    assert by_name["x"].causality == "output"
+
+    unzipdir = fmpy.extract(fmu_path)
+    try:
+        fmu = fmpy.fmi2.FMU2Slave(
+            guid=md.guid,
+            unzipDirectory=unzipdir,
+            modelIdentifier=md.coSimulation.modelIdentifier,
+            instanceName="full_surface",
+        )
+        refs = {v.name: v.valueReference for v in md.modelVariables}
+        fmu.instantiate()
+        fmu.setupExperiment(startTime=0.0)
+        fmu.enterInitializationMode()
+        fmu.setReal([refs["x0"]], [2.0])
+        fmu.setReal([refs["u"]], [1.0])
+        fmu.exitInitializationMode()
+
+        # Priming: the initial state must be readable before doStep.
+        (x_init,) = fmu.getReal([refs["x"]])
+        assert x_init == pytest.approx(2.0, abs=1e-9), (
+            f"output not primed at initialization: got {x_init}"
+        )
+
+        # One step: dx/dt = 2 * u = 2, so x(0.1) = 2.0 + 0.2.
+        fmu.doStep(currentCommunicationPoint=0.0, communicationStepSize=0.1)
+        (x1,) = fmu.getReal([refs["x"]])
+        fmu.terminate()
+        fmu.freeInstance()
+    finally:
+        import shutil
+        shutil.rmtree(unzipdir, ignore_errors=True)
+
+    assert x1 == pytest.approx(2.2, abs=1e-6), (
+        f"exported input port ignored or x0 not applied: x(0.1)={x1}"
+    )

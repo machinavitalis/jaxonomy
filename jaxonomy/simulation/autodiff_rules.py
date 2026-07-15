@@ -88,6 +88,9 @@ def make_advance_to_vjp(simulator) -> "Callable":
         # earlier implementation patched the latter and so was a no-op.
         solver = _sim.ode_solver
         ctx_boundary = None
+        # Set below when the system is a semi-explicit DAE; used for the
+        # initial-time (t=0) algebraic-cotangent correction after ``vjp_fun``.
+        dae_alg_mask = None
         # Preserve the ORIGINAL objective seed for the tf_adj computation below;
         # the DAE correction patches adjoints.context.continuous_state in place.
         vc = adjoints.context.continuous_state
@@ -109,6 +112,7 @@ def make_advance_to_vjp(simulator) -> "Callable":
             needs_perm = not np.array_equal(perm, np.arange(n_total))
 
             if n_ode < n_total:  # at least one algebraic state -> DAE
+                dae_alg_mask = alg_mask
                 # Flatten the objective seed (per-subsystem continuous_state
                 # cotangent) into the global flat order matching solver.mass.
                 g_x_flat, cs_unravel = ravel_pytree(
@@ -173,6 +177,29 @@ def make_advance_to_vjp(simulator) -> "Callable":
         if ctx_boundary is not None:
             context_adj = jax.tree_util.tree_map(
                 lambda a, b: a + b, context_adj, ctx_boundary
+            )
+
+        # T-113-followup, initial-time counterpart: zero the ALGEBRAIC rows of
+        # the returned initial-continuous-state cotangent dJ/dx(0).  For a
+        # semi-explicit index-1 DAE the algebraic initial state x_a(0) is not
+        # a free input — the implicit solver re-enforces 0 = f_a(x_d, x_a, p)
+        # regardless of the value supplied, so J is locally constant in
+        # x_a(0) and the true sensitivity is 0 (finite differences confirm).
+        # The naive backward sweep instead leaks the adjoint solve's algebraic
+        # variable λ_a(0) — a pointwise-determined quantity of the adjoint
+        # DAE, not a gradient — one-to-one into these rows.  On the two-tank
+        # test problem (``0 = z - x²``) that leak is O(1) and flips the sign
+        # of chained gradients such as d/dx0 of simulate(x0, h(x0)) (the
+        # reset-then-integrate pattern in episodic/DPC workflows; see
+        # reported by a downstream consumer, 2026-07).  The differential rows λ_d(0) are the
+        # correct Cao et al. (2003) sensitivities and pass through untouched.
+        if dae_alg_mask is not None:
+            from jax.flatten_util import ravel_pytree
+
+            g0_flat, cs_unravel0 = ravel_pytree(context_adj.continuous_state)
+            g0_new = jnp.where(jnp.asarray(dae_alg_mask), 0.0, g0_flat)
+            context_adj = context_adj.with_continuous_state(
+                cs_unravel0(g0_new)
             )
 
         # Manual tf_adj: dot product of the ORIGINAL objective seed with final

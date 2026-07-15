@@ -41,6 +41,7 @@ from ..framework.diagram import Diagram
 from ..framework.port import OutputPort
 from .errors import remap_simulation_errors
 from .provenance import ProvenanceManifest, compute_provenance
+from .results_recorder import maybe_warn_recording_truncation
 from .simulator import simulate, _check_options
 from .types import ResultsOptions, SimulationResults, SimulatorOptions
 
@@ -653,6 +654,10 @@ def _scan_kernel_path(
         for sig_name, port in recorded_signals.items()
     }
 
+    # Overflow (T-138 decimation) is detected host-side after each
+    # kernel call; warn at most once per batch to avoid N repeats.
+    _overflow_warned = False
+
     if lazy:
         time_list = []
         out_lists = {k: [] for k in recorded_signals}
@@ -660,10 +665,14 @@ def _scan_kernel_path(
             updates = {path: jnp.asarray(stacked[path][i]) for path in stacked}
             ctx_i = _pure_patch_context(base_ctx, updates)
             sim_state = _kernel(ctx_i)
+            if not _overflow_warned:
+                _overflow_warned = maybe_warn_recording_truncation(
+                    sim_state.results_data, opts.buffer_length,
+                )
             time_list.append(sim_state.results_data.time)
             for sig_name in recorded_signals:
                 out_lists[sig_name].append(sim_state.results_data.outputs[sig_name])
-        
+
         stacked_time = jnp.stack(time_list, axis=0)
         stacked_out = {k: jnp.stack(vs, axis=0) for k, vs in out_lists.items()}
         return BatchSimulationResults(time=stacked_time, outputs=stacked_out, used_vmap=False)
@@ -681,6 +690,10 @@ def _scan_kernel_path(
 
         sim_state = _kernel(ctx_i)
         results_data = sim_state.results_data
+        if not _overflow_warned:
+            _overflow_warned = maybe_warn_recording_truncation(
+                results_data, opts.buffer_length,
+            )
         time_i, outputs_i = results_data.finalize()
 
         if time_ref is None:
@@ -764,6 +777,11 @@ def _vmap_path(
 
     # Finalize: the results_data has shape (N, T, ...) due to vmap
     results_data_batch = batch_sim_states.results_data
+
+    # Post-vmap, host-side overflow check.  ``record_stride`` is a
+    # batched (N,) array here; any entry > 1 means that run's recording
+    # buffer filled and was decimated (T-138) — warn once for the batch.
+    maybe_warn_recording_truncation(results_data_batch, opts.buffer_length)
 
     if lazy:
         return BatchSimulationResults(

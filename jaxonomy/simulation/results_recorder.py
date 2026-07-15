@@ -17,6 +17,82 @@ if TYPE_CHECKING:
     from ..backend.typing import Array
 
 
+def maybe_warn_recording_truncation(
+    results_data,
+    options_buffer_length: int | None,
+    caller: str = "jaxonomy.simulate_batch",
+) -> bool:
+    """Warn once if the recording buffer overflowed during a run.
+
+    Host-side, post-materialization check (the same idiom as the
+    T-138 check in ``simulate``: it runs *after* the JIT'd kernel
+    returns, so it never disturbs jit/vmap tracing).  Detection is
+    exact: the JAX backend's ``record_stride`` ends > 1 iff at least
+    one T-138 buffer compaction ran, i.e. the fixed ``buffer_length``
+    ring filled and the trajectory was decimated to keep spanning
+    [t0, tf] at reduced resolution.
+
+    Callers that materialize results without going through
+    ``simulate`` (the batch kernel and vmap paths) use this to close
+    a silent-truncation gap reported by a downstream consumer.
+
+    Args:
+        results_data: A (possibly vmapped/batched) backend
+            ``ResultsData``; backends without the T-138 decimation
+            fields are silently skipped.
+        options_buffer_length: The user-configured
+            ``SimulatorOptions.buffer_length`` (None means auto-sized).
+        caller: Prefix naming the API entry point in the message.
+
+    Returns:
+        True iff a ``UserWarning`` was emitted.
+    """
+    import warnings
+
+    import numpy as np
+
+    if results_data is None:
+        return False
+    inner = getattr(results_data, "_solution_data", results_data)
+    stride = getattr(inner, "record_stride", None)
+    if stride is None:
+        return False
+    try:
+        stride_arr = np.asarray(stride)
+        max_stride = int(stride_arr.max())
+        total_steps = int(np.max(np.asarray(inner.step_count)))
+        n_kept = int(np.max(np.asarray(inner.buffer_index)))
+    except (TypeError, ValueError):
+        # Traced / abstract values (still inside a transform) — skip.
+        return False
+    if max_stride <= 1:
+        return False
+
+    buf_str = (
+        f"buffer_length={options_buffer_length}"
+        if options_buffer_length is not None
+        else "buffer_length=None (auto)"
+    )
+    run_str = ""
+    if stride_arr.ndim > 0 and stride_arr.size > 1:
+        n_overflowed = int((stride_arr > 1).sum())
+        run_str = f" in {n_overflowed} of {stride_arr.size} runs"
+    warnings.warn(
+        f"{caller}: the recording buffer ({buf_str}) filled{run_str}; "
+        f"the trajectory was recorded at reduced resolution "
+        f"(~{n_kept} of {total_steps} samples kept, keeping every "
+        f"{max_stride}th at worst). The recorded time-series still "
+        f"starts at t0 and covers the whole trajectory. Set "
+        f"SimulatorOptions(buffer_length="
+        f"{max(total_steps + 1, 4000)}) or larger to capture every "
+        f"sample, loosen rtol/atol, or reduce the number of recorded "
+        f"signals.",
+        UserWarning,
+        stacklevel=3,
+    )
+    return True
+
+
 class ResultsRecorder:
     """Manages simulation results initialization and recording.
 

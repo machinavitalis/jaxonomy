@@ -198,11 +198,17 @@ def build_fmu(
 
     This delegates the binary half of the FMU (the C wrapper that
     embeds Python and dispatches FMI calls into the slave) to the
-    `pythonfmu` library. pythonfmu's wheel ships pre-built wrappers
-    for ``binaries/win64/`` and ``binaries/linux64/``; **darwin
-    requires a one-time source build** (T-025b) of
+    `pythonfmu` library. Since pythonfmu 0.7.0 the wheel ships
+    pre-built wrappers for all three platforms —
+    ``binaries/win64/``, ``binaries/linux64/``, and
+    ``binaries/darwin64/`` — so ``build_fmu()`` bundles them
+    automatically and round-trip via ``fmpy`` works end-to-end on
+    macOS out of the box.
+
+    Older pythonfmu releases (< 0.7.0) shipped no darwin wrapper;
+    there a one-time source build (T-025b) of
     ``libpythonfmu-export.dylib`` into pythonfmu's
-    ``resources/binaries/darwin64/`` folder::
+    ``resources/binaries/darwin64/`` folder is required::
 
         git clone https://github.com/NTNU-IHB/PythonFMU.git
         cd PythonFMU && cmake -B build -DCMAKE_BUILD_TYPE=Release \\
@@ -217,11 +223,9 @@ def build_fmu(
                           print(os.path.dirname(pythonfmu.__file__))')\\
            /resources/binaries/darwin64/"
 
-    Once the wrapper is in place, ``build_fmu()`` automatically
-    bundles all three platforms into the FMU and round-trip via
-    ``fmpy`` works end-to-end on the same host. Without it, the
-    generated ``.fmu`` is still structurally valid (XML + win64 +
-    linux64 binaries) but cannot be re-imported on darwin.
+    Without a host-platform wrapper the generated ``.fmu`` is still
+    structurally valid for the platforms that are bundled, but cannot
+    be re-imported on the host itself.
 
     .. warning:: FMUs produced this way inherit pythonfmu's
         **one-instance-per-process** limitation: the embedded-Python
