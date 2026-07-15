@@ -1,0 +1,66 @@
+<svg viewBox="0 0 680 500" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+<defs>
+<marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6b7280"/></marker>
+</defs>
+<rect x="0" y="0" width="680" height="500" fill="#ffffff"/>
+
+<text x="20" y="26" font-size="13" font-weight="bold" fill="#374151">A · Export and embed — deploy a trained policy (no gradients cross)</text>
+<g>
+<rect x="20" y="40" width="180" height="56" rx="4" fill="#eeedfe" stroke="#534ab7"/>
+<text x="110" y="64" font-size="13" font-weight="bold" fill="#3c3489" text-anchor="middle">NEUROMANCER</text>
+<text x="110" y="82" font-size="11" fill="#534ab7" text-anchor="middle">trains policy in PyTorch</text>
+</g>
+<line x1="200" y1="68" x2="248" y2="68" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<g>
+<rect x="250" y="40" width="130" height="56" rx="4" fill="#f3f4f6" stroke="#6b7280"/>
+<text x="315" y="64" font-size="13" font-weight="bold" fill="#374151" text-anchor="middle">ONNX export</text>
+<text x="315" y="82" font-size="11" fill="#6b7280" text-anchor="middle">frozen policy</text>
+</g>
+<line x1="380" y1="68" x2="428" y2="68" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<g>
+<rect x="430" y="40" width="230" height="56" rx="4" fill="#e1f5ee" stroke="#0f6e56"/>
+<text x="545" y="64" font-size="13" font-weight="bold" fill="#085041" text-anchor="middle">jaxonomy diagram</text>
+<text x="545" y="82" font-size="11" fill="#0f6e56" text-anchor="middle">ONNXJax block + acausal plant</text>
+</g>
+<line x1="545" y1="96" x2="545" y2="120" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="545" y="140" font-size="11" fill="#6b7280" text-anchor="middle">closed-loop validation · jit + vmap UQ · robustness maps</text>
+
+<text x="20" y="192" font-size="13" font-weight="bold" fill="#374151">B · Differentiable plant in the loop — gradients cross via dlpack</text>
+<g>
+<rect x="20" y="206" width="200" height="56" rx="4" fill="#e1f5ee" stroke="#0f6e56"/>
+<text x="120" y="230" font-size="13" font-weight="bold" fill="#085041" text-anchor="middle">jaxonomy DAE plant</text>
+<text x="120" y="248" font-size="11" fill="#0f6e56" text-anchor="middle">implicit BDF step + VJP</text>
+</g>
+<g>
+<rect x="260" y="206" width="160" height="56" rx="4" fill="#f3f4f6" stroke="#6b7280"/>
+<text x="340" y="230" font-size="13" font-weight="bold" fill="#374151" text-anchor="middle">dlpack bridge</text>
+<text x="340" y="248" font-size="11" fill="#6b7280" text-anchor="middle">torch.autograd.Function</text>
+</g>
+<g>
+<rect x="460" y="206" width="200" height="56" rx="4" fill="#eeedfe" stroke="#534ab7"/>
+<text x="560" y="230" font-size="13" font-weight="bold" fill="#3c3489" text-anchor="middle">NEUROMANCER</text>
+<text x="560" y="248" font-size="11" fill="#534ab7" text-anchor="middle">policy · loss · optimizer</text>
+</g>
+<line x1="220" y1="220" x2="258" y2="220" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<line x1="420" y1="220" x2="458" y2="220" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<line x1="460" y1="248" x2="422" y2="248" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+<line x1="260" y1="248" x2="222" y2="248" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+<text x="340" y="288" font-size="11" fill="#6b7280" text-anchor="middle">solid: forward batched rollout · dashed: gradients back to policy weights</text>
+
+<text x="20" y="340" font-size="13" font-weight="bold" fill="#374151">C · Co-simulation via FMI — tool-neutral validation</text>
+<g>
+<rect x="20" y="354" width="220" height="56" rx="4" fill="#e1f5ee" stroke="#0f6e56"/>
+<text x="130" y="378" font-size="13" font-weight="bold" fill="#085041" text-anchor="middle">jaxonomy plant FMU</text>
+<text x="130" y="396" font-size="11" fill="#0f6e56" text-anchor="middle">build_fmu co-sim slave</text>
+</g>
+<g>
+<rect x="440" y="354" width="220" height="56" rx="4" fill="#eeedfe" stroke="#534ab7"/>
+<text x="550" y="378" font-size="13" font-weight="bold" fill="#3c3489" text-anchor="middle">PyTorch policy</text>
+<text x="550" y="396" font-size="11" fill="#534ab7" text-anchor="middle">steps in lockstep (fmpy)</text>
+</g>
+<line x1="240" y1="370" x2="438" y2="370" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="340" y="364" font-size="11" fill="#6b7280" text-anchor="middle">levels y(t)</text>
+<line x1="440" y1="398" x2="242" y2="398" stroke="#6b7280" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="340" y="416" font-size="11" fill="#6b7280" text-anchor="middle">pump, valve u(t)</text>
+<text x="340" y="450" font-size="11" fill="#6b7280" text-anchor="middle">the FMI boundary carries no gradients — verification and HIL prep, not training</text>
+</svg>
