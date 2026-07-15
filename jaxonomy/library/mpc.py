@@ -31,6 +31,22 @@ osqp = LazyLoader(
     error_message=_load_error_msg,
 )
 
+
+def _osqp_warm_start_kwarg():
+    """Name of OSQP's warm-start setting for the installed version.
+
+    OSQP renamed the ``warm_start`` setting to ``warm_starting`` in 1.0, so the
+    same code must pick the right keyword to run on both the 0.6.x line and the
+    1.x line (the block otherwise raises ``TypeError`` at ``setup`` on whichever
+    version it wasn't written for).
+    """
+    version = getattr(osqp, "__version__", "") or ""
+    try:
+        major = int(version.split(".")[0])
+    except (ValueError, IndexError):
+        major = 0
+    return "warm_starting" if major >= 1 else "warm_start"
+
 __all__ = [
     "LinearDiscreteTimeMPC",
     "LinearDiscreteTimeMPC_OSQP",
@@ -162,7 +178,7 @@ class LinearDiscreteTimeMPC(LeafSystem):
             l=np.array(lb0),
             u=np.array(ub0),
             verbose=False,
-            warm_starting=self.warm_start,
+            **{_osqp_warm_start_kwarg(): self.warm_start},
         )
 
     def _np_solve(self, time, state, x0):

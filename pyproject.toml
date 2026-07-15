@@ -113,7 +113,7 @@ test-full = [
 ]
 
 # NMPC requires IPOPT to be preinstalled and maybe cmake on macOS
-nmpc = ["cyipopt ~= 1.3.0", "osqp ~= 0.6.5"]
+nmpc = ["cyipopt ~= 1.3.0", "osqp >=0.6.5,<2"]
 
 # safe is a target for optional dependencies without complex build requirements
 # FIXME: torch and tensorflow are not exactly simple, depending on the platform
@@ -135,7 +135,7 @@ safe = [
 all = [
   "control ~= 0.9.4",
   "cyipopt ~= 1.3.0",
-  "osqp ~= 0.6.5",
+  "osqp >=0.6.5,<2",
   "pandas ~= 2.2",
   "pysindy ~= 1.7.5",
   "pytwin ~= 0.6.0",

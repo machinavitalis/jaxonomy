@@ -32,6 +32,7 @@ Pure internal refactors live in commits, not here.
 
 ### Fixed
 
+- **`LinearDiscreteTimeMPC` works on the pinned OSQP again**: the block passed OSQP 1.x's `warm_starting` setting to `setup()` while the `nmpc` extra pinned `osqp ~= 0.6.5` (whose setting is `warm_start`), so it raised `TypeError` on a clean `jaxonomy[nmpc]` install. The warm-start keyword is now selected by the installed OSQP version, and the pin widened to `osqp >=0.6.5,<2` so 0.6.x and 1.x both work. Adds the block's first `setup`/`solve` regression test.
 - **BDF retries transient non-finite steps instead of terminating** (T-134): a Newton blowup on a hard-switching transition (e.g. a diode turning on) now rejects the step and halves `dt`, terminating only once `dt` reaches the floor — the no-hang bound on true divergences is preserved. Long multi-cycle rectifier runs now complete with the documented recipe (`bdf` + `max_minor_step_size` below the switching-transition width: 100 cycles in ~1s wall).
 - **Shared top-level parameter aliases propagate again** (T-141): `Diagram.with_parameters({"alias": v})` now updates blocks that reference the alias — previously a silent no-op, both on live diagrams (the alias `Parameter` was swapped out instead of mutated) and after a `model_json` round-trip (deserialized expression parameters lost their dependency links and namespace identity on deepcopy). Affects `fit_parameters` and every MCP/dashboard flow that sets model-level parameters on a loaded model.
 
