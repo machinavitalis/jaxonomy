@@ -12,7 +12,7 @@ dynamic = ["dependencies"]
 license = { text = "MIT" }
 
 # Keep in sync with version.py
-version = "3.0.0"
+version = "3.1.0"
 
 # See https://pypi.org/classifiers/
 classifiers = [

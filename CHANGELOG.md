@@ -13,7 +13,7 @@ Pure internal refactors live in commits, not here.
 
 ---
 
-## [Unreleased]
+## [3.1.0] - 2026-07-15
 
 ### Added
 

@@ -23,7 +23,7 @@ def test_version():
 
     # Check major and minor
     assert version[0] == "3"
-    assert version[1] == "0"
+    assert version[1].isdigit()
 
     # Check micro
     assert version[2].isdigit()

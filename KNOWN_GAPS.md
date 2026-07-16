@@ -27,37 +27,23 @@ Each entry has the same shape:
 
 ## Currently known gaps
 
-### Differentiability — multi-event saltation gradient
+### Multirate substepping and declared state projection — fixed-step scope
 
-- **Area**: event-time gradients for `LeafSystem`s with multiple
-  events whose guards depend on parameters via state
+- **Area**: `declare_continuous_state(substeps=N)` and
+  `declare_continuous_state(project=fn)` under adaptive solvers
 - **Status**: known limitation
-- **What works**: single-event differentiability (matches finite
-  differences to ~1e-6); see `test/autodiff/`
-- **What doesn't**: on multi-event systems where the guard depends on a
-  parameter via state (e.g. a tilted-floor bouncing ball with slope as
-  parameter), the second-and-later event-time gradients can return ~0
-  while finite differences return materially nonzero values
-- **Workaround**: for first-event-only optimisation the single-event
-  path is unaffected; multi-event problems should cross-check with
-  finite differences
-- **Tracking**: regression tests pinned strict-xfail in
-  `test/autodiff/test_t_125_followup_multi_event_saltation_bug.py`
-
-### Differentiability — DAE adjoint on multi-cell acausal models
-
-- **Area**: BDF-DAE reverse-mode adjoint when a parameter enters as a
-  divisor of the algebraic constraint
-- **Status**: known limitation
-- **What works**: ODE adjoints; single-cell DAE adjoints with
-  parameters on the differential side
-- **What doesn't**: on multi-cell acausal battery packs where `R`
-  appears as `Q = ΔT / R`, the autodiff gradient shows a sign flip and
-  a ~10⁷× magnitude error vs central differences
-- **Workaround**: use central differences for these parameter classes
-  until the DAE adjoint correction lands
-- **Tracking**: regression tests pinned in
-  `test/acausal/test_t_113_followup_dae_adjoint_sign_bug.py`
+- **What works**: under fixed-step `ode_solver_method="rk4"`, `substeps=N`
+  advances a stiff block with N inner RK4 steps per outer step and
+  `project=fn` retracts the state after every step; both are jit-,
+  vmap-, and reverse-AD-compatible and compose
+  (`test/simulation/test_t_133_multirate_substepping.py`,
+  `test/simulation/test_t_132_state_projection.py`)
+- **What doesn't**: adaptive solvers ignore the `substeps=` declaration
+  entirely, and apply `project=` only at major-step boundaries, so a
+  projected quantity can drift within a major step
+- **Workaround**: use `rk4` for blocks that need per-step projection or
+  substepping; under adaptive solvers, tighten `max_minor_step_size` to
+  bound intra-step drift
 
 ### Performance — parameter sweeps re-JIT on every value
 
@@ -96,12 +82,19 @@ Each entry has the same shape:
   `build_fmu` post-processes pythonfmu's XML to add the
   FMI-2.0-required `InitialUnknowns`), and CI additionally runs the
   strict INTO-CPS VDMCheck2 static checker on every generated FMU
-  (`test/library/test_t_026c_fmu_official_validation.py`).
+  (`test/library/test_t_026c_fmu_official_validation.py`). Exported
+  diagram input ports are honored as real FMI inputs, outputs are
+  primed during `exitInitializationMode`, declared continuous states
+  can be exposed as FMI initialization parameters
+  (`EXPOSE_INITIAL_STATES`), and the default-on cached-kernel
+  `doStep` path is bit-identical to a fresh `simulate`
+  (`test/library/test_fmu_slave.py`,
+  `test/library/test_fmu_export_binary.py`).
 - **What doesn't**: no model-exchange import; no FMI 3
-  scheduledExecution; macOS arm64 export requires a one-line
-  pythonfmu patch (documented in `build_fmu`'s docstring); validator
-  coverage is FMI 2.0 export only (imports are exercised by round-trip
-  tests, not the static checkers)
+  scheduledExecution; macOS export needs pythonfmu >= 0.7.0 (older
+  releases require a one-time source build documented in `build_fmu`'s
+  docstring); validator coverage is FMI 2.0 export only (imports are
+  exercised by round-trip tests, not the static checkers)
 
 ### State machines
 
@@ -147,10 +140,12 @@ Each entry has the same shape:
 
 - **Area**: user-facing tutorials and reference
 - **Status**: partial
-- **What works**: README quickstart, MkDocs site at `docs/`, ~22
+- **What works**: README quickstart, MkDocs site at `docs/`, ~80
   example notebooks under `docs/examples/`
 - **What doesn't**: docs for several recently-shipped surfaces lag
-  the code; the Wave-2 tutorial roadmap is in progress
+  the code (e.g. `implicit_solver` has no docs page and the
+  `pinn_across_stacks` tutorial series is not yet wired into the
+  MkDocs nav); the Wave-2 tutorial roadmap is in progress
 
 ---
 

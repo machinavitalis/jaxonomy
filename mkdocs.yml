@@ -156,6 +156,9 @@ nav:
           - FMI export round-trip: examples/fmi_export_roundtrip.ipynb
           - Modelica plant FMU co-sim: examples/openmodelica_plant_fmu_cosim.ipynb
           - Hybrid ML + physics predictor: examples/hybrid_ml_physics_predictor.ipynb
+          - PINNs across stacks 1 — policy export via ONNX: examples/pinn_across_stacks_part_1_policy_export.ipynb
+          - PINNs across stacks 2 — neural DAE + gradient bridge: examples/pinn_across_stacks_part_2_neural_dae.ipynb
+          - PINNs across stacks 3 — FMI co-simulation: examples/pinn_across_stacks_part_3_fmi_cosim.ipynb
       - Battery series:
           - 01 - Battery ECM: examples/battery_part_1_ecm_model.ipynb
           - 02 - Using synthetic data: examples/battery_part_2_parameter_estimation_synthetic_data.ipynb
