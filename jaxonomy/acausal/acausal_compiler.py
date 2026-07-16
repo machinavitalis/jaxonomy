@@ -390,6 +390,13 @@ class AcausalSystem(LeafSystem):
                 knowns,
                 verbose=self.dp.verbose,
             )
+            # deferred weak-IC override check: this authoritative solve (with
+            # resolved input values) is where a silently-discarded declared IC
+            # is actually knowable; doing it here keeps compile time flat
+            from jaxonomy.acausal.index_reduction.index_reduction import (
+                warn_declared_weak_ics_overridden,
+            )
+            warn_declared_weak_ics_overridden(sed.ics_weak, X_ic_mapping)
 
             x_ic = [X_ic_mapping[sed.dae_X_to_X_mapping[var]] for var in sed.x]
             y_ic = [X_ic_mapping[sed.dae_X_to_X_mapping[var]] for var in sed.y]

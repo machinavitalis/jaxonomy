@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import warnings
 
+import jaxonomy as jx
+
 import pytest
 import sympy as sp
 
@@ -144,7 +146,13 @@ def _compile_tank(*, pin_port_pressure, h_ic=0.4):
     ad.connect(props, "prop", tank, "port")
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        AcausalCompiler(ev, ad)()
+        system = AcausalCompiler(ev, ad)()
+        # the override check runs at system creation, where the
+        # authoritative IC solve happens with resolved input values
+        # (doing it at compile time regressed the compile benchmarks)
+        builder = jx.DiagramBuilder()
+        builder.add(system)
+        builder.build().create_context()
     return [
         x
         for x in w

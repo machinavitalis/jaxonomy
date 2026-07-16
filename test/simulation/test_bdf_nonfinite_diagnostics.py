@@ -94,7 +94,11 @@ class SemiExplicitDAE(LeafSystem):
         return jnp.array([-x + z, z - x**2])
 
 
-_BDF = dict(ode_solver_method="bdf", math_backend="jax")
+# detailed abort diagnostics are opt-in (the in-graph callback costs ~0.3 s
+# of XLA compile per BDF model); these tests exercise the detailed path
+_BDF = dict(ode_solver_method="bdf", math_backend="jax",
+            bdf_nonfinite_diagnostics=True)
+_BDF_DEFAULT = dict(ode_solver_method="bdf", math_backend="jax")
 
 
 class TestBDFNonfiniteWarning:
@@ -268,3 +272,38 @@ class TestBDFAutodiffParity:
         ) / (2 * eps)
         assert np.isfinite(float(y))
         assert np.isclose(float(g), fd, rtol=1e-4), (float(g), fd)
+
+
+class TestDefaultPathGenericWarning:
+    def test_default_warns_generically_and_points_at_flag(self):
+        """Without the opt-in, a non-finite end state still warns (free,
+        post-run, host-side) and names the detailed flag."""
+        diagram, _, integ = _source_driven_integrator(float("nan"))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            simulate(
+                diagram, diagram.create_context(), (0.0, 1.0),
+                options=SimulatorOptions(**_BDF_DEFAULT),
+            )
+        # no detailed abort warning on the default path...
+        assert _abort_warnings(w) == []
+        # ...but the generic post-run warning fires and names the flag
+        generic = [
+            x for x in w
+            if "non-finite continuous state" in str(x.message)
+        ]
+        assert len(generic) == 1
+        assert "bdf_nonfinite_diagnostics=True" in str(generic[0].message)
+
+    def test_default_healthy_run_fully_silent(self):
+        diagram, _, integ = _source_driven_integrator(1.0)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            simulate(
+                diagram, diagram.create_context(), (0.0, 1.0),
+                options=SimulatorOptions(**_BDF_DEFAULT),
+            )
+        assert _abort_warnings(w) == []
+        assert not [
+            x for x in w if "non-finite continuous state" in str(x.message)
+        ]

@@ -812,11 +812,19 @@ class BDFSolver(ODESolverImpl):
         # on jax 0.9.2); under ``vmap`` the cond lowers to a form where the
         # callback may run for non-bailing batches too, so the emitter
         # re-checks ``bailed`` host-side and stays silent for those.
-        def _warn_branch(diag):
-            jax.debug.callback(_emit_bdf_nonfinite_warning, *diag)
-            return 0
+        # The cond-gated host callback is runtime-free but costs ~0.3 s of
+        # XLA compile per BDF model (measured on the rc_acausal_dae compile
+        # gate), so it is only compiled in when
+        # ``SimulatorOptions(bdf_nonfinite_diagnostics=True)`` stamped the
+        # flag on this solver (same wiring as ``_cond_monitor``).  The
+        # default path still gets a free post-run non-finite check in
+        # ``simulate()`` that points at the flag.
+        if getattr(self, "_nonfinite_diagnostics", False):
+            def _warn_branch(diag):
+                jax.debug.callback(_emit_bdf_nonfinite_warning, *diag)
+                return 0
 
-        lax.cond(fail_diag[0], _warn_branch, lambda diag: 0, fail_diag)
+            lax.cond(fail_diag[0], _warn_branch, lambda diag: 0, fail_diag)
 
         # Occasionally floating point precision loss will mean that the next
         # time step will be less than machine epsilon from the boundary time.

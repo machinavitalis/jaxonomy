@@ -494,6 +494,13 @@ class SimulatorOptions:
     # monitor when ``ode_solver`` is not a BDF solver.
     bdf_condition_warning_threshold: float | None = None
 
+    # Compile the detailed BDF non-finite abort diagnostic (failure time,
+    # collapsed dt, offending state rows) into the solver.  Default off:
+    # the in-graph host callback costs ~0.3 s of XLA compile time per BDF
+    # model.  The default path still warns generically after the run when
+    # the final state is non-finite, pointing at this flag.
+    bdf_nonfinite_diagnostics: bool = False
+
     # T-027a-followup: simulator-level Zeno protection toggles.  When
     # ``zeno_protection_enabled=False`` (the default), the simulator's
     # ``_major_step`` skips the Zeno tracker entirely — the carry is

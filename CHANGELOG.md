@@ -13,6 +13,12 @@ Pure internal refactors live in commits, not here.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **BDF non-finite abort diagnostics are now opt-in** (`SimulatorOptions(bdf_nonfinite_diagnostics=True)`): the in-graph cond-gated host callback introduced in 3.1.0 is runtime-free but costs ~0.3 s of XLA compile time per BDF model (a 6x regression on the compile-time gate's small-model scenario). The default path now performs a free post-run check instead — a non-finite final state still warns, naming the failure and pointing at the flag for the detailed report (failure time, collapsed dt, offending rows). The acausal weak-IC override warning likewise moved from compile time to system creation, where the authoritative IC solve already runs — same coverage, no extra symbolic solve during compilation.
+
 ## [3.1.0] - 2026-07-15
 
 ### Added

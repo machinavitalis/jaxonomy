@@ -303,6 +303,7 @@ _RECORDED_OPTION_FIELDS: tuple[str, ...] = (
     "dae_initial_projection",
     "dae_drift_threshold",
     "bdf_condition_warning_threshold",
+    "bdf_nonfinite_diagnostics",
     "zeno_protection_enabled",
     "zeno_tolerance",
     "zeno_recovery_period",

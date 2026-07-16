@@ -1021,81 +1021,17 @@ class IndexReduction:
         """Warn when a declared (non-default) weak IC is overridden by the
         consistent-initialization solve.
 
-        Weak ICs are only starting guesses for the IC solve: when the strong
-        (fixed) ICs and the model equations determine a different consistent
-        value, the declared value is silently discarded. That failure mode is
-        easy to miss -- e.g. a tank level state declared with ``ic=0.4``
-        initializes to 0.0 unless the port pressure IC is also declared fixed
-        -- so name the symbols and the values they actually received.
-
-        Only weak ICs with non-default (non-zero) declared values are checked:
-        diagram processing applies a 0.0 default to every undeclared IC, and
-        the two are indistinguishable here.
-
-        ``X_ic_mapping`` is reused when the caller already solved the ICs
-        (the ``scale=True`` path); otherwise the ICs are solved here with the
-        compile-time knowns. Solve failures are ignored -- the authoritative
-        IC solve happens again at system creation with resolved input values
-        and reports its own errors.
+        Only runs when the caller already has a solved ``X_ic_mapping`` (the
+        ``scale=True`` path, where the mapping is computed anyway).  On the
+        unscaled path the check is deferred to system creation, where the
+        authoritative IC solve happens with resolved input values — solving
+        the ICs here purely to warn measurably regresses compile time (the
+        rc_acausal_dae compile benchmark went 6x slower).
         """
-        declared = {}
-        for var, val in self.ics_weak.items():
-            try:
-                val_f = float(val)
-            except (TypeError, ValueError):
-                continue
-            if val_f != 0.0:
-                declared[var] = val_f
-        if not declared:
-            return
-
         if X_ic_mapping is None:
-            try:
-                X_ic_mapping = compute_initial_conditions(
-                    self.t,
-                    self.eqs,
-                    self.X,
-                    self.ics,
-                    self.ics_weak,
-                    self.knowns,
-                    verbose=False,
-                )
-            except Exception:
-                return
+            return
+        warn_declared_weak_ics_overridden(self.ics_weak, X_ic_mapping)
 
-        overridden = []
-        for var, declared_val in declared.items():
-            solved = X_ic_mapping.get(var)
-            if solved is None:
-                continue
-            try:
-                solved_f = float(solved)
-            except (TypeError, ValueError):
-                continue
-            # 5% relative threshold: the solve routinely *refines* declared
-            # guesses by a fraction of a percent (that is its job and not
-            # worth a warning); a discarded IC lands somewhere unrelated
-            # (e.g. 0.4 -> 0.0, or at another component's fixed value).
-            if abs(solved_f - declared_val) > max(0.05 * abs(declared_val), 1e-6):
-                overridden.append((var, declared_val, solved_f))
-
-        if overridden:
-            details = "; ".join(
-                f"{var}: declared ic={dv:.6g}, initialized to {sv:.6g}"
-                for var, dv, sv in overridden
-            )
-            warnings.warn(
-                "Initial-condition resolution overrode declared (non-fixed) "
-                f"initial conditions: {details}. Non-fixed ICs are only "
-                "starting guesses for the consistent-initialization solve; "
-                "the strong (fixed) ICs and model equations determined "
-                "different values. To enforce a declared value, mark it fixed "
-                "(ic_fixed=True on the symbol, or the component's "
-                "*_ic_fixed=True argument), or fix a related port variable "
-                "to a value consistent with it.",
-                UserWarning,
-                stacklevel=2,
-            )
 
     def handle_overdetermined_ics(self, num_ics_to_remove):
         """
@@ -1967,3 +1903,64 @@ class IndexReduction:
             print("\n# and, y =\n")
             for var, ic in zip(self.ses_y, self.ses_y_ic):
                 print(f"{str(var):30} with ic= {ic}")
+
+
+def warn_declared_weak_ics_overridden(ics_weak, X_ic_mapping):
+    """Warn when declared (non-default) weak ICs were overridden by the
+    consistent-initialization solve.
+
+    Weak ICs are only starting guesses for the IC solve: when the strong
+    (fixed) ICs and the model equations determine a different consistent
+    value, the declared value is silently discarded. That failure mode is
+    easy to miss -- e.g. a tank level state declared with ``ic=0.4``
+    initializes to 0.0 unless the port pressure IC is also declared fixed
+    -- so name the symbols and the values they actually received.
+
+    Only weak ICs with non-default (non-zero) declared values are checked:
+    diagram processing applies a 0.0 default to every undeclared IC, and
+    the two are indistinguishable here.
+    """
+    declared = {}
+    for var, val in ics_weak.items():
+        try:
+            val_f = float(val)
+        except (TypeError, ValueError):
+            continue
+        if val_f != 0.0:
+            declared[var] = val_f
+    if not declared:
+        return
+
+    overridden = []
+    for var, declared_val in declared.items():
+        solved = X_ic_mapping.get(var)
+        if solved is None:
+            continue
+        try:
+            solved_f = float(solved)
+        except (TypeError, ValueError):
+            continue
+        # 5% relative threshold: the solve routinely *refines* declared
+        # guesses by a fraction of a percent (that is its job and not
+        # worth a warning); a discarded IC lands somewhere unrelated
+        # (e.g. 0.4 -> 0.0, or at another component's fixed value).
+        if abs(solved_f - declared_val) > max(0.05 * abs(declared_val), 1e-6):
+            overridden.append((var, declared_val, solved_f))
+
+    if overridden:
+        details = "; ".join(
+            f"{var}: declared ic={dv:.6g}, initialized to {sv:.6g}"
+            for var, dv, sv in overridden
+        )
+        warnings.warn(
+            "Initial-condition resolution overrode declared (non-fixed) "
+            f"initial conditions: {details}. Non-fixed ICs are only "
+            "starting guesses for the consistent-initialization solve; "
+            "the strong (fixed) ICs and model equations determined "
+            "different values. To enforce a declared value, mark it fixed "
+            "(ic_fixed=True on the symbol, or the component's "
+            "*_ic_fixed=True argument), or fix a related port variable "
+            "to a value consistent with it.",
+            UserWarning,
+            stacklevel=2,
+        )

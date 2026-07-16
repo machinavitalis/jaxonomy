@@ -870,6 +870,34 @@ def simulate(
     if _bdf_cond_monitor is not None:
         _bdf_cond_monitor.maybe_warn()
 
+    # Free post-run non-finite check: when the returned final state contains
+    # NaN/Inf, say so and point at the detailed opt-in diagnostic.  Runs
+    # host-side once after the JIT'd kernel returns; skipped when the final
+    # context isn't materialized (traced/vmap callers get the in-graph
+    # diagnostic instead, if enabled).
+    if final_context is not None:
+        try:
+            _xc = final_context.continuous_state
+            _leaves = jax.tree.leaves(_xc)
+            _nonfinite = any(
+                not bool(jnp.all(jnp.isfinite(l))) for l in _leaves if l is not None
+            )
+        except Exception:
+            _nonfinite = False
+        if _nonfinite:
+            import warnings as _warnings
+            _warnings.warn(
+                "Simulation ended with a non-finite continuous state. For the "
+                "failure time, collapsed step size, and the offending state "
+                "rows, rerun with "
+                "SimulatorOptions(bdf_nonfinite_diagnostics=True) (BDF). "
+                "Common causes: an inconsistent algebraic initial state (for "
+                "DAEs, set dae_initial_projection=True), an ill-conditioned "
+                "component equation, or a genuinely diverging solution.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     # T-138 — decimated-recording diagnostic.  When the recording buffer
     # filled, the JAX backend now degrades to uniform decimation (keep
     # every Nth sample spanning the whole trajectory) instead of the old
@@ -1459,6 +1487,17 @@ class Simulator:
                 # picks it up via ``getattr(self, "_cond_monitor", None)``
                 # without needing a constructor change.
                 ode_solver._cond_monitor = self._bdf_cond_monitor
+
+        # Detailed non-finite abort diagnostics: stamp the opt-in flag on
+        # the BDF solver (checked at trace time; default path compiles no
+        # callback ops).
+        if getattr(options, "bdf_nonfinite_diagnostics", False):
+            try:
+                from ..backend._jax.bdf import BDFSolver as _BDFSolver2
+            except Exception:  # pragma: no cover — import-time guard only
+                _BDFSolver2 = None
+            if _BDFSolver2 is not None and isinstance(ode_solver, _BDFSolver2):
+                ode_solver._nonfinite_diagnostics = True
 
         # T-027a-followup: simulator-level Zeno protection options.  All
         # default-off — the recovery probe and the latch are skipped at
