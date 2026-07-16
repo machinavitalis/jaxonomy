@@ -122,7 +122,7 @@ safe = [
   "pandas ~= 2.2",
   "pysindy ~= 1.7.5",
   "pytwin ~= 0.6.0",
-  "sympy ~= 1.11.1",
+  "sympy ~= 1.13",
   "tensorflow ~= 2.16.1",
   "torch ~= 2.3",
   "opencv-python-headless",                     # cv2
@@ -139,7 +139,7 @@ all = [
   "pandas ~= 2.2",
   "pysindy ~= 1.7.5",
   "pytwin ~= 0.6.0",
-  "sympy ~= 1.11.1",
+  "sympy ~= 1.13",
   "tensorflow ~= 2.16.1",
   "torch ~= 2.3",
   "mujoco",
