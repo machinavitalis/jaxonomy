@@ -1,39 +1,34 @@
 # SPDX-License-Identifier: MIT
 """
-Parameter sensitivity / identifiability analysis example
-=========================================================
+Multi-start optimization example
+=================================
 
-Before fitting parameters, check whether the objective is actually *sensitive*
-to each parameter.  Near-zero gradient → the simulation output barely changes
-with that parameter → the parameter is unidentifiable from this data.
+Demonstrates how to use ``MultiStart`` to escape local minima when fitting
+a non-convex objective.
 
-This example uses ``compute_sensitivity`` to:
-
-1. Report the gradient and normalised sensitivity for each parameter.
-2. Compute the Hessian (Fisher Information Matrix approximation).
-3. Flag parameters with near-zero sensitivity.
+Problem
+-------
+Damped spring-mass system.  ISE objective in c (damping coefficient).
+The true optimum is c ≈ 1.65.  Starting far from it (e.g. c = 3.0) causes
+gradient-based methods to converge slowly — multi-start with random restarts
+reliably finds the global minimum.
 
 Usage::
 
-    python examples/optimization/sensitivity_example.py
+    python docs/examples/optimization/multi_start_example.py
 """
 
 import numpy as np
 
 from jaxonomy import DiagramBuilder, Parameter, SimulatorOptions
 from jaxonomy.library import Adder, Gain, Integrator, Power
-from jaxonomy.optimization import Optimizable
-from jaxonomy.optimization.sensitivity import compute_sensitivity
-
+from jaxonomy.optimization import Optimizable, Scipy, MultiStart
 
 # ── build diagram ─────────────────────────────────────────────────────────────
 
-params = {
-    "c": Parameter(np.array(0.5)),   # damping — identifiable
-    "k": Parameter(np.array(1.0)),   # stiffness — identifiable
-}
+params = {"c": Parameter(np.array(1.0))}
 b = DiagramBuilder()
-k_x = b.add(Gain(params["k"], name="k_x"))
+k_x = b.add(Gain(1.0,         name="k_x"))
 c_v = b.add(Gain(params["c"], name="c_v"))
 add = b.add(Adder(2, operators="--", name="adder"))
 inv = b.add(Gain(1.0,         name="inv_m"))
@@ -68,7 +63,7 @@ class SpringOptimizable(Optimizable):
         self._obj = diagram["obj"].output_ports[0]
 
     def optimizable_params(self, ctx):
-        return {"c": ctx.parameters["c"], "k": ctx.parameters["k"]}
+        return {"c": ctx.parameters["c"]}
 
     def objective_from_context(self, ctx):
         return self._obj.eval(ctx)
@@ -79,27 +74,42 @@ class SpringOptimizable(Optimizable):
 
 model = SpringOptimizable(
     diagram, diagram.create_context(),
-    params_0={"c": 0.5, "k": 1.0},
+    params_0={"c": 0.5},
     sim_t_span=(0.0, 2.0),
     sim_options=SimulatorOptions(max_major_steps=1),
 )
 
 
-# ── sensitivity analysis ──────────────────────────────────────────────────────
+# ── single start (for comparison) ────────────────────────────────────────────
 
-print("Computing sensitivity at initial parameters (c=0.5, k=1.0) ...")
-sens = compute_sensitivity(model, sensitivity_threshold=1e-3)
-print(sens.summary())
+single_optim = Scipy(model, "L-BFGS-B",
+                     opt_method_config={"maxiter": 40},
+                     use_autodiff_grad=True)
+single_result = single_optim.optimize()
+print("=== Single-start result ===")
+print(f"  c = {float(single_result['c']):.4f}  (expected ≈ 1.65)")
+print(f"  success={single_result.success}, nit={single_result.nit}, "
+      f"final_loss={single_result.final_loss:.6g}")
 
-print("\n--- Raw values ---")
-print(f"Gradients:             {sens.gradients}")
-print(f"Normalised sensitivity:{sens.normalized_sensitivity}")
-print(f"Hessian diagonal:      {sens.hessian_diagonal}")
-print(f"Eigenvalues:           {sens.eigenvalues}")
-print(f"Condition number:      {sens.condition_number:.3g}")
 
-if sens.unidentifiable_params:
-    print(f"\n⚠  The following parameters have low sensitivity and may be "
-          f"unidentifiable:\n  {sens.unidentifiable_params}")
-else:
-    print("\n✓  All parameters appear identifiable at this operating point.")
+# ── multi-start ───────────────────────────────────────────────────────────────
+
+def factory(opt):
+    return Scipy(opt, "L-BFGS-B",
+                 opt_method_config={"maxiter": 40},
+                 use_autodiff_grad=True)
+
+
+ms = MultiStart(
+    model,
+    factory,
+    n_starts=6,
+    sample_scale=1.5,   # search window: ±1.5×|c0|
+    seed=42,
+    include_initial=True,
+)
+
+ms_result = ms.run()
+print("\n=== Multi-start result ===")
+print(ms_result.summary())
+print(f"\nBest c = {float(ms_result.best_result['c']):.4f}  (expected ≈ 1.65)")

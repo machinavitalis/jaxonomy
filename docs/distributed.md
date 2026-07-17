@@ -58,7 +58,7 @@ import jaxonomy
 # jax.devices() now returns 4 CpuDevice's
 ```
 
-A runnable end-to-end example lives at `examples/distributed_ensemble.py`.
+A runnable end-to-end example lives at `docs/examples/distributed_ensemble.py`.
 It runs `simulate_distributed` against a 4-device fake mesh and checks
 the output against a serial `simulate_batch` call.
 

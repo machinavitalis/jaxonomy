@@ -13,7 +13,7 @@ the recipe identical.
 
 Run:
 
-    python examples/distributed_ensemble.py
+    python docs/examples/distributed_ensemble.py
 """
 
 from __future__ import annotations
@@ -27,9 +27,10 @@ os.environ.setdefault(
     "XLA_FLAGS", "--xla_force_host_platform_device_count=4"
 )
 
-# Allow `python examples/distributed_ensemble.py` from the repo root without an
-# editable install — Python only adds the script's directory to sys.path.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# Allow `python docs/examples/distributed_ensemble.py` from the repo root
+# without an editable install — Python only adds the script's directory to
+# sys.path.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
