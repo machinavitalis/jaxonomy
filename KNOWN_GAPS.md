@@ -54,11 +54,17 @@ Each entry has the same shape:
 - **What doesn't**: the natural Python-loop sweep pattern
   `for v in v_grid: simulate(diag.with_parameter("p", float(v)))`
   triggers a fresh JIT trace per iteration (the trace cache keys on
-  the value, not on abstract type/shape). On a bouncing-ball plant
-  with `record_event_times=True` this is on the order of 2 minutes per
-  iteration.
+  the value, not on abstract type/shape). Per-iteration cost scales
+  with model size: measured (2026-07, jax 0.9.2, arm64 CPU) at
+  ~0.15–0.2 s on a bouncing-ball plant with
+  `record_event_times=True`, and ~2.3 s on a 160-block diagram.
 - **Workaround**: promote sweep parameters to `jnp.asarray` and key
-  the loop on traced inputs, or use `simulate_batch`
+  the loop on traced inputs, or use `simulate_batch`. The persistent
+  JIT cache (`enable_persistent_jit_cache`, `docs/jit_cache.md`) does
+  **not** mitigate this: each float value is baked into the HLO as a
+  constant, so every sweep value is a compulsory cache miss (measured:
+  a 3-value sweep against a warm cache added 3 new cache entries and
+  every iteration paid the full re-trace + compile cost).
 
 ### Container blocks
 

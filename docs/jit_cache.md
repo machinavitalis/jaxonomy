@@ -1,11 +1,11 @@
 # Persistent JIT compilation cache
 
 Jaxonomy compiles each diagram + solver combination into XLA on first use.
-Single-shot ODE simulations compile in well under a second (roughly
+Small single-shot ODE simulations compile in well under a second (roughly
 60–250 ms, depending on whether the model has zero-crossings or an acausal
-DAE); `simulate_batch` ensembles take longer. JAX provides a persistent
-on-disk cache that recovers
-most of this cost across processes — Jaxonomy ships a one-call helper.
+DAE); large diagrams and `simulate_batch` ensembles take longer. JAX
+provides a persistent on-disk cache for the XLA-compile share of that
+cost — Jaxonomy ships a one-call helper.
 
 ```python
 import jaxonomy
@@ -16,8 +16,39 @@ jaxonomy.enable_persistent_jit_cache("/scratch/jit")  # custom dir
 
 The first run after enabling pays the normal compile cost and writes the
 artefact to disk. Subsequent processes (with matching JAX version, JAXPR,
-and target device) read from disk in tens of milliseconds rather than
-re-running XLA lowering.
+and target device) read the compiled executable from disk instead of
+re-running XLA compilation.
+
+## What it does and does not buy you
+
+Two structural limits bound the win, both measured (2026-07, jax 0.9.2,
+arm64 CPU):
+
+- **Small models are below the write threshold.** The helper sets
+  `jax_persistent_cache_min_compile_time_secs = 1.0`, so kernels that
+  compile faster than 1 s are never written. A 4-block PID loop and the
+  bouncing-ball model with `record_event_times=True` (first `simulate`
+  ≈ 0.21–0.25 s) produced **zero cache entries** — warm-cache startup was
+  identical to cold. For these models the cache is a harmless no-op; the
+  compile is cheap anyway.
+- **Python tracing is not cacheable.** The cache stores compiled XLA
+  executables, not traces. On a 160-block diagram (first `simulate`
+  ≈ 2.4 s cold), a warm cache cut the first call to ≈ 1.2 s — a genuine
+  ~2× — but the remaining ~1.1 s is JAX tracing/lowering, which every
+  process pays regardless.
+
+A side benefit on larger models: repeated *bare* `simulate` calls in the
+same process re-trace each time (see below), and with the cache enabled
+each re-trace's recompile hits the disk cache too (measured ≈ 2.2 s →
+≈ 1.1 s per repeat call on the 160-block diagram).
+
+**The cache does not fix Python-loop parameter sweeps.** In
+`for v in grid: simulate(..., ctx.with_parameter("p", float(v)))` each
+float is baked into the HLO as a constant, so every value is a compulsory
+cache miss (measured: a 3-value sweep against a warm cache added 3 fresh
+entries and every iteration paid full re-trace + compile). Use
+`simulate_batch` or traced parameters instead — see the sweep entry in
+`KNOWN_GAPS.md`.
 
 ## What is cached
 
@@ -40,9 +71,12 @@ For different thresholds, call `jax.config.update(...)` directly afterwards.
 
 ## When to enable
 
-Always for interactive work and long-running CI jobs; skip for short-lived
-single-shot scripts where the cache write itself dominates. See
-`benchmarks/compile_time.py` for per-case timings.
+Enable it when your model's compile time is noticeable — large diagrams
+(≳100 blocks), big acausal packs, `simulate_batch` ensembles, or jitted
+gradient loops (next section), where it roughly halves cold-start and
+recompile cost. For small models it is a harmless no-op (compiles under
+1 s are never written). See `benchmarks/compile_time.py` for per-case
+compile timings.
 
 ## Repeated gradients: hoist the `jit`
 
