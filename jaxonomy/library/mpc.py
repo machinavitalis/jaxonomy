@@ -64,12 +64,25 @@ class LinearDiscreteTimeMPC(LeafSystem):
         port is evaluated.  Pair with a zero-order hold so the solver is
         invoked only once per MPC step.
 
+        Data-driven discrete-time operators (:func:`~jaxonomy.library.rom.dmdc`,
+        :func:`~jaxonomy.library.rom.edmd`) compose directly: wrap the fitted
+        ``A``, ``B`` as ``LinearizedSystem(A, B, C, D, {}, dt=dt)`` (``C``/``D``
+        are unused by the MPC) and pass the result — no manual
+        "un-discretization" needed.
+
     Args:
-        lin_sys: Linearized system (continuous-time A, B matrices).
+        lin_sys: Prediction model. A continuous-time model (``LTISystem``
+            block, or ``LinearizedSystem`` with ``dt=None``) is discretized
+            internally by forward Euler at ``dt``. An already-discrete model
+            (``LinearizedSystem`` with ``dt`` set — e.g. from
+            ``discretize(...)`` or a ``dmdc``/``edmd`` fit — or an
+            ``LTISystemDiscrete`` block) has its ``A``, ``B`` used as-is; its
+            ``dt`` must equal the MPC ``dt``.
         Q: State cost matrix (n×n).
         R: Input cost matrix (m×m).
         N: Prediction horizon (number of steps).
-        dt: Sampling period for Euler discretization.
+        dt: MPC sampling period (also the Euler discretization step for a
+            continuous-time ``lin_sys``).
         x_ref: Terminal state reference (length-n array).
         lbu: Lower bound on control input (scalar or length-m array).
         ubu: Upper bound on control input (scalar or length-m array).
@@ -90,15 +103,28 @@ class LinearDiscreteTimeMPC(LeafSystem):
         warm_start=False,
     ):
         super().__init__(name=name)
-        lin_sys.create_context()
+        if hasattr(lin_sys, "create_context"):
+            lin_sys.create_context()
         self.n = lin_sys.A.shape[0]
         self.m = lin_sys.B.shape[1]
         self.N = N
         self.warm_start = warm_start
 
-        # Euler discretization
-        A = jnp.eye(self.n) + dt * lin_sys.A
-        B = dt * lin_sys.B
+        model_dt = getattr(lin_sys, "dt", None)
+        if model_dt is not None:
+            # Already-discrete model: x[k+1] = A x[k] + B u[k] as given.
+            if not np.isclose(float(model_dt), float(dt)):
+                raise ValueError(
+                    f"lin_sys is discrete-time with dt={model_dt}, but the MPC "
+                    f"step is dt={dt}; rediscretize the model at the MPC rate "
+                    "or match dt to the model."
+                )
+            A = jnp.asarray(lin_sys.A)
+            B = jnp.asarray(lin_sys.B)
+        else:
+            # Continuous-time model: forward-Euler discretization at dt
+            A = jnp.eye(self.n) + dt * lin_sys.A
+            B = dt * lin_sys.B
 
         self.declare_input_port()
 
