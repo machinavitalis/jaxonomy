@@ -654,9 +654,13 @@ class IndexReduction:
         self.G.add_nodes_from([i for i, _ in enumerate(self.eqs)], bipartite=0)
         self.G.add_nodes_from(self.X, bipartite=1)
 
-        # Add edges based on variable presence in each equation
+        # Add edges based on variable presence in each equation.
+        # T-002a follow-up: ``vars_in_eq`` is a set of sympy symbols, so plain
+        # iteration inserts edges in hash order — and networkx neighbor order is
+        # insertion order, which the Pantelides matching traversal (and hence
+        # the dummy-derivative selection) depends on.  Sort for determinism.
         for eq_idx, (_, vars_in_eq) in enumerate(self.vars_in_eqs.items()):
-            for var in vars_in_eq:
+            for var in sorted(vars_in_eq, key=str):
                 self.G.add_edge(eq_idx, var)
 
         self.e_nodes = [n for n, d in self.G.nodes(data=True) if d["bipartite"] == 0]

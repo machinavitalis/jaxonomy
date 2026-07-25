@@ -2040,8 +2040,13 @@ class DiagramProcessing:
         X = x_set | x_dot_set | set(y)
 
         # create a list of all syms that cant be in y
-        x = list(x_set)
-        x_dot = list(x_dot_set)
+        # T-002a follow-up: sort by symbol string, matching process_equations().
+        # `list(set(...))` is hash-ordered, and this ordering propagates through
+        # the Pantelides bipartite graph and the dummy-derivative rref pivoting
+        # — so which of a constraint-coupled pair (e.g. a planar pendulum's
+        # vx/vy) survives as the differential state varied with PYTHONHASHSEED.
+        x = sorted(x_set, key=str)
+        x_dot = sorted(x_dot_set, key=str)
 
         exprs = []
         exprs_idx = {}
@@ -2084,7 +2089,7 @@ class DiagramProcessing:
             syms_set = syms_set - ders_fcns  # remove the der_fcns if any
             vars_in_exprs[expr] = X & syms_set  # set intersection
 
-        X = list(X)
+        X = sorted(X, key=str)  # T-002a follow-up: deterministic order (see above)
         if self.verbose:
             print(f"{X=}")
         # collect the strong and weak ICs

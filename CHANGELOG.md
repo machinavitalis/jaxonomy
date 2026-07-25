@@ -22,6 +22,7 @@ Pure internal refactors live in commits, not here.
 ### Fixed
 
 - **`findop` is re-entrant on fixed-input systems**: the restore of the caller's `fix_value(...)` state was snapshotted after the residual-scaling pre-pass had already unfixed the port, so it never ran — a second `findop` (or any later `input_port.eval`) on the same system raised `UpstreamEvalError`, silently breaking operating-point sweeps that loop over one system.
+- **Acausal index reduction picks differential states deterministically**: which of a symmetric constraint-coupled pair (a planar pendulum's `vx/vy`, `x/y`) survived as the differential state in the compiled system varied with `PYTHONHASHSEED` — the DiagramProcessing input path built its variable lists with `list(set(...))` and the Pantelides bipartite graph inserted edges in set-iteration order, both feeding the dummy-derivative pivot choice. Variable lists and graph edges are now sorted (completing T-002a, which had only fixed the state-vector *ordering*), so the same diagram yields the same `sed.x` in every process and by-name state references (e.g. `NeuralDAEBlock` targets) are reproducible. Note: the deterministic choice may differ from what a particular hash seed produced before.
 
 ### Changed
 
