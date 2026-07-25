@@ -19,6 +19,10 @@ Pure internal refactors live in commits, not here.
 
 - **`LinearDiscreteTimeMPC` accepts already-discrete prediction models**: a `LinearizedSystem` carrying `dt` (from `discretize(...)` or a `dmdc`/`edmd` fit wrapped as `LinearizedSystem(A, B, C, D, {}, dt=dt)`) or an `LTISystemDiscrete` block now has its `A`, `B` used as-is, skipping the internal forward-Euler step; a `dt` mismatch between model and MPC raises `ValueError`. Previously discrete operators had to be hand-"un-discretized" (`A_c=(A−I)/dt`, `B_c=B/dt`) and a naive pass-through was silently wrong.
 
+### Fixed
+
+- **`findop` is re-entrant on fixed-input systems**: the restore of the caller's `fix_value(...)` state was snapshotted after the residual-scaling pre-pass had already unfixed the port, so it never ran — a second `findop` (or any later `input_port.eval`) on the same system raised `UpstreamEvalError`, silently breaking operating-point sweeps that loop over one system.
+
 ### Changed
 
 - **BDF non-finite abort diagnostics are now opt-in** (`SimulatorOptions(bdf_nonfinite_diagnostics=True)`): the in-graph cond-gated host callback introduced in 3.1.0 is runtime-free but costs ~0.3 s of XLA compile time per BDF model (a 6x regression on the compile-time gate's small-model scenario). The default path now performs a free post-run check instead — a non-finite final state still warns, naming the failure and pointing at the flag for the detailed report (failure time, collapsed dt, offending rows). The acausal weak-IC override warning likewise moved from compile time to system creation, where the authoritative IC solve already runs — same coverage, no extra symbolic solve during compilation.

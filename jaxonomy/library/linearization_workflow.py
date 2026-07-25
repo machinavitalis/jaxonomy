@@ -352,6 +352,13 @@ def findop(
             )
         input_port = system.input_ports[0]
 
+    # Snapshot the caller's fixed-port state *before* any residual
+    # evaluation: every residual call wraps eval_time_derivatives in
+    # ``with input_port.fixed(u0)``, whose exit unfixes the port, so reading
+    # ``is_fixed`` after the first evaluation always sees False and the
+    # restore at the end would never run.
+    restore_fixed_val = bool(getattr(input_port, "is_fixed", False))
+
     default_residual, u0 = _residual_fn(system, base_context, input_port)
     residual = residual_fn if residual_fn is not None else default_residual
 
@@ -409,10 +416,6 @@ def findop(
 
     def _scaled_residual(z):
         return _masked_residual(z) * scale
-
-    # Restore the previous fixed value (if any) at the end so we don't
-    # accidentally mutate caller state.
-    restore_fixed_val = bool(getattr(input_port, "is_fixed", False))
 
     jac_fn = jax.jit(jax.jacrev(_scaled_residual))
     res_fn = jax.jit(_scaled_residual)

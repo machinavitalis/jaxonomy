@@ -195,6 +195,31 @@ def test_findop_residual_is_differentiable():
     assert float(jnp.linalg.norm(g)) > 0.0
 
 
+def test_findop_is_reentrant_on_fixed_input_system():
+    """findop restores the caller's fixed-port state, so repeated calls work.
+
+    Regression: the ``restore_fixed_val`` snapshot was taken *after* the
+    residual-scaling pre-pass had already evaluated the residual once (whose
+    ``with input_port.fixed(u0)`` exit unfixes the port), so it always read
+    False, the restore never ran, and a second findop on the same system
+    raised UpstreamEvalError.
+    """
+    k = 2.0
+    sys = _make_damped_oscillator(m=1.0, c=0.5, k=k)
+    u_val = 3.0
+    sys.input_ports[0].fix_value(jnp.array([u_val]))
+    base_ctx = sys.create_context()
+
+    op1 = findop(sys, base_ctx, tol=1e-10)
+    assert sys.input_ports[0].is_fixed, "findop unfixed the caller's port"
+
+    # Second call on the *same* system must work (sweep-in-a-loop pattern).
+    op2 = findop(sys, base_ctx, tol=1e-10)
+    assert op2.converged
+    np.testing.assert_allclose(np.asarray(op2.x), np.asarray(op1.x), atol=1e-9)
+    assert sys.input_ports[0].is_fixed
+
+
 def test_findop_converged_flag_with_zero_iterations_when_at_equilibrium():
     """Starting from the equilibrium short-circuits the Newton loop."""
     k = 4.0
