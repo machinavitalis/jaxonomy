@@ -256,11 +256,12 @@ class SimulatorOptions:
     # (solver) step*, not per major step. Adaptive solvers — Dopri5 and the
     # "auto" default — take many minor steps per major step, and *more* of them
     # as ``rtol`` / ``atol`` tighten. A tight-tolerance Dopri5 run can therefore
-    # record far more samples than the major-step-derived auto size, overrunning
-    # the ring buffer and silently dropping the *head* of the trajectory
-    # (``results.time`` then starts mid-run). The simulator detects this after
-    # the fact and emits a loud, solver/tolerance-aware ``UserWarning``
-    # recommending a concrete larger ``buffer_length``. To avoid it up front:
+    # record far more samples than the major-step-derived auto size and fill
+    # the buffer. On overflow (T-138) the buffer compacts by uniform
+    # decimation — every-other sample, doubling the keep-stride as needed — so
+    # ``results.time`` always starts at t0 and spans the whole trajectory, at
+    # reduced resolution; a loud ``UserWarning`` reports the kept fraction and
+    # recommends a concrete larger ``buffer_length``. To capture every sample:
     # set ``buffer_length`` explicitly for long fine-grained recordings, loosen
     # the tolerances, or use the fixed-step ``ode_solver_method="rk4"`` (whose
     # sample count is predictable from ``max_minor_step_size``). Set a small

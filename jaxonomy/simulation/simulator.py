@@ -655,10 +655,18 @@ def simulate(
             stored, interpolated, and returned.
         recorded_signals (dict[str, OutputPort]):
             Dictionary of ports for which the time series should be recorded.
+            Each recorded series is read back as ``results.outputs[name]``,
+            sampled at ``results.time`` — there is no ``results.time_series``
+            attribute. If the recording buffer (``SimulatorOptions.
+            buffer_length``) fills mid-run, the series is kept at reduced
+            resolution (uniform decimation, still spanning the whole run) and
+            a ``UserWarning`` recommends a larger ``buffer_length``.
 
     Returns:
-        SimulationResults: A named tuple containing the recorded signals and the final
-            context (if `options.return_context` is `True`).
+        SimulationResults: A named tuple containing the recorded signals
+            (``results.time`` and ``results.outputs``, a dict keyed by the
+            names given in `recorded_signals`) and the final context (if
+            `options.return_context` is `True`).
 
     Notes:
         If `recorded_signals` is provided as a kwarg, it will override any entry in
