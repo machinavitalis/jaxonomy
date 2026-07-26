@@ -959,11 +959,74 @@ def _augmented_step_block(A, B, t):
     return EM[:n, n:]  # (n, m) block = ∫₀ᵗ expm(A·s) ds · B
 
 
-def step_response(linsys: LinearizedSystem, t_grid):
-    """Closed-form step response of a continuous-time LTI system.
+def _discrete_time_to_steps(t_grid, dt, fn_name):
+    """Map a time grid onto the integer sample grid ``k = t/dt``.
 
-    For zero initial state and unit step input ``u(t) = 1`` (for ``t ≥ 0``)
-    the response is
+    Policy for discrete-time responses: every requested time must lie on
+    the sampling grid (within a 1e-6·dt float tolerance) — a discrete
+    system is simply not defined between samples, and silently rounding
+    would return values for instants the system never produces.  Negative
+    times are allowed and map to the causal pre-input response (zero).
+
+    Returns ``(k, scalar_input)`` with ``k`` an int numpy array.  Requires
+    a concrete (non-traced) ``t_grid``; the discrete path is a host-side
+    analysis helper like :func:`bode_data`.
+    """
+    t_np = np.asarray(t_grid, dtype=float)
+    scalar_input = (t_np.ndim == 0)
+    t_flat = np.atleast_1d(t_np)
+    k_float = t_flat / dt
+    k = np.rint(k_float).astype(int)
+    off_grid = np.abs(k_float - k) > 1e-6
+    if off_grid.any():
+        bad = t_flat[off_grid][:5]
+        raise ValueError(
+            f"{fn_name}: discrete-time response is only defined on the "
+            f"sampling grid t = k*dt (dt={dt}); got off-grid times "
+            f"{bad.tolist()}. Pass times that are integer multiples of dt "
+            f"(e.g. np.arange(K)*dt)."
+        )
+    return k, scalar_input
+
+
+def _discrete_response_samples(A, B, C, D, K, kind):
+    """Samples ``y[0..K]`` of the discrete step or impulse response.
+
+    Exact recurrence ``x[k+1] = A x[k] + B u[k]``, ``y[k] = C x[k] + D u[k]``
+    from zero initial state, evaluated with ``lax.scan`` (no matrix power to
+    a traced exponent).  The state is propagated as an ``(n, m)`` block —
+    one column per input channel — so all channel pairs come out of one scan.
+
+    step:    ``u[k] = 1``  for k ≥ 0  →  ``y[k] = C·(Σ_{j<k} Aʲ)·B + D``
+    impulse: ``u[0] = 1``, else 0     →  ``y[0] = D``, ``y[k] = C·A^{k-1}·B``
+    """
+    from jax import lax
+
+    if kind == "step":
+        def scan_step(x, _):
+            y = C @ x + D
+            return A @ x + B, y
+
+        x0 = jnp.zeros((A.shape[0], B.shape[1]), dtype=B.dtype)
+        _, ys = lax.scan(scan_step, x0, None, length=K + 1)
+        return ys  # (K+1, p, m)
+
+    # impulse: x[1] = B, then x[k+1] = A x[k]; y[0] = D is prepended.
+    def scan_impulse(x, _):
+        y = C @ x
+        return A @ x, y
+
+    if K == 0:
+        return jnp.asarray(D)[None, ...]
+    _, ys = lax.scan(scan_impulse, jnp.asarray(B), None, length=K)
+    return jnp.concatenate([jnp.asarray(D)[None, ...], ys], axis=0)
+
+
+def step_response(linsys: LinearizedSystem, t_grid):
+    """Step response of an LTI system, continuous- or discrete-time.
+
+    **Continuous** (``linsys.dt is None``): for zero initial state and unit
+    step input ``u(t) = 1`` (for ``t ≥ 0``) the closed-form response is
 
     .. code-block:: text
 
@@ -974,11 +1037,22 @@ def step_response(linsys: LinearizedSystem, t_grid):
     for non-invertible ``A`` (e.g. integrators).  When ``A`` is
     invertible the same value equals ``C·A⁻¹·(expm(A·t) − I)·B + D``.
 
+    **Discrete** (``linsys.dt`` set, e.g. from :func:`discretize`): the exact
+    recurrence ``x[k+1] = A x[k] + B``, ``y[k] = C x[k] + D`` from zero
+    initial state, sampled on the integer grid ``k = t/dt``.  Every entry of
+    ``t_grid`` must lie on the sampling grid (within 1e-6·dt) — off-grid
+    times raise ``ValueError`` rather than silently interpolating.  Negative
+    times return the causal pre-input response (zero).  For a ``"zoh"``
+    discretization the discrete samples equal the continuous step response
+    at ``t = k·dt`` exactly.
+
     Args:
-        linsys: A :class:`LinearizedSystem`.
-        t_grid: Scalar or 1-D array of evaluation times.  Negative times
-            are evaluated formally (the closed-form result is still well
-            defined; physically the step starts at ``t = 0``).
+        linsys: A :class:`LinearizedSystem` (either time base).
+        t_grid: Scalar or 1-D array of evaluation times.  Continuous:
+            negative times are evaluated formally (the closed-form result
+            is still well defined; physically the step starts at ``t = 0``).
+            Discrete: must be integer multiples of ``dt`` (see above), and
+            must be concrete (not JAX-traced).
 
     Returns:
         Array of shape ``(K, p, m)`` — step response at each ``t`` for
@@ -988,23 +1062,25 @@ def step_response(linsys: LinearizedSystem, t_grid):
         scalar ``t_grid`` the result squeezes naturally to a scalar.
 
     Notes:
-        Fully differentiable through ``A, B, C, D`` via
-        :func:`jax.scipy.linalg.expm`.  For very large state dimensions
+        Fully differentiable through ``A, B, C, D`` — via
+        :func:`jax.scipy.linalg.expm` (continuous) or ``lax.scan``
+        (discrete).  For very large continuous state dimensions
         (``n > 50``) the augmented expm may be slow — the honest fall-
         back is to simulate the diagram with a :class:`Step` source
         (deferred to a deeper follow-up).
     """
-    if linsys.is_discrete():
-        raise ValueError(
-            "step_response is defined for continuous-time LinearizedSystems "
-            f"only, but got a discrete-time system (dt={linsys.dt}). The "
-            "closed-form continuous matrix-exponential formula does not "
-            "apply to a discrete recurrence x[k+1] = A x[k] + B u[k]. "
-            "Simulate the discrete diagram directly to obtain its step "
-            "response (see KNOWN_GAPS.md)."
-        )
-
     A, B, C, D, n, m, p = _coerce_state_space(linsys)
+
+    if linsys.is_discrete():
+        k, scalar_input = _discrete_time_to_steps(
+            t_grid, linsys.dt, "step_response"
+        )
+        K = int(k.max()) if k.size and k.max() > 0 else 0
+        samples = _discrete_response_samples(A, B, C, D, K, "step")
+        out = jnp.where(
+            (k >= 0)[:, None, None], samples[jnp.clip(k, 0)], 0.0
+        )
+        return out[0] if scalar_input else out
 
     t_arr = jnp.asarray(t_grid)
     scalar_input = (t_arr.ndim == 0)
@@ -1022,9 +1098,10 @@ def step_response(linsys: LinearizedSystem, t_grid):
 
 
 def impulse_response(linsys: LinearizedSystem, t_grid):
-    """Closed-form impulse response of a continuous-time LTI system.
+    """Impulse response of an LTI system, continuous- or discrete-time.
 
-    For zero initial state the (finite part of the) impulse response is
+    **Continuous** (``linsys.dt is None``): for zero initial state the
+    (finite part of the) impulse response is
 
     .. code-block:: text
 
@@ -1034,9 +1111,18 @@ def impulse_response(linsys: LinearizedSystem, t_grid):
     samples since it is not representable on a numeric grid; consumers
     that need it can add ``D`` to the ``t = 0`` sample explicitly.
 
+    **Discrete** (``linsys.dt`` set): the response to the unit pulse
+    ``u[0] = 1`` (which, unlike the Dirac, *is* representable):
+    ``y[0] = D``, ``y[k] = C·A^{k-1}·B`` for ``k ≥ 1``, evaluated by the
+    exact recurrence and sampled on the integer grid ``k = t/dt``.
+    Off-grid times raise ``ValueError`` (same policy as
+    :func:`step_response`); negative times return zero.  This matches the
+    ``scipy.signal.dimpulse`` convention.
+
     Args:
-        linsys: A :class:`LinearizedSystem`.
-        t_grid: Scalar or 1-D array of evaluation times.
+        linsys: A :class:`LinearizedSystem` (either time base).
+        t_grid: Scalar or 1-D array of evaluation times.  Discrete: must
+            be integer multiples of ``dt`` and concrete (not JAX-traced).
 
     Returns:
         Array of shape ``(K, p, m)`` for vector ``t_grid``, or ``(p, m)``
@@ -1048,17 +1134,18 @@ def impulse_response(linsys: LinearizedSystem, t_grid):
     """
     from jax.scipy.linalg import expm
 
-    if linsys.is_discrete():
-        raise ValueError(
-            "impulse_response is defined for continuous-time "
-            "LinearizedSystems only, but got a discrete-time system "
-            f"(dt={linsys.dt}). The closed-form continuous matrix-"
-            "exponential formula does not apply to a discrete recurrence "
-            "x[k+1] = A x[k] + B u[k]. Simulate the discrete diagram "
-            "directly to obtain its impulse response (see KNOWN_GAPS.md)."
-        )
-
     A, B, C, D, n, m, p = _coerce_state_space(linsys)
+
+    if linsys.is_discrete():
+        k, scalar_input = _discrete_time_to_steps(
+            t_grid, linsys.dt, "impulse_response"
+        )
+        K = int(k.max()) if k.size and k.max() > 0 else 0
+        samples = _discrete_response_samples(A, B, C, D, K, "impulse")
+        out = jnp.where(
+            (k >= 0)[:, None, None], samples[jnp.clip(k, 0)], 0.0
+        )
+        return out[0] if scalar_input else out
 
     t_arr = jnp.asarray(t_grid)
     scalar_input = (t_arr.ndim == 0)
