@@ -97,7 +97,7 @@ def linearize_model(
                 "C": C.tolist(),
                 "D": D.tolist(),
                 "eigenvalues": ev_json,
-                "is_stable": bool(lin.is_stable()),
+                "is_stable": bool(lin.is_stable),
             },
             indent=2,
         )

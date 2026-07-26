@@ -30,6 +30,7 @@ Pure internal refactors live in commits, not here.
 
 ### Changed
 
+- **Breaking: `LinearizedSystem.is_stable` / `.is_discrete` are now properties**: write `linsys.is_stable` (no parentheses) — the old method call now raises `TypeError: 'bool' object is not callable`. The zero-arg-method form made the natural `f"stable={sys.is_stable}"` print a bound-method repr followed by the full A/B/C/D dump. `__repr__` is also now a one-line shape/dt summary instead of the array dump. `declare_output_port` gained a worked docstring example (positional callback `(time, state, *inputs, **parameters)` — there is no `eval=`/`calc=` keyword — plus `requires_inputs`/`prerequisites_of_calc` usage).
 - **BDF non-finite abort diagnostics are now opt-in** (`SimulatorOptions(bdf_nonfinite_diagnostics=True)`): the in-graph cond-gated host callback introduced in 3.1.0 is runtime-free but costs ~0.3 s of XLA compile time per BDF model (a 6x regression on the compile-time gate's small-model scenario). The default path now performs a free post-run check instead — a non-finite final state still warns, naming the failure and pointing at the flag for the detailed report (failure time, collapsed dt, offending rows). The acausal weak-IC override warning likewise moved from compile time to system creation, where the authoritative IC solve already runs — same coverage, no extra symbolic solve during compilation.
 
 ## [3.1.0] - 2026-07-15

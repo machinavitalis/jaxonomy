@@ -1096,6 +1096,32 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         and wraps it to the signature expected by SystemBase.declare_output_port:
             `callback(context) -> value`
 
+        The callback is passed **positionally** (there is no ``eval=`` or
+        ``calc=`` keyword). A computed (non-state) output looks like::
+
+            class Thermometer(LeafSystem):
+                def __init__(self):
+                    super().__init__()
+                    self.declare_input_port(name="q_in")
+                    self.declare_continuous_state(default_value=jnp.zeros(2),
+                                                  ode=self._ode)
+                    # Output reads the continuous state -> declare the xc
+                    # prerequisite; it does not read the input -> say so.
+                    self.declare_output_port(
+                        self._temperature,
+                        name="T",
+                        requires_inputs=False,
+                        prerequisites_of_calc=[DependencyTicket.xc],
+                    )
+
+                def _temperature(self, time, state, *inputs, **parameters):
+                    return state.continuous_state[0]
+
+        A feedthrough output that transforms its inputs instead declares
+        ``requires_inputs=True`` (the default) and reads them positionally:
+        ``def _out(self, time, state, u, v): return u + v``. Mistakes in the
+        callback signature surface at trace time, not at declaration.
+
         Args:
             callback (Callable):
                 The callback function defining the output port.

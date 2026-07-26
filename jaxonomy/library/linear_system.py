@@ -448,6 +448,19 @@ class LinearizedSystem:
     operating_point: dict
     dt: Optional[float] = None
 
+    def __repr__(self) -> str:
+        # The generated dataclass repr dumps the full A/B/C/D arrays (~100
+        # lines for a modest model), which buries slips like printing a bound
+        # method.  Report shapes and the time base instead.
+        n = getattr(self.A, "shape", (None,))[0]
+        m = getattr(self.B, "shape", (None, None))[-1]
+        p = getattr(self.C, "shape", (None,))[0]
+        return (
+            f"{type(self).__name__}(n_states={n}, n_inputs={m}, "
+            f"n_outputs={p}, dt={self.dt!r})"
+        )
+
+    @property
     def is_discrete(self) -> bool:
         """True if this LinearizedSystem carries a sampling period."""
         return self.dt is not None
@@ -466,6 +479,7 @@ class LinearizedSystem:
         import jax.numpy as jnp
         return jnp.linalg.eigvals(self.A)
 
+    @property
     def is_stable(self) -> bool:
         """
         True if the system is stable.  For continuous-time linsys
@@ -478,7 +492,7 @@ class LinearizedSystem:
         if self.dt is None:
             return bool(jnp.all(jnp.real(eigs) < 0))
         return bool(jnp.all(jnp.abs(eigs) < 1.0))
-    
+
     def to_scipy_lti(self):
         """Convert to :class:`scipy.signal.StateSpace` for frequency-domain analysis.
 

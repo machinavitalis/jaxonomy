@@ -63,7 +63,7 @@ def test_diagram_path_matches_explicit_linearize_then_discretize():
     np.testing.assert_allclose(np.asarray(explicit.C), np.asarray(diagram_form.C))
     np.testing.assert_allclose(np.asarray(explicit.D), np.asarray(diagram_form.D))
     assert diagram_form.dt == pytest.approx(dt)
-    assert diagram_form.is_discrete()
+    assert diagram_form.is_discrete
 
 
 def test_diagram_path_default_method_is_zoh():
@@ -117,7 +117,7 @@ def test_lti_path_still_works_unchanged():
         operating_point={"x": jnp.zeros(1), "u": jnp.zeros(1)},
     )
     out = discretize(linsys, 0.1)
-    assert out.is_discrete()
+    assert out.is_discrete
     assert out.dt == pytest.approx(0.1)
 
 
@@ -152,6 +152,6 @@ def test_diagram_path_handles_nonlinear_system():
     down = base.with_continuous_state(jnp.array([0.0, 0.0]))
 
     out = discretize(system, 0.05, base_context=down)
-    assert out.is_discrete()
-    # is_stable() on a discrete linsys checks |eig| < 1.
-    assert out.is_stable()
+    assert out.is_discrete
+    # is_stable on a discrete linsys checks |eig| < 1.
+    assert out.is_stable

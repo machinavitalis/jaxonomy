@@ -139,11 +139,11 @@ def test_euler_matches_closed_form():
 def test_continuous_input_has_dt_none_discrete_output_carries_dt():
     linsys = _first_order()
     assert linsys.dt is None
-    assert not linsys.is_discrete()
+    assert not linsys.is_discrete
 
     d = discretize(linsys, dt=0.03, method="zoh")
     assert d.dt == pytest.approx(0.03)
-    assert d.is_discrete()
+    assert d.is_discrete
 
 
 def test_c_and_d_are_forwarded_untouched():
@@ -157,10 +157,10 @@ def test_is_stable_uses_unit_disk_for_discrete_linsys():
     """A stable continuous A=-1/τ becomes a stable discrete A=exp(-dt/τ),
     which lives inside the unit disk."""
     linsys = _first_order(tau=1.0)
-    assert linsys.is_stable()  # Re(eig) < 0 in continuous-time
+    assert linsys.is_stable  # Re(eig) < 0 in continuous-time
 
     d = discretize(linsys, dt=0.1, method="zoh")
-    assert d.is_stable()  # |eig| = exp(-0.1) < 1 in discrete-time
+    assert d.is_stable  # |eig| = exp(-0.1) < 1 in discrete-time
 
 
 def test_is_stable_detects_marginal_discrete_instability():
@@ -169,7 +169,7 @@ def test_is_stable_detects_marginal_discrete_instability():
     linsys = _integrator()
     d = discretize(linsys, dt=0.05, method="zoh")
     # |eig| = 1, not < 1 → not strictly stable.
-    assert not d.is_stable()
+    assert not d.is_stable
 
 
 # ---------------------------------------------------------------------------

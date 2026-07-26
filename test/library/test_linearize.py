@@ -87,7 +87,7 @@ def test_is_stable():
     system.input_ports[0].fix_value(jnp.array([0.0]))
     context = system.create_context()
     result = linearize(system, context)
-    assert result.is_stable()
+    assert result.is_stable
 
     # Unstable system
     system2 = LTISystem(
@@ -99,7 +99,22 @@ def test_is_stable():
     system2.input_ports[0].fix_value(jnp.array([0.0]))
     context2 = system2.create_context()
     result2 = linearize(system2, context2)
-    assert not result2.is_stable()
+    assert not result2.is_stable
+
+def test_is_stable_is_discrete_are_properties_and_repr_is_short():
+    """DX regression: the natural f-string usage prints a boolean, not a
+    bound-method repr followed by a ~100-line state-space dump."""
+    import numpy as np
+
+    sys_ = LinearizedSystem(
+        jnp.eye(3) * -1.0, jnp.ones((3, 2)), jnp.ones((1, 3)), jnp.zeros((1, 2)), {}
+    )
+    assert f"stable={sys_.is_stable}" == "stable=True"
+    assert f"discrete={sys_.is_discrete}" == "discrete=False"
+    r = repr(sys_)
+    assert "n_states=3" in r and "n_inputs=2" in r and "dt=None" in r
+    assert len(r) < 120  # shape summary, not an array dump
+
 
 def test_to_lti():
     """Can convert to LTISystem."""

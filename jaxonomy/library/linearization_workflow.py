@@ -1071,7 +1071,7 @@ def step_response(linsys: LinearizedSystem, t_grid):
     """
     A, B, C, D, n, m, p = _coerce_state_space(linsys)
 
-    if linsys.is_discrete():
+    if linsys.is_discrete:
         k, scalar_input = _discrete_time_to_steps(
             t_grid, linsys.dt, "step_response"
         )
@@ -1136,7 +1136,7 @@ def impulse_response(linsys: LinearizedSystem, t_grid):
 
     A, B, C, D, n, m, p = _coerce_state_space(linsys)
 
-    if linsys.is_discrete():
+    if linsys.is_discrete:
         k, scalar_input = _discrete_time_to_steps(
             t_grid, linsys.dt, "impulse_response"
         )
@@ -1390,7 +1390,7 @@ def discretize(
         Ad, Bd = discretize_forward_euler(A, B, dt)
 
     # Stamp dt as a Python float when concrete (so the dataclass repr is
-    # readable and is_discrete() is cheap); pass through the traced array
+    # readable and is_discrete is cheap); pass through the traced array
     # unchanged when called under jit / grad.
     dt_field = dt_concrete if dt_concrete is not None else dt
     return LinearizedSystem(
