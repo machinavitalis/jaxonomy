@@ -125,8 +125,32 @@ class MassflowSource(FluidOnePort):
 
 
 class StaticPipe(FluidTwoPort):
-    """
-    Modelica>Fluid>Pipes>StaticPipe
+    """Pipe with wall friction and static head, no mass or energy storage.
+
+    Modeled on Modelica>Fluid>Pipes>StaticPipe. The steady-state momentum
+    balance is
+
+        P_a - P_b = f(Re) * (L/D) * mdot*|mdot| / (2*rho*A^2) + rho*g*h_ab
+
+    with flow area ``A = pi*D^2/4``, ``Re = 4*|mdot| / (pi*D*mu)``, and ``f``
+    the Darcy friction factor from the Churchill (1977) correlation, valid
+    continuously across laminar / transitional / turbulent flow and any
+    relative roughness ``e/D``. The signed ``mdot*|mdot|`` form supports flow
+    reversal; in the laminar limit the drop reduces to Hagen-Poiseuille,
+    ``dP = 128*mu*L*mdot / (pi*rho*D^4)``.
+
+    Args:
+        L: Pipe length [m].
+        D: Inner diameter [m].
+        e: Wall roughness [m] (0 = hydraulically smooth).
+        h_ab: Height of port_b above port_a [m]; adds the static head
+            ``rho*g*h_ab`` to the pressure drop. Signed, ``|h_ab| <= L``.
+        mu: Dynamic viscosity [Pa*s]. Defaults to the connected medium's
+            ``viscosity_dyn``; required if the medium does not define one.
+        enable_sensors: Expose ``m_flow``, ``pa``, ``pb`` as causal outputs.
+
+    Density is taken from the medium's constant ``density`` when it defines
+    one (incompressible media); otherwise the port_a density variable is used.
     """
 
     @staticmethod
@@ -162,14 +186,18 @@ class StaticPipe(FluidTwoPort):
         name=None,
         L=1.0,
         D=0.5,
-        e=0.0,  # roughness
-        h_ab=0.0,
-        allow_flow_reversal=False,
+        e=0.0,  # wall roughness [m]
+        h_ab=0.0,  # height of port_b above port_a [m] (static head)
+        mu=None,  # dynamic viscosity [Pa*s]; defaults to the medium's viscosity_dyn
+        enable_sensors=False,
     ):
         self.name = self.__class__.__name__ if name is None else name
         super().__init__(ev, self.name)
+        self.enable_sensors = enable_sensors
+        self._mu_arg = mu
+        L_arg = L
 
-        L = self.declare_symbol(
+        self.L = self.declare_symbol(
             ev,
             "L",
             self.name,
@@ -179,7 +207,7 @@ class StaticPipe(FluidTwoPort):
             invalid_msg=f"Component {self.__class__.__name__} {self.name} must have L>0",
         )
 
-        D = self.declare_symbol(
+        self.D = self.declare_symbol(
             ev,
             "D",
             self.name,
@@ -189,7 +217,7 @@ class StaticPipe(FluidTwoPort):
             invalid_msg=f"Component {self.__class__.__name__} {self.name} must have D>0",
         )
 
-        e = self.declare_symbol(
+        self.e = self.declare_symbol(
             ev,
             "e",
             self.name,
@@ -199,37 +227,109 @@ class StaticPipe(FluidTwoPort):
             invalid_msg=f"Component {self.__class__.__name__} {self.name} must have e>=0",
         )
 
-        h_ab = self.declare_symbol(
+        self.h_ab = self.declare_symbol(
             ev,
             "h_ab",
             self.name,
             kind=SymKind.param,
             val=h_ab,
-            validator=lambda x: L >= h_ab,
-            invalid_msg=f"Component {self.__class__.__name__} {self.name} must L>=h_ab",
+            validator=lambda x: abs(x) <= L_arg,
+            invalid_msg=f"Component {self.__class__.__name__} {self.name} must have |h_ab|<=L",
         )
 
-        port = self.ports["port_a"]
-        fluid = port.fluid
-        rho = fluid.density.s
-        mu = fluid.viscosity_dyn
+        self.Re = self.declare_symbol(ev, "Re", self.name, kind=SymKind.var)
 
-        Re = self.declare_symbol(ev, "Re", self.name, kind=SymKind.var)
-        f = self.get_friction_factor(Re, e, D)
+        if self.enable_sensors:
+            self.m_flow = self.declare_symbol(
+                ev, "m_flow", self.name, kind=SymKind.outp
+            )
+            self.pa = self.declare_symbol(ev, "pa", self.name, kind=SymKind.outp)
+            self.pb = self.declare_symbol(ev, "pb", self.name, kind=SymKind.outp)
+
+    def finalize(self, ev):
+        p1 = self.ports[self.port_1_name]
+        p2 = self.ports[self.port_2_name]
+        if p1.fluid is None or p2.fluid is None:
+            raise ValueError(
+                f"StaticPipe {self.name} has no fluid assigned to its port."
+            )
+
+        # Dynamic viscosity: explicit mu= argument wins, else the medium's
+        # constant. Raise a clear error rather than silently assuming a value.
+        mu_val = self._mu_arg
+        if mu_val is None:
+            mu_val = getattr(p1.fluid, "viscosity_dyn", None)
+        if mu_val is None:
+            raise ValueError(
+                f"StaticPipe {self.name}: medium {type(p1.fluid).__name__} does "
+                "not define viscosity_dyn; pass mu=<dynamic viscosity in Pa*s> "
+                "to the component."
+            )
+        mu = self.declare_symbol(
+            ev,
+            "mu",
+            self.name,
+            kind=SymKind.param,
+            val=mu_val,
+            validator=lambda x: x > 0.0,
+            invalid_msg=f"Component {self.__class__.__name__} {self.name} must have mu>0",
+        )
+
+        # Density: use the medium's constant for incompressible media
+        # (WaterLiquidSimple/WaterLiquid). For compressible media (IdealGasAir)
+        # fall back to the port_a density variable, which the medium equations
+        # of the adjacent volume/boundary constrain via port aliasing.
+        rho = getattr(p1.fluid, "density", None)
+        if rho is None:
+            rho = p1.d.s
+
+        mflow = p1.mflow.s  # positive into port_a
+        L, D, e, h_ab = self.L, self.D, self.e, self.h_ab
+        area = sp.pi * D.s**2 / 4
+
+        # Regularized Reynolds number, Re = |mflow|*D/(area*mu). The +eps keeps
+        # the Churchill correlation finite at zero flow; in the laminar limit
+        # f = 64/Re the friction drop is then linear in mflow and exactly zero
+        # at mflow = 0. The friction factor is built from this *expression*
+        # (positive for every real Newton trial of mflow) rather than the Re
+        # unknown — an unknown's initial guess or trial iterate can be <= 0,
+        # which puts 1/Re and log() outside their domain and kills the
+        # algebraic solve.
+        Re_expr = 4 * (sp.Abs(mflow) + M_FLOW_EPS) / (sp.pi * D.s * mu.s)
+        f = self.get_friction_factor(Re_expr, e, D)
 
         self.add_eqs(
             [
                 # does not store mass
-                sp.Eq(0, self.M1.s + self.M2.s),
-                # Reynolds number
+                sp.Eq(0, p1.mflow.s + p2.mflow.s),
+                # Reynolds number (diagnostic variable; linear, no singularity)
+                sp.Eq(self.Re.s, Re_expr),
+                # Steady-state momentum balance: Darcy-Weisbach wall friction
+                # (signed, mflow*|mflow|, so flow reversal is supported) plus
+                # the static head of the port_b end sitting h_ab above port_a.
                 sp.Eq(
-                    Re.s,
-                    4 * abs(self.M1.s) / (sp.pi * D.s * mu),
+                    self.dP.s,
+                    f * (L.s / D.s) * mflow * sp.Abs(mflow) / (2 * rho * area**2)
+                    + rho * ev.g_n.s * h_ab.s,
                 ),
-                # pressure drop equation. use M1 due to sign convention
-                sp.Eq(self.dP.s, f * L.s * rho * abs(self.M1.s) ** 2 / (2 * D.s)),
+                # Adiabatic pass-through: fluid exits each end with the
+                # enthalpy it carried in from the other.
+                sp.Eq(p2.h_outflow.s, p1.h_inStream.s),
+                sp.Eq(p1.h_outflow.s, p2.h_inStream.s),
             ]
         )
+
+        if self.enable_sensors:
+            self.declare_equation(sp.Eq(p1.mflow.s, self.m_flow.s), kind=EqnKind.outp)
+            self.declare_equation(sp.Eq(p1.p.s, self.pa.s), kind=EqnKind.outp)
+            self.declare_equation(sp.Eq(p2.p.s, self.pb.s), kind=EqnKind.outp)
+
+        for p in (p1, p2):
+            p.p.ic = p.fluid.init["p"]
+            p.T.ic = p.fluid.init["T"]
+            p.h_outflow.ic = p.fluid.init["h"]
+            p.u.ic = p.fluid.init["u"]
+            p.d.ic = p.fluid.init["d"]
 
 class ClosedVolume(FluidOnePort):
     """see Modelica>Fluid>Vessels>ClosedVolume...sort of."""

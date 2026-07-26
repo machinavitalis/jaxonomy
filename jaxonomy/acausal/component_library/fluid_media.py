@@ -48,6 +48,10 @@ class IdealGasAir(FluidBase):
         self.Rs_air = 287.052874
         self.Tref = 0.0
         self.href = 274648.7
+        # Dynamic viscosity at ~300 K [Pa*s]; constant approximation used by
+        # friction models (StaticPipe). Sutherland-law T dependence is out of
+        # scope for this medium.
+        self.viscosity_dyn = 1.85e-5
 
         # Pre-compute physical initial conditions from (P_ic, T_ic) so that fluid
         # state variables (density, enthalpy, internal energy) get meaningful weak ICs
@@ -104,6 +108,9 @@ class WaterLiquidSimple(FluidBase):
         self.cp = 4180.0  # J/(kg*K)
         self.cv = 4130.0  # J/(kg*K)
         self.density = 997  # kg/m3
+        # Dynamic viscosity at ~298 K [Pa*s]; constant approximation used by
+        # friction models (StaticPipe).
+        self.viscosity_dyn = 0.89e-3
         # T2h is a linear approximation from the graph here: https://www.engineeringtoolbox.com/water-properties-d_1508.html
         # self.T2h = lambda T: (T - 273.15) * 1350e3 / 573  # (J/kg)/(K)
         # HACK: this function was intentionally crafted identical to the u=cp*T equation so that h and u are both identical
@@ -159,6 +166,10 @@ class WaterLiquid(FluidBase):
         # constants
         self.cp = 4180.0  # J/(kg*K)
         self.cv = 4130.0  # J/(kg*K)
+        # Dynamic viscosity at ~298 K [Pa*s]; constant approximation used by
+        # friction models (StaticPipe) — the IF97 viscosity release is out of
+        # scope for this medium.
+        self.viscosity_dyn = 0.89e-3
 
         # coefficients from table 2. auto linter forces them to be formatted annoyingly
         self.Iis = np.array(
