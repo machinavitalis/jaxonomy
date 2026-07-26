@@ -3674,8 +3674,16 @@ def _odeint(solver: ODESolverBase, ode_rhs, solver_state, tf, context, checkpoin
         )
 
         # Save the last state in the checkpoints array (will be used to
-        # initialize adjoint pass)
-        index = jnp.maximum(index + 1, max_checkpoints - 1)
+        # initialize adjoint pass).  ``minimum``, not ``maximum``: when the
+        # array is exactly full (index + 1 == max_checkpoints) the final state
+        # must overwrite the last interior checkpoint — the previous
+        # ``maximum`` produced an out-of-bounds index whose scatter JAX
+        # silently drops, leaving ts[-1] < tf and making the adjoint sweep
+        # skip the final (ts[-1], tf] sub-interval entirely, precisely where
+        # the costate is largest.  The resulting gradient error appeared and
+        # disappeared with the forward step count (tolerance, hmax), which is
+        # why it looked erratically tolerance-dependent from the outside.
+        index = jnp.minimum(index + 1, max_checkpoints - 1)
         yt = jnp.append(solver_state.y, solver_state.t)
         checkpoints = checkpoints.at[index].set(yt)
 
@@ -3739,6 +3747,16 @@ def _odeint_adj(solver, ode_rhs, _checkpoint, residuals, adjoints):
         idx = n_steps - i
         adj_state = solver_state.y.at[:ny].set(ys[idx])
         solver_state = solver_state.with_state_and_time(adj_state, -ts[idx])
+        # Refresh the stored derivative at the teleported state:
+        # ``with_state_and_time`` replaces (y, t) but keeps ``f`` — the RHS
+        # evaluated at the *end of the previous backward sub-interval*, where
+        # the primal slice of the augmented state carried backward-integration
+        # drift.  Dopri5 trusts ``f`` as the first Runge-Kutta stage (and it
+        # enters the error estimate), so a stale value injects an
+        # uncontrolled O(dt·‖Δf‖) error at every checkpoint restart.
+        solver_state = dataclasses.replace(
+            solver_state, f=adj_dynamics(adj_state, -ts[idx], context)
+        )
         return _odeint(
             solver, adj_dynamics, solver_state, -ts[idx - 1], context, checkpoint=False
         )
