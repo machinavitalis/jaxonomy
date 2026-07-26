@@ -542,8 +542,14 @@ class ComponentBase(metaclass=AcausalBlockMeta):
         return f"For component {self.name} and lookup table {lut_name}, the "
 
     def _val_lut_param_type(self, lut_name, p, p_name):
+        # Accept concrete sequences and anything array-like via duck typing:
+        # numpy arrays, JAX arrays, and JAX tracers (a parameter traced under
+        # jit/vmap) all expose ``.shape``.  An isinstance check against
+        # concrete array types rejected tracers, breaking lookup-table
+        # components inside JAX transformations; duck typing keeps this
+        # module backend-neutral (no jax import).
         prefix_str = self._err_prefix(lut_name)
-        if not isinstance(p, (ArrayLike, List)):
+        if not (isinstance(p, (list, tuple)) or hasattr(p, "shape")):
             raise AcausalModelError(
                 message=prefix_str
                 + f"{p_name} param must be an array or list. Type found: {type(p)=}"
