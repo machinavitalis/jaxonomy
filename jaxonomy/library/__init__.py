@@ -113,6 +113,14 @@ from .primitives import (
     ZeroOrderHold,
 )
 from .battery_cell import BatteryCell
+from .drives import (
+    PMSM,
+    Clarke,
+    InverseClarke,
+    Park,
+    InversePark,
+    AveragedInverter,
+)
 from .conditional import Conditional, WhenDisabled
 from .replicated import ReplicatedFunction
 # T-120 phase 1: Container Blocks (EnabledSubsystem, TriggeredSubsystem).
@@ -405,6 +413,12 @@ __all__ = [
     "Constant",
     "Sine",
     "BatteryCell",
+    "PMSM",
+    "Clarke",
+    "InverseClarke",
+    "Park",
+    "InversePark",
+    "AveragedInverter",
     "BusCreator",
     "BusMerge",
     "BusPassthrough",
