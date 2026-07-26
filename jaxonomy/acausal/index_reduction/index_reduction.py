@@ -1144,8 +1144,78 @@ class IndexReduction:
 
             max_ics_swappable = min(len(X_available_for_ic_swap), len(self.ics))
 
+            import math
+            # Calculate total possible combinations to see if we should use fast mode
+            total_combos = 0
+            for swap_num_ics in range(max_ics_swappable):
+                total_combos += math.comb(len(self.ics), swap_num_ics) * math.comb(len(X_available_for_ic_swap), swap_num_ics)
+            use_fast_mode = total_combos > 100
+
             structurally_feasible_set_found = False
             numerically_feasible_set_found = False
+
+            if use_fast_mode:
+                # Greedy matching repair
+                G_rem = self.G.copy()
+                for ic_var in self.ics.keys():
+                    if G_rem.has_node(ic_var):
+                        G_rem.remove_node(ic_var)
+                
+                v_nodes = [n for n, d in G_rem.nodes(data=True) if d["bipartite"] == 1]
+                _mm = bipartite.matching.maximum_matching(G_rem, top_nodes=v_nodes)
+                mm = {k: v for k, v in _mm.items() if v in v_nodes}
+                
+                if len(mm) == len(v_nodes):
+                    structurally_feasible_set_found = True
+                    numerically_feasible_set_found = True
+                else:
+                    unmatched_eqs = [eq for eq in v_nodes if eq not in mm]
+                    vars_to_move_to_weak = set()
+                    for eq in unmatched_eqs:
+                        neighbors = list(self.G.neighbors(eq))
+                        ic_neighbors = [v for v in neighbors if v in self.ics]
+                        if ic_neighbors:
+                            vars_to_move_to_weak.add(ic_neighbors[0])
+                    
+                    ics = self.ics.copy()
+                    ics_weak = self.ics_weak.copy()
+                    for var in vars_to_move_to_weak:
+                        if var in ics:
+                            ics_weak[var] = ics.pop(var)
+                    
+                    num_to_add = len(vars_to_move_to_weak)
+                    if num_to_add > 0:
+                        G_new = self.G.copy()
+                        for ic_var in ics.keys():
+                            if G_new.has_node(ic_var):
+                                G_new.remove_node(ic_var)
+                        
+                        v_nodes_new = [n for n, d in G_new.nodes(data=True) if d["bipartite"] == 1]
+                        _mm_new = bipartite.matching.maximum_matching(G_new, top_nodes=v_nodes_new)
+                        mm_new = {k: v for k, v in _mm_new.items() if v in v_nodes_new}
+                        
+                        remaining_vars = [n for n, d in G_new.nodes(data=True) if d["bipartite"] == 0]
+                        free_vars_new = [v for v in remaining_vars if v not in mm_new]
+                        
+                        vars_to_move_to_strong = []
+                        for v in free_vars_new:
+                            if v in self.X_free and v not in ics:
+                                vars_to_move_to_strong.append(v)
+                                if len(vars_to_move_to_strong) == num_to_add:
+                                    break
+                        
+                        for var in vars_to_move_to_strong:
+                            ics[var] = ics_weak.pop(var)
+                    
+                    self.ics = ics
+                    self.ics_weak = ics_weak
+                    structurally_feasible_set_found = True
+                    numerically_feasible_set_found = True
+                
+                if self.verbose:
+                    print("Greedy matching repair selected structurally feasible set.")
+                return
+
             for swap_num_ics in range(max_ics_swappable):
                 for swap_orig_ics in itertools.combinations(
                     self.ics.keys(), swap_num_ics
@@ -1233,6 +1303,10 @@ class IndexReduction:
         X_excluding_ics = [x for x in self.X if x not in self.ics.keys()]
         X_availale_for_new_ics = [x for x in X_excluding_ics if x in self.X_free]
 
+        import math
+        total_combos = math.comb(len(X_availale_for_new_ics), num_new_ics)
+        use_fast_mode = total_combos > 100
+
         X_availale_for_new_ics_idx = [self.X.index(x) for x in X_availale_for_new_ics]
 
         for x_chosen_idxs in itertools.combinations(
@@ -1245,6 +1319,15 @@ class IndexReduction:
             ics.update({var: ics_weak.pop(var) for var in x_chosen})
 
             if is_structurally_feasible(ics, self.G):
+                if use_fast_mode:
+                    self.ics_new = {
+                        var: self.ics_weak.pop(var) for var in x_chosen
+                    }
+                    self.ics = {**self.ics, **self.ics_new}
+                    if self.verbose:
+                        print("Fast mode: selected first structurally feasible underdetermined set.")
+                    return
+
                 condition_number = compute_condition_number(
                     self.t, self.eqs, self.X, ics, ics_weak, self.knowns
                 )

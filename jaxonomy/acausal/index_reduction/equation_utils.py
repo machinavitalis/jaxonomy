@@ -444,7 +444,9 @@ def _get_jacoboian_at_t0(t, eqs, X, ics, ics_weak, knowns, full_X=False):
         F_full = sp.lambdify(sym_args, eqs, modules=["jax", {"npa": npa}])
 
         def F(X_vals):
-            return jnp.array(F_full(0.0, X_vals, knowns_vals))
+            res = F_full(0.0, X_vals, knowns_vals)
+            res_squeezed = [jnp.squeeze(val) for val in res]
+            return jnp.array(res_squeezed)
 
         X_0 = jnp.array([ics_all[var] for var in X])
 
@@ -467,7 +469,9 @@ def _get_jacoboian_at_t0(t, eqs, X, ics, ics_weak, knowns, full_X=False):
         F_full = sp.lambdify(sym_args, eqs, modules=["jax", {"npa": npa}])
 
         def F(y_vals):
-            return jnp.array(F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals))
+            res = F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals)
+            res_squeezed = [jnp.squeeze(val) for val in res]
+            return jnp.array(res_squeezed)
 
         jac_F = jax.jacfwd(F)(jnp.array(y_0))
 
@@ -519,9 +523,10 @@ def _get_root_function(t, eqs, X, ics, ics_weak, knowns):
 
     sym_args = (t, x + y, knowns_symbols)
     F_full = sp.lambdify(sym_args, eqs, modules=["jax", {"npa": npa}])
-
     def F(y_vals):
-        return jnp.array(F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals))
+        res = F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals)
+        res_squeezed = [jnp.squeeze(val) for val in res]
+        return jnp.array(res_squeezed)
 
     return F, y
 

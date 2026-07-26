@@ -242,7 +242,9 @@ class AcausalSystem(LeafSystem):
             param_values = [params[k] for k in param_keys_str]
             x = cstate[:n_ode]
             y = cstate[n_ode:]  # noqa
-            return npa.array(sp_rhs(time, x, y, *u, *param_values))
+            res = sp_rhs(time, x, y, *u, *param_values)
+            res_squeezed = [npa.squeeze(val) for val in res]
+            return npa.array(res_squeezed)
 
         cs_idx = self.declare_continuous_state(
             shape=(self.n_ode + self.n_alg), ode=_rhs, mass_matrix=mass_matrix
