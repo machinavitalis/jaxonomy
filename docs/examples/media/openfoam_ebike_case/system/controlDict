@@ -1,0 +1,11 @@
+/* simpleFoam steady RANS; forceCoeffs functionObject writes Cd/Cl. */
+application     simpleFoam;
+startFrom       startTime; startTime 0; stopAt endTime; endTime 500;
+deltaT          1; writeControl timeStep; writeInterval 100;
+functions {
+    forceCoeffs {
+        type forceCoeffs; libs ("libforces.so"); patches (bike);
+        rho rhoInf; rhoInf 1.2; magUInf 8.0; lRef 1.0; Aref 0.6;
+        liftDir (0 0 1); dragDir (1 0 0); CofR (0 0 0); pitchAxis (0 1 0);
+    }
+}

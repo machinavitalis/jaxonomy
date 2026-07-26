@@ -1,0 +1,161 @@
+<mujoco model="cargo_ebike_sagittal">
+  <!--
+    3-D cargo e-bike, high-fidelity companion to the planar jaxonomy model.
+
+    ROLL STABILITY CHOICE (see task brief): rather than solving bicycle
+    self-balance, the frame is mounted on a *sagittal-plane* base — three DOFs
+    only: longitudinal slide (x), vertical heave (z) and pitch (hinge about y).
+    Roll, yaw and lateral translation simply do not exist as coordinates, so the
+    bike is upright by construction. This is the "hard roll+yaw constraint"
+    option from the brief. Everything the planar (bird's-eye) jaxonomy model
+    cannot see — squat/pitch under drive torque, suspension travel, front/rear
+    weight transfer, and true tyre-ground contact — lives entirely in this
+    sagittal plane and is fully resolved here.
+
+    MuJoCo is +Z up. Bike travels in +x. Heightfield "road" data is injected
+    from Python after load (flat -> speed bump -> incline plateau).
+  -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"
+          cone="elliptic" impratio="3">
+    <flag eulerdamp="disable"/>
+  </option>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096" offsamples="8"/>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.55 0.55 0.55" specular="0.1 0.1 0.1"/>
+    <map znear="0.05" zfar="60"/>
+  </visual>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.62 0.76 0.92"
+             rgb2="0.90 0.94 0.98" width="512" height="512"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.42 0.48 0.42"
+             rgb2="0.52 0.58 0.52" width="512" height="512" mark="edge" markrgb="0.7 0.75 0.7"/>
+    <material name="roadmat" texture="grid" texrepeat="70 6" reflectance="0.02"/>
+    <material name="framemat" rgba="0.83 0.28 0.18 1" reflectance="0.15"/>
+    <material name="darkmat"  rgba="0.15 0.16 0.18 1" reflectance="0.1"/>
+    <material name="tyremat"  rgba="0.10 0.10 0.12 1" reflectance="0.02"/>
+    <material name="rimmat"   rgba="0.80 0.82 0.86 1" reflectance="0.4"/>
+    <material name="cargomat" rgba="0.75 0.60 0.32 1" reflectance="0.05"/>
+    <material name="ridermat" rgba="0.20 0.35 0.62 1" reflectance="0.1"/>
+    <material name="skinmat"  rgba="0.85 0.68 0.55 1"/>
+    <!-- size z (1.5 m) is the fixed elevation envelope: the collision hull is
+         compiled from this, so the loader must NOT enlarge it at runtime. Total
+         road relief (descent+climb) must stay under it. -->
+    <hfield name="road" nrow="110" ncol="1700" size="45 18 1.5 0.1"/>
+  </asset>
+
+  <default>
+    <default class="deco">
+      <!-- frame / rider / cargo: carry mass + inertia, no contact -->
+      <geom contype="0" conaffinity="0" group="1"/>
+    </default>
+    <default class="wheel">
+      <geom type="cylinder" material="tyremat" friction="1.3 0.01 0.001"
+            contype="1" conaffinity="1" condim="4" priority="1"
+            quat="0.7071068 0.7071068 0 0"/>
+    </default>
+    <default class="susp">
+      <joint type="slide" axis="0 0 1" damping="850" armature="0.5"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="sun" directional="true" diffuse="0.8 0.8 0.78" specular="0.25 0.25 0.25"
+           pos="0 -4 8" dir="0.2 0.35 -1" castshadow="true"/>
+    <geom name="floor" type="hfield" hfield="road" material="roadmat" pos="30 0 0"
+          friction="1.3 0.01 0.001" condim="4"/>
+
+    <!-- 3/4 follow cameras: track the bike's centre of mass, fixed offset,
+         no rotation (mode=trackcom) so pitch/heave are seen, not chased -->
+    <camera name="follow" mode="trackcom" pos="1.4 -4.4 1.5"
+            xyaxes="0.966 0.259 0 -0.090 0.336 0.938" fovy="46"/>
+    <camera name="follow_far" mode="trackcom" pos="2.2 -7.8 2.5"
+            xyaxes="0.966 0.259 0 -0.10 0.372 0.922" fovy="40"/>
+
+    <!-- Sagittal-plane base: three joints on the single frame body
+         (x-slide, z-heave, pitch-hinge). Roll/yaw/lateral do not exist. -->
+    <body name="frame" pos="0 0 0.55">
+          <joint name="slide_x" type="slide" axis="1 0 0"/>
+          <joint name="slide_z" type="slide" axis="0 0 1"/>
+          <joint name="pitch" type="hinge" axis="0 1 0"/>
+
+          <!-- main frame tubes (visual + mass) -->
+          <geom class="deco" name="downtube" type="capsule" material="framemat"
+                fromto="-0.55 0 -0.10  0.45 0 0.05" size="0.03" mass="6"/>
+          <geom class="deco" name="toptube" type="capsule" material="framemat"
+                fromto="-0.28 0 0.16  0.42 0 0.14" size="0.028" mass="4"/>
+          <geom class="deco" name="seattube" type="capsule" material="framemat"
+                fromto="-0.28 0 0.16  -0.20 0 -0.06" size="0.026" mass="2"/>
+          <geom class="deco" name="steerer" type="capsule" material="darkmat"
+                fromto="0.42 0 0.14  0.60 0 0.34" size="0.022" mass="2"/>
+          <geom class="deco" name="bar" type="capsule" material="darkmat"
+                fromto="0.60 -0.22 0.34  0.60 0.22 0.34" size="0.018" mass="1.5"/>
+          <geom class="deco" name="saddle" type="box" material="darkmat"
+                pos="-0.30 0 0.20" size="0.11 0.06 0.03" mass="1"/>
+
+          <!-- rider: torso + head, seated and slightly forward (mass on frame) -->
+          <geom class="deco" name="rider_torso" type="capsule" material="ridermat"
+                fromto="-0.24 0 0.24  0.10 0 0.60" size="0.10" mass="46"/>
+          <geom class="deco" name="rider_hips" type="box" material="ridermat"
+                pos="-0.26 0 0.22" size="0.12 0.11 0.09" mass="18"/>
+          <geom class="deco" name="rider_head" type="sphere" material="skinmat"
+                pos="0.14 0 0.74" size="0.09" mass="5"/>
+          <geom class="deco" name="rider_arm" type="capsule" material="ridermat"
+                fromto="0.10 0 0.55  0.58 0 0.36" size="0.035" mass="4"/>
+          <geom class="deco" name="rider_thigh" type="capsule" material="darkmat"
+                fromto="-0.26 0 0.22  0.05 0 0.05" size="0.05" mass="9"/>
+
+          <!-- rear cargo rack + payload (60 kg), set back and high => big
+               rearward weight bias, so pitch/weight-transfer read clearly -->
+          <geom class="deco" name="rack" type="box" material="darkmat"
+                pos="-0.62 0 0.02" size="0.22 0.16 0.015" mass="2"/>
+          <geom class="deco" name="cargo" type="box" material="cargomat"
+                pos="-0.60 0 0.20" size="0.20 0.17 0.18" mass="58"/>
+
+          <!-- REAR: telescopic suspension + driven wheel -->
+          <body name="rear_fork" pos="-0.62 0 -0.26">
+            <joint name="rear_susp" class="susp" stiffness="26000"
+                   range="-0.10 0.05" springref="0"/>
+            <geom class="deco" name="rear_stanchion" type="capsule" material="rimmat"
+                  fromto="0 0 0.24  0 0 0.02" size="0.014" mass="0.5"/>
+            <body name="rear_wheel" pos="0 0 0">
+              <joint name="rear_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.6"/>
+              <geom class="wheel" name="rear_tyre" size="0.29 0.035" mass="2.6"/>
+              <geom class="deco" name="rear_rim" type="cylinder" size="0.24 0.037" material="rimmat"
+                    quat="0.7071068 0.7071068 0 0" mass="0.2"/>
+              <geom class="deco" name="rear_hub" type="box" size="0.04 0.04 0.038" material="darkmat" mass="0.2"/>
+            </body>
+          </body>
+
+          <!-- FRONT: telescopic suspension + free-rolling wheel -->
+          <body name="front_fork" pos="0.62 0 -0.26">
+            <joint name="front_susp" class="susp" stiffness="15000"
+                   range="-0.10 0.05" springref="0"/>
+            <geom class="deco" name="front_stanchion" type="capsule" material="rimmat"
+                  fromto="0 0 0.28  0 0 0.02" size="0.014" mass="0.5"/>
+            <body name="front_wheel" pos="0 0 0">
+              <joint name="front_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.6"/>
+              <geom class="wheel" name="front_tyre" size="0.29 0.035" mass="2.6"/>
+              <geom class="deco" name="front_rim" type="cylinder" size="0.24 0.037" material="rimmat"
+                    quat="0.7071068 0.7071068 0 0" mass="0.2"/>
+              <geom class="deco" name="front_hub" type="box" size="0.04 0.04 0.038" material="darkmat" mass="0.2"/>
+            </body>
+          </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- rear-wheel drive torque; ctrl set each step from the assist law -->
+    <motor name="rear_drive" joint="rear_spin" gear="1" ctrlrange="-100 100"/>
+  </actuator>
+
+  <sensor>
+    <jointvel name="v_long"     joint="slide_x"/>
+    <jointpos name="pitch_pos"  joint="pitch"/>
+    <jointvel name="rear_wvel"  joint="rear_spin"/>
+    <jointpos name="rear_travel" joint="rear_susp"/>
+    <jointpos name="front_travel" joint="front_susp"/>
+  </sensor>
+</mujoco>

@@ -1,0 +1,10 @@
+/* Wind-tunnel box with a bluff body cut out is produced by snappyHexMesh in
+   production; here a simple graded channel as the background mesh. */
+scale 1;
+vertices ((-5 -2 0)(15 -2 0)(15 2 0)(-5 2 0)(-5 -2 3)(15 -2 3)(15 2 3)(-5 2 3));
+blocks (hex (0 1 2 3 4 5 6 7) (100 20 15) simpleGrading (1 1 1));
+boundary (
+  inlet  {type patch;  faces ((0 4 7 3));}
+  outlet {type patch;  faces ((1 2 6 5));}
+  walls  {type wall;   faces ((0 1 5 4)(3 7 6 2)(0 3 2 1)(4 5 6 7));}
+);

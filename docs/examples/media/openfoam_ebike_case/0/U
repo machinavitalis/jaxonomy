@@ -1,0 +1,8 @@
+dimensions [0 1 -1 0 0 0 0];
+internalField uniform (8.0 0 0);
+boundaryField {
+  inlet { type fixedValue; value uniform (8.0 0 0); }
+  outlet { type inletOutlet; inletValue uniform (0 0 0); value uniform (8.0 0 0); }
+  bike { type noSlip; }
+  walls { type slip; }
+}

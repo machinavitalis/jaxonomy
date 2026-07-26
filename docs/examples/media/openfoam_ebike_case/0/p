@@ -1,0 +1,8 @@
+dimensions [0 2 -2 0 0 0 0];
+internalField uniform 0;
+boundaryField {
+  inlet { type zeroGradient; }
+  outlet { type fixedValue; value uniform 0; }
+  bike { type zeroGradient; }
+  walls { type slip; }
+}
