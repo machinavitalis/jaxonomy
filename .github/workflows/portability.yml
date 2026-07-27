@@ -1,0 +1,18 @@
+name: portability
+
+# Keep examples reproducible: their code and saved outputs must not embed
+# machine- or session-specific paths (a contributor's home dir, an OS temp dir,
+# a Jupyter kernel temp file, a worktree path). These most often sneak in via
+# absolute paths baked into executed notebook outputs.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  portable-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for machine-specific paths
+        run: python scripts/check_portable_paths.py
