@@ -105,14 +105,22 @@ def road_height(x):
     return h
 
 
-def load_model():
+def load_model(cargo_mass=None):
     """Load the MJCF and inject the heightfield road profile.
 
     The heightfield stores normalised heights in [0,1]; we set its elevation
     size and z-offset programmatically so the true profile (including the
     below-baseline descent) is reproduced and the flat start sits at world z=0.
+
+    ``cargo_mass`` (kg), if given, overrides the rear payload mass (default 58 kg)
+    so callers can study weight transfer vs load.
     """
-    model = mujoco.MjModel.from_xml_path(XML)
+    if cargo_mass is None:
+        model = mujoco.MjModel.from_xml_path(XML)
+    else:
+        with open(XML) as _f:
+            _xml = _f.read().replace('mass="58"', f'mass="{float(cargo_mass)}"')
+        model = mujoco.MjModel.from_xml_string(_xml)
     hid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_HFIELD, "road")
     gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     nrow = int(model.hfield_nrow[hid])
@@ -138,9 +146,9 @@ def load_model():
 # ---------------------------------------------------------------------------
 # Co-simulation
 # ---------------------------------------------------------------------------
-def run(t_end=15.0, sample_hz=100.0, settle=0.5, seed_speed=0.0):
+def run(t_end=15.0, sample_hz=100.0, settle=0.5, seed_speed=0.0, cargo_mass=None):
     """Run the closed-loop co-sim; return a dict of numpy traces."""
-    model = load_model()
+    model = load_model(cargo_mass=cargo_mass)
     data = mujoco.MjData(model)
 
     # index helpers -------------------------------------------------------
