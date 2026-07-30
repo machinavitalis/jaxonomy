@@ -27,6 +27,90 @@ Each entry has the same shape:
 
 ## Currently known gaps
 
+### Influence graph — state granularity is per state group, not per component
+
+- **Area**: `jaxonomy.analysis.influence_graph`
+- **Status**: known limitation
+- **What works**: one node per leaf continuous-state group (`xc`) and
+  discrete-state group (`xd`), with exact Jacobian blocks on every edge;
+  path products are exact for scalar signals and scalar states
+  (`test/analysis/test_influence.py`)
+- **What doesn't**: a block with a multi-component state (a 3-state
+  `BatteryCell`, a 12-state rigid body) collapses to one node, and the
+  scalar edge weight is the induced ∞-norm of the Jacobian block — a
+  conservative upper bound. So "which *component* of this state drives
+  the output" cannot be answered from the node scores, and a slice
+  through a vector state over-approximates. The same applies to vector
+  ports.
+- **Workaround**: the full Jacobian block is retained on the edge, so
+  `graph.graph.edges[src, dst]["relative"]` (or `["jacobian"]` for raw
+  partials) gives the per-component answer; split the block into
+  scalar-state blocks if the graph itself must resolve components
+
+### Influence graph — trajectory mode costs one simulation per snapshot
+
+- **Area**: `influence_graph(..., at="trajectory", n_snapshots=k)`
+- **Status**: known limitation
+- **What works**: building at a single operating point is linear in block
+  count — measured 0.4 s at 129 blocks, 0.9 s at 629, 3.8 s at 2504 —
+  and every query (`slice`, `attribute`, `bottlenecks`,
+  `influence_subgraph`) then runs in well under a second at all three
+  sizes
+- **What doesn't**: recorded signals do not pin down every stateful
+  leaf's state, so trajectory mode re-derives the operating points by
+  advancing the context, costing `k + 1` `simulate` calls. `simulate`
+  has a fixed per-call setup cost that scales with block count and
+  dominates the integration — a 1 µs span costs the same as a 4 s one
+  (3.38 s vs 3.40 s at 629 blocks) — so the snapshots, not the
+  Jacobians, set the price: ~11 minutes for `n_snapshots=6` at 2504
+  blocks.
+- **Workaround**: use the operating-point mode on large models, or
+  lower `n_snapshots`; the per-edge profile is the only thing lost
+
+### Influence graph — path search is bounded, not exhaustive
+
+- **Area**: `InfluenceGraph.slice` / `.attribute` / `.dominant_paths`
+- **Status**: known limitation
+- **What works**: scores are best *simple*-path products, verified
+  against exhaustive enumeration on random graphs, and pruned only by an
+  admissible bound — so a contributor whose partial product dips below
+  the threshold and recovers is still found. Regions behind an edge with
+  no local gradient are resolved by reachability rather than path
+  enumeration, so a comparator or quantizer upstream does not make the
+  search exponential
+  (`test/analysis/test_influence.py::TestTraversalSoundness`)
+- **What doesn't**: enumerating simple paths is exponential in the worst
+  case, so the search carries a `max_depth` (default 32) and an
+  expansion budget. On a densely-connected model both can bite: paths
+  longer than `max_depth` are never seen, and if the budget is exhausted
+  the scores are lower bounds. Scores *inside* an unmeasurable region
+  are placeholders, not rankings — the nodes are retained and flagged,
+  but their numbers should not be compared against measured ones.
+- **Workaround**: the result says so — `InfluenceSlice.truncated` is set
+  and `report()` prints a note. Raise the threshold, lower `max_depth`,
+  or focus on a smaller neighbourhood with
+  `analysis.influence_subgraph`
+
+### Influence graph — one `tau` per graph on a stiff model
+
+- **Area**: `influence_graph(..., tau=...)`
+- **Status**: known limitation
+- **What works**: `tau` scales continuous-state-rate edges, and a path
+  crossing *k* integrators reads exactly as that path's transfer
+  magnitude at ω = 1/`tau`
+  (`test/analysis/test_influence.py::TestPathAttribution::test_path_product_is_the_gain_at_one_over_tau`)
+- **What doesn't**: a single `tau` applies to every state in the model.
+  On a stiff model (a 2 ms electrical loop inside a 4 s mechanical one)
+  no single value reads as a percentage for both, so an absolute
+  threshold means different things on the fast and slow paths, and node
+  scores at different integrator depths from the target are being
+  compared through different-order transfers.
+- **Workaround**: run the analysis at several `tau` values — it is a
+  frequency sweep, and the picture changing *is* the information (see
+  `docs/examples/influence_graph_model_slicing.py` section 3); use
+  `InfluenceGraph.relative_threshold()` to scale the cutoff to the
+  strongest contributor instead of to an absolute number
+
 ### Multirate substepping and declared state projection — fixed-step scope
 
 - **Area**: `declare_continuous_state(substeps=N)` and

@@ -85,6 +85,19 @@ Kalman/EKF/UKF) are library blocks too — prefer them over hand-rolling.
 - `linearize(...)` → a `LinearizedSystem`; analytical helpers (`bode_data`,
   `nyquist_data`, `step_response`, `frequency_response`, …) return plain dicts
   of arrays (no matplotlib inside Jaxonomy — you plot).
+- `influence_graph(system, context)` → an `InfluenceGraph`: the model's
+  dependency structure with autodiff Jacobians on every edge. Use it to answer
+  "what actually drives this signal" quantitatively rather than structurally —
+  `.slice(target, threshold)` (vs `.structural_slice(target)` for the boolean
+  over-approximation), `.attribute(target, source)` (signed per-path chain
+  rule), `.dominant_paths`, `.dead_edges`, `.bottlenecks`. Read the module
+  docstring before reading a weight: weights are dimensionless elasticities by
+  default, edges into a continuous state are scaled by `tau` (which makes a
+  path's product its gain at ω = 1/`tau`), and anything non-differentiable is
+  labelled `local_gradient=False` rather than silently zeroed.
+  `analysis.influence_subgraph(graph, focus, budget_tokens=…)`
+  serializes a bounded, citable neighbourhood when you need to reason about one
+  part of a model too large to read whole.
 - Because `simulate` is differentiable, parameter estimation, trajectory
   optimization, and controller tuning are just gradient-based optimizations
   over the simulation — use JAX autodiff / the provided tuning helpers.

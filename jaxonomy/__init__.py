@@ -43,6 +43,8 @@ from .simulation import (
 from .cli import load_model, load_model_from_dir
 from . import acausal
 from . import uq
+from . import analysis
+from .analysis import influence_graph
 from .precision import (
     precision_info,
     assert_float64_active,
@@ -93,6 +95,8 @@ __all__ = [
     "validate_diagram",
     "acausal",
     "uq",
+    "analysis",
+    "influence_graph",
     "precision_info",
     "assert_float64_active",
     "PrecisionInfo",

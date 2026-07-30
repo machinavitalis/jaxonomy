@@ -92,6 +92,7 @@ nav:
       - library.md
       - simulation.md
       - optimization.md
+      - analysis.md
   - Tutorials:
       - tutorials/index.md
       - Getting started: tutorials/01-getting-started.ipynb
@@ -136,6 +137,7 @@ nav:
       - Workflows (T-1XX shipped):
           - Unit-safe wiring: examples/unit_safe_wiring.ipynb
           - Linearization workflow: examples/linearization_workflow.ipynb
+          - Quantitative model slicing: examples/quantitative_model_slicing.ipynb
           - Engine map fitting → MPC: examples/engine_map_fitting_to_mpc.ipynb
           - Actuator delay identification: examples/actuator_delay_identification.ipynb
           - Multirate controller (1k/100/10 Hz): examples/multirate_controller.ipynb

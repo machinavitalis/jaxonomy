@@ -29,7 +29,7 @@ from .system_decorators import parameters, ports
 from .leaf_system import LeafSystem
 from .diagram_builder import DiagramBuilder
 from .diagram import Diagram
-from .flatten import flatten_diagram
+from .flatten import flatten_diagram, leaf_connections
 from .parameter import Parameter, ParameterCache
 from .submodel import submodel_function
 from .error import (
@@ -159,6 +159,7 @@ __all__ = [
     "ports",
     "build_recorder",
     "flatten_diagram",
+    "leaf_connections",
     "units",
     "Unit",
     "BusUnit",

@@ -33,6 +33,9 @@ Use the same Python interpreter where `jaxonomy` and `jaxonomy[mcp]` are install
 - **run_simulation**: execute a simulation from model JSON
 - **fit_parameters**: fit selected parameters to CSV data (finite-difference gradients + Adam)
 - **linearize_model**: compute linearized A, B, C, D and eigenvalues
+- **influence_subgraph**: serialize what actually drives a signal — the model's
+  dependency structure weighted by autodiff Jacobians, expanded strongest-edge-
+  first from a focus point, enriched with units and rates, under a token budget
 
 ## Usage with Claude
 

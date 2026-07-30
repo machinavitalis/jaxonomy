@@ -17,7 +17,7 @@ from .diagram_builder import DiagramBuilder
 if TYPE_CHECKING:
     from .port import InputPortLocator, OutputPortLocator
 
-__all__ = ["flatten_diagram"]
+__all__ = ["flatten_diagram", "leaf_connections"]
 
 
 def _resolve_output_locator(
@@ -133,6 +133,25 @@ def _collect_exported_outputs(
     return exports
 
 
+def leaf_connections(
+    diagram: Diagram,
+) -> List[Tuple["InputPortLocator", "OutputPortLocator"]]:
+    """Resolve the Diagram hierarchy's wiring to leaf-to-leaf connections.
+
+    Same resolution :func:`flatten_diagram` performs, but returned as a plain
+    list of ``(input_locator, output_locator)`` pairs without rebuilding a
+    Diagram.  Use this when you need the flattened *topology* while continuing
+    to evaluate against the original hierarchy and its context —
+    :func:`flatten_diagram` re-parents the leaf systems into a new Diagram,
+    which invalidates contexts created from the original.
+
+    A ``LeafSystem`` (or a Diagram with no connections) yields an empty list.
+    """
+    if not isinstance(diagram, Diagram):
+        return []
+    return _collect_connections(diagram)
+
+
 def flatten_diagram(diagram: Diagram) -> Diagram:
     """Flatten a nested Diagram into a single-depth Diagram.
 
@@ -156,7 +175,7 @@ def flatten_diagram(diagram: Diagram) -> Diagram:
     leaf_systems = list(diagram.leaf_systems)
 
     # Collect all leaf-to-leaf connections
-    connections = _collect_connections(diagram)
+    connections = leaf_connections(diagram)
 
     # Collect diagram-level port exports
     exported_inputs = _collect_exported_inputs(diagram)

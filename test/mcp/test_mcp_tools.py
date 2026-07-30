@@ -69,3 +69,38 @@ def test_explain_model_returns_description():
     data = json.loads(out)
     assert "description" in data
     assert "integ" in data["description"]
+
+
+def test_influence_subgraph_returns_weighted_context():
+    from jaxonomy.mcp.tools.analysis_tools import influence_subgraph
+
+    model_json = build_and_serialize_simple_model()
+    result = influence_subgraph(
+        model_json=model_json,
+        focus="integ",
+        budget_tokens=800,
+        hops=4,
+        tau=1.0,
+    )
+    data = json.loads(result)
+    assert "error" not in data, data.get("traceback", "")
+    assert set(data["focus"]) >= {"integ:xc", "integ:out:out_0"}
+    assert "gain" in data["blocks"]
+    # The weights are real: a unity gain has elasticity 1, and the connection
+    # into the integrator's state carries the tau=1 s step.
+    edges = {(e["src"], e["dst"]): e for e in data["edges"]}
+    assert edges[("gain:in:in_0", "gain:out:out_0")]["weight"].startswith("+1")
+    assert data["conventions"]["tau_seconds"] == 1.0
+    assert data["estimated_tokens"] <= 800
+    assert data["text"].startswith("# influence subgraph of model")
+
+
+def test_influence_subgraph_reports_a_bad_focus():
+    from jaxonomy.mcp.tools.analysis_tools import influence_subgraph
+
+    result = influence_subgraph(
+        model_json=build_and_serialize_simple_model(), focus="no_such_block"
+    )
+    data = json.loads(result)
+    assert "error" in data
+    assert "No influence-graph node matches" in data["error"]
