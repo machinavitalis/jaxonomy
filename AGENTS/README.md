@@ -42,7 +42,7 @@ append a bullet when user-visible work lands on `main`.)
 
 ### Branching and commits
 
-- One task per branch (`task/T###-short-title`), branched from `main`, merged
+- One task per branch (`task/short-title`), branched from `main`, merged
   back when acceptance criteria pass and the full suite is green.
 - Commit at every acceptance criterion, not at the end — small atomic commits
   bisect and review better.
