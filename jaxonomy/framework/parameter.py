@@ -424,6 +424,22 @@ class ParameterCache:
     __is_dirty__ = defaultdict(lambda: True)
     _lock: threading.RLock = threading.RLock()
 
+    # Monotonic counter bumped on every invalidation.  A *static* parameter's
+    # value is baked into the traced program, so anything memoizing a compiled
+    # kernel (``simulate``'s kernel cache) must treat a parameter change as a
+    # cache-invalidating event — the system object is unchanged and its dirty
+    # flags are cleared by the next ``create_context``, so there is otherwise
+    # nothing to observe and the stale kernel would silently return the old
+    # answer.  Reading one integer is O(1) per simulate call; bumping on
+    # dynamic-parameter changes too over-invalidates slightly, which costs a
+    # recompile and never a wrong answer.
+    __epoch__: int = 0
+
+    @classmethod
+    def epoch(cls) -> int:
+        """Monotonic version of all parameter values; changes on any mutation."""
+        return cls.__epoch__
+
     @classmethod
     def _register(cls, param: "Parameter") -> None:
         """Register a newly created Parameter in the cache (called from __post_init__)."""
@@ -500,6 +516,18 @@ class ParameterCache:
         # Caller MUST already hold cls._lock (called from replace() or recursively).
         cls.__cache__[param] = None
         cls.__is_dirty__[param] = True
+        # Only a *static* parameter's value is baked into the traced program, so
+        # only a static change can invalidate a memoized compiled kernel.  A
+        # dynamic parameter's value travels in the context, which is a kernel
+        # argument — bumping for those too would be correct but would defeat the
+        # cache for the common parameter-sweep-via-context workload.
+        #
+        # The recursion below reaches every dependent, so a dynamic parameter
+        # that feeds a static one still bumps the epoch when that static
+        # dependent is invalidated (staticness is not propagated at declaration
+        # time — see the TODO on ``Parameter.is_static``).
+        if getattr(param, "is_static", False):
+            cls.__epoch__ += 1
         # Snapshot the dependent set to avoid mutation-during-iteration if another
         # thread somehow inserts a new dependent while we traverse (belt-and-suspenders).
         for dependent in list(cls.__dependents__.get(param, ())):

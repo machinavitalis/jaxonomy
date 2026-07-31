@@ -9,9 +9,11 @@ which provides more fine-grained control over the simulation process.
 
 from __future__ import annotations
 from functools import partial
+from collections import OrderedDict
 import dataclasses
 import warnings
-from typing import TYPE_CHECKING, Callable, Any
+import weakref
+from typing import TYPE_CHECKING, Callable, Any, NamedTuple
 
 import numpy as np
 import jax
@@ -80,8 +82,169 @@ else:
 __all__ = [
     "estimate_max_major_steps",
     "simulate",
+    "clear_simulate_cache",
+    "simulate_cache_info",
     "Simulator",
 ]
+
+
+#
+# Compiled-kernel reuse across ``simulate`` calls
+# -----------------------------------------------
+# ``simulate`` used to define ``_wrapped_simulate`` as a fresh closure on every
+# call and hand *that* to ``jax.jit``.  ``jax.jit`` keys its cache on the
+# function object, so a brand-new closure per call is a guaranteed 100% cache
+# miss: every ``simulate`` re-traced and re-compiled the whole diagram, even
+# with byte-identical arguments.  The cost is fixed per call and scales with
+# block count rather than with the length of the simulated span — a 1 us run
+# cost the same as a 4 s one — which made snapshot-style workloads (k+1 calls
+# to walk a trajectory) pay k+1 full compiles.
+#
+# The fix is to memoize the ``Simulator`` and its jitted kernel so a repeated
+# call reuses the compile.
+#
+# What this deliberately does NOT do is hoist ``t0`` / ``tf`` / ``context`` into
+# kernel *arguments*. That is the change that would widen reuse to a varying
+# span or initial state (JAX would then key on argument avals), and it was tried
+# — but it changes trace semantics, and real models depend on those values being
+# trace-time constants XLA can fold: with ``t_span`` traced, the host
+# ``io_callback`` video source fired a different number of times
+# (``test_video.py::test_VideoSource``); with ``context`` traced, a tabulated
+# BDF/DAE battery cell integrated to NaN
+# (``test_t_121_followup_table_cell.py``). Both are silent wrong answers, not
+# crashes. So the kernel stays fully specialized and the specialization goes in
+# the cache key, which buys less but cannot be wrong. Callers that need reuse
+# across spans should hold a ``Simulator`` and call ``advance_to``, which takes
+# time and context as traced arguments by design (T-A2-followup).
+#
+# Cache-key discipline: anything baked into the traced program must be in the
+# key.  That is the resolved ``SimulatorOptions`` (every field — e.g.
+# ``max_major_steps`` and ``buffer_length`` set the bounded-loop trip count and
+# recording buffer size), the identity of the system, the recorded signals, the
+# span, the context, the static-parameter epoch (``Parameter.set`` leaves the
+# system object untouched, so nothing else would observe it), the integer-time
+# scale (a *global* that ``_check_options`` re-resolves from ``t_span``), and
+# the x64 flag.  If any option is unhashable, or the span is not concrete, the
+# entry is simply not cached — a slow correct answer beats a fast wrong one.
+_SIMULATE_CACHE: OrderedDict[tuple, "_CachedKernel"] = OrderedDict()
+
+# Memory note: an entry holds a Simulator and a compiled XLA executable for as
+# long as it stays in the cache. Holding the executable is the entire point, but
+# it means the cache must stay small: a Python-loop sweep built on
+# ``with_parameters`` mints a *new* system per iteration, so every iteration is
+# a compulsory miss and the cache churns through one-shot entries. Keep the
+# bound low enough that the churn cannot pin a meaningful amount of memory, and
+# use ``clear_simulate_cache()`` to release everything eagerly.
+#
+# What this cache does NOT fix: that ``with_parameters`` sweep. Each copy is a
+# distinct system and is compiled on its own — see the "parameter sweeps re-JIT
+# on every value" entry in KNOWN_GAPS.md, whose remedy is still ``vmap`` /
+# ``simulate_batch`` or traced parameters rather than a Python loop. The reuse
+# here targets repeated calls on *one* system: snapshot walks, interactive
+# stepping, MPC-style inner loops.
+_SIMULATE_CACHE_MAXSIZE = 8
+
+_SIMULATE_CACHE_STATS = {"hits": 0, "misses": 0, "uncacheable": 0}
+
+
+class _CachedKernel(NamedTuple):
+    """A memoized ``Simulator`` plus the jitted kernel that drives it."""
+
+    sim: "Simulator"
+    run: Callable
+    options: SimulatorOptions
+    # Weak reference to the system the kernel was built for, checked on lookup.
+    # The key contains ``id(system)``, which CPython recycles once an object is
+    # freed; this guards against a recycled id aliasing onto the wrong entry.
+    # (It does not make the entry non-pinning — ``sim`` references the system
+    # strongly, by construction.)
+    system_ref: Any
+
+
+def clear_simulate_cache() -> None:
+    """Drop every memoized ``simulate`` kernel.
+
+    ``simulate`` reuses the compiled kernel for a given (system, options)
+    pair across calls. Call this to force the next ``simulate`` to re-trace
+    and re-compile — after mutating a system in place, or to reclaim memory:
+    a live entry pins its system and its compiled XLA executable, and clearing
+    the cache is what releases them.
+    """
+    _SIMULATE_CACHE.clear()
+    for k in _SIMULATE_CACHE_STATS:
+        _SIMULATE_CACHE_STATS[k] = 0
+
+
+def simulate_cache_info() -> dict:
+    """Return ``simulate`` compiled-kernel cache statistics.
+
+    Keys: ``hits``, ``misses`` (a compile happened), ``uncacheable`` (the
+    options carried an unhashable field, so the call bypassed the cache),
+    ``size`` and ``maxsize``.
+    """
+    return {
+        **_SIMULATE_CACHE_STATS,
+        "size": len(_SIMULATE_CACHE),
+        "maxsize": _SIMULATE_CACHE_MAXSIZE,
+    }
+
+
+def _recorded_signal_key(recorded_signals) -> tuple:
+    """Identity key for the recorded-signal set.
+
+    The ports are baked into the traced program (the recorder reads exactly
+    these cache sources), so two calls may share a kernel only if they record
+    the same ports under the same names. The cache entry keeps the resolved
+    options — and therefore the port objects — alive, so ``id()`` stays valid
+    for as long as the key can match.
+    """
+    if not recorded_signals:
+        return ()
+    return tuple(
+        (name, id(recorded_signals[name])) for name in sorted(recorded_signals)
+    )
+
+
+def _simulate_cache_key(system, options, t_span, context) -> tuple | None:
+    """Build the cache key, or return ``None`` if this call must not be cached."""
+    from ..framework.event import IntegerTime
+    from ..framework.parameter import ParameterCache
+
+    try:
+        option_items = []
+        for field in dataclasses.fields(options):
+            if field.name == "recorded_signals":
+                continue  # handled separately: dict of ports, not hashable
+            value = getattr(options, field.name)
+            hash(value)  # raises TypeError for lists/dicts/arrays
+            option_items.append((field.name, value))
+        key = (
+            id(system),
+            system.system_id,
+            # The span is baked into the trace (see ``_build_kernel``), so two
+            # calls may share a kernel only if they simulate the same interval.
+            # A traced end time is not a usable key — and not cacheable — so
+            # bail out and let that call compile on its own.
+            (float(t_span[0]), float(t_span[1])),
+            tuple(option_items),
+            _recorded_signal_key(options.recorded_signals),
+            # Set globally by ``_check_options`` from ``t_span`` and baked into
+            # every time computation in the traced program.
+            IntegerTime.time_scale,
+            bool(jax.config.read("jax_enable_x64")),
+            # A *static* parameter's value is baked into the trace, and mutating
+            # one (``Parameter.set``) leaves the system object untouched, so
+            # without this a changed static parameter would silently reuse the
+            # kernel compiled with the old value.
+            ParameterCache.epoch(),
+        )
+        hash(key)
+    except (TypeError, ValueError):
+        # Unhashable option, or a traced/non-concrete t_span (autodiff through
+        # the end time). Not cacheable — a slow correct answer beats a fast
+        # wrong one.
+        return None
+    return key
 
 
 def _emit_dae_drift_warning(t_val, residual_val, threshold_val):
@@ -133,6 +296,17 @@ class _BDFConditionMonitor:
         self.max_cond: float = float("-inf")
         self.t_at_max: float = float("nan")
         self.n_samples: int = 0
+
+    def reset(self) -> None:
+        """Clear the running max so the monitor describes one run only.
+
+        The monitor lives on the ``Simulator``, which ``simulate`` now reuses
+        across calls; without this the max would carry over and a later run
+        could inherit an earlier run's warning.
+        """
+        self.max_cond = float("-inf")
+        self.t_at_max = float("nan")
+        self.n_samples = 0
 
     def update(self, cond_val, t_val) -> None:
         """Host-side callback target.  Updates the running max."""
@@ -195,6 +369,16 @@ class _DAEDriftMonitor:
     def __init__(self):
         self.times: list[float] = []
         self.residuals: list[float] = []
+
+    def reset(self) -> None:
+        """Drop accumulated samples so the trace describes one run only.
+
+        The monitor lives on the ``Simulator``, which ``simulate`` now reuses
+        across calls; without this each run would append to the previous run's
+        trace and ``finalize`` would return their concatenation.
+        """
+        self.times.clear()
+        self.residuals.clear()
 
     def update(self, t_val, residual_val) -> None:
         """Host-side callback target.  Appends one ``(time, residual)``."""
@@ -673,9 +857,21 @@ def simulate(
         `options.recorded_signals`. This will be deprecated in the future in favor of
         only passing via `options`.
 
-        This function is meant to best handle single independent simulations.
-        Calling this function repeatedly will always trigger a recompilation of the
-        model when using the JAX backend. To avoid this, call advance_to directly.
+        A *repeated* call reuses the compiled kernel instead of re-tracing and
+        re-compiling: the trace and XLA compile are a fixed cost that scales
+        with block count, not with the length of the simulated span, and
+        repeating a call used to pay it again in full.
+
+        Reuse requires the same system, options, ``t_span`` and ``context``, all
+        of which are baked into the traced program. A call that varies the span
+        or the context therefore still compiles. If you need reuse *across*
+        spans or initial states — a snapshot walk, an interactive stepper, an
+        MPC inner loop — construct a :class:`Simulator` once and call its
+        ``advance_to``, which takes the end time and context as traced arguments
+        by design and so reuses one compiled kernel across all of them.
+
+        Set ``SimulatorOptions(reuse_compiled_kernel=False)`` to opt out per
+        call, or call :func:`clear_simulate_cache` to drop the memo.
     """
 
     # Backward-compatibility shim: accept legacy `tspan` keyword argument.
@@ -787,34 +983,105 @@ def simulate(
             return x
         context = jax.tree_util.tree_map(cast_floats, context)
 
-    ode_solver = ODESolver(system, options=options.ode_options)
-
-    sim = Simulator(system, ode_solver=ode_solver, options=options)
-    logger.info("Simulator ready to start: %s, %s", options, ode_solver)
-
-    # Define a function to be traced by JAX, if allowed, closing over the
-    # arguments to `_simulate`.
-    def _wrapped_simulate() -> tuple[ContextBase, ResultsData]:
+    # Build (or reuse) the Simulator and its jitted kernel.  ``t0`` / ``tf`` /
+    # ``context`` are kernel *arguments*, not closed-over constants, so JAX's
+    # own jit cache treats a different span or initial state as a cache hit
+    # rather than a fresh compile.  See the cache notes at the top of the file.
+    def _build_kernel(sim, options, t_span, context) -> Callable:
+        # ``t0`` / ``tf`` stay *closed over* (trace-time constants); ``context``
+        # is a traced kernel argument, so varying the initial state or dynamic
+        # parameters reuses one compile.
+        #
+        # Hoisting them into kernel arguments is what would widen the reuse — a
+        # snapshot walk with a growing end time, or a Monte-Carlo sweep over
+        # initial states, would stop recompiling. It also changes trace
+        # semantics, and real models do not survive it: with ``t_span`` traced,
+        # a host ``io_callback`` video source fired a different number of times;
+        # with ``context`` traced, a tabulated BDF/DAE battery cell integrated
+        # to NaN (both are regression-tested elsewhere in the suite). Constants
+        # that XLA can fold are load-bearing for those paths.
+        #
+        # So the kernel stays fully specialized and the specialization goes in
+        # the cache key instead. That reuses the compile only for a genuinely
+        # repeated call, which is narrower than argument-hoisting would be but
+        # cannot change an answer.
         t0, tf = t_span
-        initial_context = context.with_time(t0)
-        sim_state = sim.advance_to(tf, initial_context)
-        error_end_time_not_reached(
-            tf, sim_state.context.time, sim_state.step_end_reason
-        )
-        final_context = sim_state.context if options.return_context else None
-        return final_context, sim_state.results_data
 
-    # JIT-compile the simulation, if allowed
-    if options.enable_tracing:
-        _wrapped_simulate = jax.jit(_wrapped_simulate)
-        _wrapped_simulate = Profiler.jaxjit_profiledfunc(
-            _wrapped_simulate, "_wrapped_simulate"
-        )
+        def _wrapped_simulate(context) -> tuple[ContextBase, ResultsData]:
+            initial_context = context.with_time(t0)
+            sim_state = sim.advance_to(tf, initial_context)
+            error_end_time_not_reached(
+                tf, sim_state.context.time, sim_state.step_end_reason
+            )
+            final_context = sim_state.context if options.return_context else None
+            return final_context, sim_state.results_data
+
+        # JIT-compile the simulation, if allowed
+        if options.enable_tracing:
+            _wrapped_simulate = jax.jit(_wrapped_simulate)
+            _wrapped_simulate = Profiler.jaxjit_profiledfunc(
+                _wrapped_simulate, "_wrapped_simulate"
+            )
+        return _wrapped_simulate
+
+    # Only the traced path has a compiled kernel worth keeping; the NumPy
+    # backend runs a plain Python loop, so caching would pin a Simulator for
+    # no gain.
+    cache_key = (
+        _simulate_cache_key(system, options, t_span, context)
+        if options.enable_tracing and options.reuse_compiled_kernel
+        else None
+    )
+
+    entry = _SIMULATE_CACHE.get(cache_key) if cache_key is not None else None
+    if entry is not None and entry.system_ref() is not system:
+        # An ``id()`` in the key was recycled onto a different object, or the
+        # original was garbage-collected. Either way the entry cannot be
+        # trusted. ``pop`` rather than ``del``: a concurrent caller may have
+        # evicted it already, and losing the race should not raise.
+        entry = None
+        _SIMULATE_CACHE.pop(cache_key, None)
+
+    if entry is None:
+        ode_solver = ODESolver(system, options=options.ode_options)
+        sim = Simulator(system, ode_solver=ode_solver, options=options)
+        logger.info("Simulator ready to start: %s, %s", options, ode_solver)
+        run = _build_kernel(sim, options, t_span, context)
+        if cache_key is not None:
+            _SIMULATE_CACHE[cache_key] = _CachedKernel(
+                sim=sim,
+                run=run,
+                options=options,
+                system_ref=weakref.ref(system),
+            )
+            _SIMULATE_CACHE.move_to_end(cache_key)
+            while len(_SIMULATE_CACHE) > _SIMULATE_CACHE_MAXSIZE:
+                _SIMULATE_CACHE.popitem(last=False)
+            _SIMULATE_CACHE_STATS["misses"] += 1
+        else:
+            _SIMULATE_CACHE_STATS["uncacheable"] += 1
+    else:
+        sim, run = entry.sim, entry.run
+        # Refresh LRU position. A concurrent caller may have evicted the entry
+        # between the lookup and here; we already hold what we need, so losing
+        # that race is harmless.
+        if cache_key in _SIMULATE_CACHE:
+            _SIMULATE_CACHE.move_to_end(cache_key)
+        _SIMULATE_CACHE_STATS["hits"] += 1
+        logger.info("Reusing compiled simulate kernel for %s", system.name)
+
+    # Host-side accumulators live on the Simulator, which is now reused across
+    # calls, so per-run state must be cleared before each run or a reused
+    # kernel would report the union of every run that shared it.
+    for _monitor_attr in ("_dae_drift_monitor", "_bdf_cond_monitor"):
+        _monitor = getattr(sim, _monitor_attr, None)
+        if _monitor is not None:
+            _monitor.reset()
 
     # Run the simulation
     try:
         system.cache_enabled = True
-        final_context, results_data = _wrapped_simulate()
+        final_context, results_data = run(context)
 
         if postprocess and results_data is not None:
             time, outputs = results_data.finalize()

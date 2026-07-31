@@ -325,9 +325,37 @@ def _solve_newton_system_impl(func, t, y, c, psi, LU, M, scale, tol):
         y = y + dy
         d = d + dy
 
-        converged = jnp.all(abs(f) <= EPS) | (
-            (dy_norm == 0.0)
-            | (jnp.isfinite(rate) & (rate / (1 - rate) * dy_norm < tol))
+        # Convergence.  ``dy_norm`` is already scaled (``norm(M @ dy / scale)``),
+        # so it is directly comparable to ``tol`` — the same quantity the rate
+        # test bounds.
+        #
+        # ``dy_norm < tol`` is the limiting case of the rate test as
+        # ``rate -> 0`` and is what makes the test robust.  Without it,
+        # convergence could ONLY be declared through ``rate / (1 - rate)``,
+        # which degenerates exactly when the iteration has done its job: once
+        # the correction reaches the floating-point noise floor it stops
+        # shrinking, ``rate`` sits at ~1, ``rate / (1 - rate)`` blows up, and a
+        # fully converged step is reported as non-converged.  The caller then
+        # halves dt and retries — which for a DAE makes things strictly worse,
+        # because as ``dt -> 0`` the Newton matrix ``M - c*J`` tends to the
+        # singular mass matrix ``M``.  Every retry fails the same way, dt
+        # collapses to the floor, and the step bails out with a NaN state.
+        # Whether the correction stalls at exactly rate ~1 depends on rounding,
+        # so the same model could integrate correctly or return NaN depending
+        # on how the enclosing loop was compiled (found via an acausal battery
+        # cell that was correct under ``simulate`` but NaN under
+        # ``Simulator.advance_to``).
+        #
+        # ``rate < 1`` additionally guards the rate test itself: at ``rate > 1``
+        # (a diverging iteration) ``1 - rate`` is negative, so the product goes
+        # negative and compares ``< tol`` as *converged* — the opposite of the
+        # truth.  SciPy breaks out of the loop on ``rate >= 1`` for the same
+        # reason.
+        converged = (
+            jnp.all(abs(f) <= EPS)
+            | (dy_norm == 0.0)
+            | (dy_norm < tol)
+            | (jnp.isfinite(rate) & (rate < 1.0) & (rate / (1 - rate) * dy_norm < tol))
         )
 
         dy_norm_old = dy_norm

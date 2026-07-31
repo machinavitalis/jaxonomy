@@ -310,6 +310,19 @@ class SimulatorOptions:
     # feature interactions like autodiff through python-only blocks.
     validate: bool = True
 
+    # Reuse the compiled kernel when a ``simulate`` call is genuinely repeated.
+    # The trace + XLA compile is a fixed cost that scales with block count and
+    # not with the simulated span, and repeating a call used to pay it again in
+    # full.  Reuse requires the same system, options, ``t_span`` and
+    # ``context`` — all of which are baked into the traced program — so a call
+    # that varies the span or the initial state still compiles and gains
+    # nothing.  For reuse *across* spans or initial states (a snapshot walk, an
+    # interactive stepper, an MPC inner loop), hold a ``Simulator`` and call
+    # ``advance_to``, which takes both as traced arguments by design.  Set False
+    # to force a fresh compile per call (A/B timing); ``clear_simulate_cache()``
+    # drops the memo globally.
+    reuse_compiled_kernel: bool = True
+
     # Zero crossings are localized in time using the ODE solver interpolant,
     # which provides state values for any time value in the previous integration
     # time interval.
