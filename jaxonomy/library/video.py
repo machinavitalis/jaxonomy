@@ -181,7 +181,7 @@ class VideoSource(LeafSystem):
         )
 
         def _frame_id_cb(time, state, *inputs, **parameters) -> Array:
-            return io_callback(self._frame_id_cb, npa.intx(0))
+            return io_callback(self._frame_id_cb, npa.intx(0), time)
 
         self.declare_output_port(
             _frame_id_cb,
@@ -195,7 +195,7 @@ class VideoSource(LeafSystem):
         if not self.repeat:
 
             def _stopped_cb(time, state, *inputs, **parameters) -> Array:
-                return io_callback(self._stopped_cb, npa.bool_(False))
+                return io_callback(self._stopped_cb, npa.bool_(False), time)
 
             self.declare_output_port(
                 _stopped_cb,
@@ -246,8 +246,36 @@ class VideoSource(LeafSystem):
         self.last_frame = frame
         return frame
 
-    def _frame_id_cb(self) -> Array:
-        return npa.intx(self.frame_id)
+    def _frame_id_cb(self, time) -> Array:
+        """Frame index at ``time`` — a pure function of time.
 
-    def _stopped_cb(self) -> Array:
-        return self.reached_end
+        Deliberately *not* read back from ``self.frame_id``.  That attribute is
+        whatever ``_source_cb`` last wrote, so reading it here made the output
+        depend on how many times — and in what order — the host callbacks had
+        run, rather than on the simulation time.  Callback scheduling is not a
+        stable property of the model: it changes with how the enclosing loop is
+        compiled, so the same run could report a different ``frame_id``
+        depending on whether the end time was a trace-time constant.  Deriving
+        the index from ``time`` here (exactly as ``_source_cb`` does) makes the
+        port independent of callback bookkeeping.
+        """
+        return npa.intx(self._frame_index_at(time))
+
+    def _frame_index_at(self, time) -> int:
+        index = int(time * self.fps + FPS_EPSILON)
+        if self.repeat:
+            return index % self.video_length
+        # Without looping the source holds on the final frame once the video
+        # is exhausted, matching ``_source_cb``'s ``reached_end`` behaviour.
+        return min(index, self.video_length - 1)
+
+    def _stopped_cb(self, time) -> Array:
+        """Whether the (non-looping) source has run past its last frame.
+
+        Time-derived for the same reason as :meth:`_frame_id_cb` — it used to
+        report ``self.reached_end``, a host-side flag whose value depended on
+        callback ordering.
+        """
+        if self.repeat:
+            return npa.bool_(False)
+        return npa.bool_(int(time * self.fps + FPS_EPSILON) >= self.video_length)

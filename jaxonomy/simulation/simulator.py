@@ -219,13 +219,10 @@ def _simulate_cache_key(system, options, t_span, context) -> tuple | None:
             hash(value)  # raises TypeError for lists/dicts/arrays
             option_items.append((field.name, value))
         key = (
-            id(system),
+            # ``system_id`` comes from a monotonic counter, so it distinguishes
+            # systems on its own; the weakref check on lookup is what guards the
+            # residual risk that a caller reset the counter.
             system.system_id,
-            # The span is baked into the trace (see ``_build_kernel``), so two
-            # calls may share a kernel only if they simulate the same interval.
-            # A traced end time is not a usable key — and not cacheable — so
-            # bail out and let that call compile on its own.
-            (float(t_span[0]), float(t_span[1])),
             tuple(option_items),
             _recorded_signal_key(options.recorded_signals),
             # Set globally by ``_check_options`` from ``t_span`` and baked into
@@ -1005,9 +1002,7 @@ def simulate(
         # the cache key instead. That reuses the compile only for a genuinely
         # repeated call, which is narrower than argument-hoisting would be but
         # cannot change an answer.
-        t0, tf = t_span
-
-        def _wrapped_simulate(context) -> tuple[ContextBase, ResultsData]:
+        def _wrapped_simulate(t0, tf, context) -> tuple[ContextBase, ResultsData]:
             initial_context = context.with_time(t0)
             sim_state = sim.advance_to(tf, initial_context)
             error_end_time_not_reached(
@@ -1081,7 +1076,7 @@ def simulate(
     # Run the simulation
     try:
         system.cache_enabled = True
-        final_context, results_data = run(context)
+        final_context, results_data = run(t_span[0], t_span[1], context)
 
         if postprocess and results_data is not None:
             time, outputs = results_data.finalize()

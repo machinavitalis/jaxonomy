@@ -123,3 +123,45 @@ def test_VideoSource():
     assert results.time[-1] == 2.4
     assert results.outputs["frame_id"][0] == 0
     assert results.outputs["frame_id"][-1] == 2  # 2.4s == 11 frames x 2 + 2
+
+
+def test_video_source_outputs_are_time_derived():
+    """``frame_id`` / ``stopped`` must not depend on host-callback bookkeeping.
+
+    They used to read ``self.frame_id`` / ``self.reached_end`` — mutable host
+    state written by the *frame* callback — so their values depended on how many
+    times, and in what order, the callbacks had run. Callback scheduling is not
+    a stable property of the model: it changes with how the enclosing loop is
+    compiled, so a run could report a different ``frame_id`` depending on
+    whether the simulation end time was a trace-time constant. Both are now
+    pure functions of time.
+    """
+    srcdir = Path(os.path.dirname(__file__)).absolute()
+    source = VideoSource(srcdir / "assets" / "test_video.mp4", no_repeat=False)
+
+    fps, n_frames = source.fps, source.video_length
+
+    # Pure function of time: same time in, same answer out, order-independent.
+    for t in (0.0, 0.35, 1.0, 2.4, 5.0):
+        expected = int(t * fps + 1e-4) % n_frames
+        first = int(source._frame_id_cb(t))
+        # Interleave an unrelated query; a stateful implementation would drift.
+        source._frame_id_cb(t + 1.0)
+        assert int(source._frame_id_cb(t)) == first == expected, (
+            f"frame_id at t={t} is not a pure function of time"
+        )
+
+
+def test_video_source_stopped_is_time_derived():
+    srcdir = Path(os.path.dirname(__file__)).absolute()
+    source = VideoSource(srcdir / "assets" / "test_video.mp4", no_repeat=True)
+    fps, n_frames = source.fps, source.video_length
+    end_time = n_frames / fps
+
+    assert not bool(source._stopped_cb(0.0))
+    assert bool(source._stopped_cb(end_time + 1.0))
+    # Querying out of order must not latch the flag on.
+    assert not bool(source._stopped_cb(0.0)), "stopped latched from a later query"
+
+    # Without looping the frame index holds on the final frame.
+    assert int(source._frame_id_cb(end_time + 5.0)) == n_frames - 1

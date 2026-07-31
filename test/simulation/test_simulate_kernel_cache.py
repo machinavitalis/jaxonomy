@@ -8,16 +8,16 @@
 when nothing had changed. The ``Simulator`` and its jitted kernel are now
 memoized.
 
-Scope: ``context`` is a traced kernel *argument*, so varying the initial state
-or dynamic parameters reuses one compile. ``t_span`` stays closed over — a
-trace-time constant — so a varying span still recompiles. Hoisting the span too
-would unlock that as well, but a host ``io_callback`` source then fires a
-different number of times (``test_video.py::test_VideoSource``), so the span
-stays specialized and lives in the cache key instead.
+Scope: ``t_span`` and ``context`` are traced kernel *arguments*, so varying the
+span, the initial state or dynamic parameters all reuse one compile. What keys
+the cache is what is genuinely baked into the traced program — the system, the
+resolved options, the recorded signals, and static parameter values.
 
-(The DAE half of that constraint is gone: a tabulated BDF/DAE cell used to go
-NaN under a traced context, which was a BDF Newton-convergence bug, not a
-tracing constraint — see ``test_bdf_newton_convergence.py``.)
+Both historical blockers to hoisting turned out to be bugs elsewhere, not
+tracing constraints: a tabulated BDF/DAE cell went NaN under a traced context
+(a Newton-convergence bug — see ``test_bdf_newton_convergence.py``), and a video
+source reported the wrong frame under a traced span (it read a host-side
+counter instead of deriving the frame from time — see ``test_video.py``).
 
 These tests are about *correctness under reuse* — a cached kernel must never
 change an answer, and must never be reused when something baked into it moved.
@@ -142,15 +142,36 @@ class TestReuse:
 class TestInvalidation:
     """Everything baked into the kernel must key the cache."""
 
-    def test_a_different_span_is_not_reused(self):
+    def test_a_different_span_reuses_the_kernel_and_stays_exact(self):
+        """The span is a kernel argument too, so a snapshot walk reuses it."""
         diagram, integ = _chain()
         context = diagram.create_context()
 
         _run(diagram, context, integ, 1.0)
         hits_before = simulate_cache_info()["hits"]
-        _run(diagram, context, integ, 2.0)
+        warm = float(_run(diagram, context, integ, 2.0).outputs["y"][-1])
 
-        assert simulate_cache_info()["hits"] == hits_before
+        assert simulate_cache_info()["hits"] == hits_before + 1, "expected reuse"
+
+        clear_simulate_cache()
+        cold = float(_run(diagram, context, integ, 2.0).outputs["y"][-1])
+        assert warm == cold, "a reused kernel changed the answer across spans"
+
+    def test_snapshot_walk_compiles_once(self):
+        """The reported case: k+1 calls with a growing end time."""
+        diagram, integ = _chain()
+        context = diagram.create_context()
+
+        values = [
+            float(_run(diagram, context, integ, 0.3 * (k + 1)).outputs["y"][-1])
+            for k in range(5)
+        ]
+
+        info = simulate_cache_info()
+        assert info["misses"] == 1, f"expected one compile, got {info}"
+        assert info["hits"] == 4, info
+        # The recorded value must still grow with the span.
+        assert values == sorted(values)
 
     def test_a_different_context_reuses_the_kernel_but_not_the_answer(self):
         """The context is a kernel *argument*, so varying it is a cache hit.
