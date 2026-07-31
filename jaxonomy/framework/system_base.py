@@ -322,6 +322,15 @@ class SystemBase:
         Subsystems reference themselves via callbacks; the default deepcopy order can
         call :meth:`__hash__` (via dict/set operations) before ``system_id`` exists
         on the copy. Assign a new ``system_id`` immediately after memo registration.
+
+        ``_dependency_graph`` is *not* copied — it is reset to ``None`` on the copy
+        and rebuilt by the next ``create_context``. It is a derived cache whose
+        ``DependencyTracker.prerequisites`` form a linked chain spanning the whole
+        signal path, so deep-copying it recurses once per block: a serial diagram
+        of a few hundred blocks overflowed the interpreter stack with
+        ``RecursionError`` on any copy of a *warm* system (one that had already
+        built a context). Skipping it makes deepcopy nesting constant in block
+        count instead of linear.
         """
         cls = type(self)
         result = cls.__new__(cls)
@@ -329,6 +338,9 @@ class SystemBase:
         result.system_id = next_system_id()
         for key, value in self.__dict__.items():
             if key == "system_id":
+                continue
+            if key == "_dependency_graph":
+                result._dependency_graph = None
                 continue
             setattr(result, key, copy.deepcopy(value, memo))
         return result

@@ -961,32 +961,58 @@ class Diagram(SystemBase):
                     edges[input_port].add(output_port)
 
         def _graph_has_cycle(
-            node: PortBase,
+            start: PortBase,
             visited: Set[DirectedPortLocator],
             stack: List[DirectedPortLocator],
         ) -> bool:
             # Helper to do the algebraic loop test by depth-first search on the graph
             # to find cycles. Modifies `visited` and `stack` in place.
+            #
+            # The search is *iterative* (explicit work stack) rather than recursive:
+            # the DFS descends one level per feedthrough edge, so the recursive form
+            # burned one interpreter frame per block along a serial signal path and
+            # overflowed the stack with ``RecursionError`` on diagrams of a few
+            # hundred serially-connected blocks. Set iteration order made the
+            # threshold nondeterministic run to run.
+            #
+            # Semantics are unchanged: ``visited`` is permanent (a node already
+            # fully explored cannot start a new cycle), ``stack`` mirrors the
+            # current DFS path so an edge back into it is a back-edge, and ``stack``
+            # is deliberately left holding the offending path when a cycle is found
+            # so the caller can report it.
 
-            logger.debug(f"Checking node {node}")
+            # Each work entry is (node, iterator over its out-edges, on_stack).
+            work: List[Tuple[PortBase, Iterator[PortBase], bool]] = []
 
-            assert node.directed_locator not in visited
-            visited.add(node.directed_locator)
+            def _enter(node: PortBase) -> None:
+                logger.debug(f"Checking node {node}")
+                visited.add(node.directed_locator)
+                if node in edges:
+                    stack.append(node.directed_locator)
+                    work.append((node, iter(edges[node]), True))
+                else:
+                    work.append((node, iter(()), False))
 
-            if node in edges:
-                assert node not in stack
-                stack.append(node.directed_locator)
-                edge_iter = edges[node]
+            _enter(start)
+            while work:
+                _node, edge_iter, on_stack = work[-1]
+                descended = False
                 for target in edge_iter:
-                    if target.directed_locator not in visited and _graph_has_cycle(
-                        target, visited, stack
-                    ):
-                        logger.debug(f"Found cycle at {target}")
-                        return True
-                    elif target.directed_locator in stack:
+                    # Anything on `stack` was added to `visited` on entry, so a
+                    # not-yet-visited target cannot be a back-edge; testing
+                    # `stack` first is equivalent to the recursive ordering.
+                    if target.directed_locator in stack:
                         logger.debug(f"Found target {target} in stack {stack}")
                         return True
-                stack.pop()
+                    if target.directed_locator not in visited:
+                        _enter(target)
+                        descended = True
+                        break
+                if descended:
+                    continue
+                work.pop()
+                if on_stack:
+                    stack.pop()
 
             # If we get this far there is no cycle
             return False
