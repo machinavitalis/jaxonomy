@@ -356,6 +356,44 @@ class TestSlicing:
         assert "src:out:out_0" in report
         assert "tau=1" in report
 
+    def test_block_scores_reduce_signals_to_blocks_by_max(self):
+        graph = influence_graph(gain_chain(gains=(3.0, -2.0, 5.0)), tau=1.0)
+        sl = graph.slice("plant:xc", threshold=1e-9)
+        scores = sl.block_scores
+
+        # Every retained block is scored, and nothing else is.
+        assert set(scores) == set(sl.blocks)
+        # Ranked descending, so `next(iter(...))` is the top block.
+        assert list(scores.values()) == sorted(scores.values(), reverse=True)
+
+        # Max over the block's own nodes — not sum (which would double-count a
+        # block's input and output, both on the same path).
+        for block, score in scores.items():
+            own = [
+                abs(v)
+                for n, v in sl.scores.items()
+                if graph.graph.nodes[n]["block"] == block
+            ]
+            assert score == pytest.approx(max(own))
+            assert score <= sum(own)
+
+    def test_report_by_block_ranks_blocks_not_signals(self):
+        graph = influence_graph(gain_chain(gains=(3.0, -2.0, 5.0)), tau=1.0)
+        sl = graph.slice("plant:xc", threshold=1e-9)
+        report = sl.report(by="block")
+        assert "Influence slice (backward) for plant:xc" in report
+        # Block names, not node ids.
+        assert "\n    " in report
+        body = report.splitlines()[3:]
+        assert body and all(":" not in line.split()[-1] for line in body)
+        assert any(line.split()[-1] == "g1" for line in body)
+        # The target node drops out, but its block may still appear via another
+        # of its signals — here `plant:in:in_0` keeps `plant` in the ranking.
+        assert any(line.split()[-1] == "plant" for line in body)
+
+        with pytest.raises(ValueError, match="'node' or 'block'"):
+            sl.report(by="signal")
+
     def test_docstring_example_behaves_as_written(self):
         builder = jaxonomy.DiagramBuilder()
         source = builder.add(Constant(1.0, name="src"))

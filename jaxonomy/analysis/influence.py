@@ -247,6 +247,33 @@ class InfluenceSlice:
         """True if any retained path crosses an edge with no local gradient."""
         return bool(self.unknown_nodes)
 
+    @property
+    def block_scores(self) -> Dict[str, float]:
+        """``{block name path: score}``, ranked, for the block-level answer.
+
+        :attr:`scores` is keyed by *signal* (one node per input port, output
+        port, and state group), which is the right granularity for tracing a
+        route but the wrong one for "which block matters most". This reduces a
+        block's nodes to one number by taking the **maximum**, so a block's
+        score is that of its most influential signal.
+
+        Max is the reducer because a block's input and output nodes lie on the
+        *same* path — summing them would count one route twice, and a block's
+        influence is not the sum of its ports' influences. The trade-off is
+        that a block reached by several genuinely independent routes reads as
+        its strongest one, not their total; use :meth:`attribute` when the
+        split between routes is the question.
+
+        The dict is ordered by descending score. Blocks holding a node in
+        :attr:`unknown_nodes` are present with a score covering only their
+        measurable routes — check that list before reading a rank as complete.
+        """
+        by_block: Dict[str, float] = {}
+        for node, score in self.scores.items():
+            block = self.graph.graph.nodes[node]["block"]
+            by_block[block] = max(by_block.get(block, 0.0), abs(score))
+        return dict(sorted(by_block.items(), key=lambda kv: (-kv[1], kv[0])))
+
     def __repr__(self) -> str:
         flags = ""
         if self.unknown_paths:
@@ -273,7 +300,15 @@ class InfluenceSlice:
             view.add_edge(src, dst, **self.graph.graph.edges[src, dst])
         return view
 
-    def report(self) -> str:
+    def report(self, by: str = "node") -> str:
+        """Human-readable ranking.
+
+        Args:
+            by: ``"node"`` (default) ranks individual signals; ``"block"``
+                ranks blocks via :attr:`block_scores`.
+        """
+        if by not in ("node", "block"):
+            raise ValueError(f"by must be 'node' or 'block', got {by!r}")
         lines = [
             f"Influence slice ({self.direction}) for {self.target}",
             f"  threshold={self.threshold:g}  normalize={self.graph.normalize}  "
@@ -281,12 +316,29 @@ class InfluenceSlice:
             f"  {len(self.blocks)} of {self.graph.n_blocks} blocks retained",
         ]
         unknown = set(self.unknown_nodes)
-        ranked = sorted(self.scores.items(), key=lambda kv: -abs(kv[1]))
-        for node, score in ranked:
-            if node == self.target:
-                continue
-            flag = "  (bound)" if node in unknown else ""
-            lines.append(f"    {score:>10.4g}  {node}{flag}")
+        if by == "block":
+            unknown_blocks = {self.graph.graph.nodes[n]["block"] for n in unknown}
+            # Drop the target *node*, not its whole block: another signal on the
+            # same block (its input port feeding the target state, say) is a
+            # real contributor and belongs in the ranking.
+            ranked_blocks: Dict[str, float] = {}
+            for node, score in self.scores.items():
+                if node == self.target:
+                    continue
+                block = self.graph.graph.nodes[node]["block"]
+                ranked_blocks[block] = max(ranked_blocks.get(block, 0.0), abs(score))
+            for block, score in sorted(
+                ranked_blocks.items(), key=lambda kv: (-kv[1], kv[0])
+            ):
+                flag = "  (bound)" if block in unknown_blocks else ""
+                lines.append(f"    {score:>10.4g}  {block}{flag}")
+        else:
+            ranked = sorted(self.scores.items(), key=lambda kv: -abs(kv[1]))
+            for node, score in ranked:
+                if node == self.target:
+                    continue
+                flag = "  (bound)" if node in unknown else ""
+                lines.append(f"    {score:>10.4g}  {node}{flag}")
         if unknown:
             lines.append(
                 f"  NOTE: {len(unknown)} nodes are reached only across an edge with "
@@ -712,9 +764,16 @@ class InfluenceGraph:
 
         The boolean answer — everything structurally upstream — is
         :meth:`structural_slice`; this one keeps only what lies on a path
-        carrying at least ``threshold`` of the influence (in the
-        relative-sensitivity sense described in the module docstring, so
-        ``0.01`` reads as "1%").
+        carrying at least ``threshold`` of the influence, in the
+        relative-sensitivity sense described in the module docstring.
+
+        ``0.01`` reads as "1%" only when ``tau`` is comparable to the time
+        constants on the paths involved — the threshold is absolute, and a
+        path across *k* integrators carries a factor of ``tau**k``, so the
+        same cutoff means different things at different ``tau``. When the
+        strongest contributor scores 95, ``threshold=0.01`` retains everything
+        down to ~0.01% of it, not 1%. Use :meth:`relative_threshold` to get
+        the cutoff that means a fraction *of the dominant contributor*.
 
         Two kinds of node are kept, and the distinction is load-bearing. A node
         is **influential** when its own best path to ``target`` clears the
