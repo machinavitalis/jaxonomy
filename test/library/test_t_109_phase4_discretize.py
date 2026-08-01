@@ -16,8 +16,9 @@ Tested:
   ``x[k+1] = x[k] + dt·u[k]``.
 * ZOH on a first-order plant matches the closed-form ``A_d = exp(-dt/τ)``.
 * Euler matches its closed-form ``A_d = I + A·dt``, ``B_d = B·dt``.
-* ZOH on an integrator avoids the singular-A fallback (the function's
-  Taylor branch must be exercised on a near-singular A).
+* ZOH is exact for a singular-but-nonzero A (any plant carrying an
+  integrator state): B_d stays finite and matches the augmented matrix
+  exponential, and gradients through it stay finite.
 * dt and is_discrete bookkeeping: continuous-in stays None, discrete-out
   carries the supplied dt, is_discrete flips, is_stable uses
   ``|eig(A)| < 1`` for the discrete case.
@@ -112,6 +113,115 @@ def test_zoh_first_order_matches_closed_form():
     expected_Bd = 1.0 - expected_Ad  # B_d = (1/τ) · τ · (1 - exp(-dt/τ))
     np.testing.assert_allclose(float(d.A[0, 0]), expected_Ad, rtol=1e-12)
     np.testing.assert_allclose(float(d.B[0, 0]), expected_Bd, rtol=1e-10)
+
+
+def _augmented_expm_reference(A, B, dt):
+    """A_d, B_d from expm([[A, B], [0, 0]]·dt), computed in float64 NumPy.
+
+    Independent of the implementation under test only in arithmetic, not
+    in formula — the analytical assertions below are the formula check;
+    this is the multi-state numerical reference.
+    """
+    from scipy.linalg import expm
+
+    A = np.asarray(A, dtype=np.float64)
+    B = np.asarray(B, dtype=np.float64)
+    n, m = A.shape[0], B.shape[1]
+    M = expm(np.block([[A, B], [np.zeros((m, n + m))]]) * dt)
+    return M[:n, :n], M[:n, n:]
+
+
+def _double_integrator() -> LinearizedSystem:
+    """G(s) = 1/s² — A is singular but nonzero (norm(A) == 1)."""
+    return LinearizedSystem(
+        A=jnp.array([[0.0, 1.0], [0.0, 0.0]]),
+        B=jnp.array([[0.0], [1.0]]),
+        C=jnp.array([[1.0, 0.0]]),
+        D=jnp.array([[0.0]]),
+        operating_point={"x": jnp.zeros(2), "u": jnp.zeros(1)},
+    )
+
+
+def test_zoh_singular_nonzero_A_matches_closed_form():
+    """Double integrator: A_d = [[1, dt], [0, 1]], B_d = [dt²/2, dt].
+
+    A is singular yet norm(A) = 1, so the old norm-based guard picked the
+    ``A⁻¹(A_d − I)B`` branch and B_d came back infinite.
+    """
+    dt = 0.05
+    d = discretize(_double_integrator(), dt=dt, method="zoh")
+
+    assert np.all(np.isfinite(np.asarray(d.B)))
+    np.testing.assert_allclose(np.asarray(d.A), [[1.0, dt], [0.0, 1.0]], atol=1e-12)
+    np.testing.assert_allclose(
+        np.asarray(d.B), [[dt ** 2 / 2.0], [dt]], atol=1e-12
+    )
+
+
+def test_zoh_singular_A_gradients_stay_finite():
+    """``jnp.where`` evaluates both branches, so the old fallback still
+    poisoned gradients with NaN even when the finite branch was selected."""
+
+    def loss(dt_val):
+        d = discretize(_double_integrator(), dt=dt_val, method="zoh")
+        return jnp.sum(d.B ** 2)
+
+    dt = 0.05
+    grad = float(jax.grad(loss)(jnp.asarray(dt)))
+    # B_d = [dt²/2, dt] ⇒ ‖B_d‖² = dt⁴/4 + dt², d/dt = dt³ + 2dt.
+    np.testing.assert_allclose(grad, dt ** 3 + 2.0 * dt, rtol=1e-6)
+
+
+def test_zoh_matches_augmented_expm_on_a_real_singular_plant():
+    """Regression for the reported failure: linearizing QubeServoModel at
+    the upright equilibrium yields a singular A (its first column is all
+    zeros), which used to produce ``B_d[0] == inf``."""
+    from jaxonomy import library
+
+    plant = library.QubeServoModel(full_state_output=False, name="qube")
+    plant.input_ports[0].fix_value(np.zeros(1))
+    ctx = plant.create_context().with_continuous_state(
+        np.array([0.0, np.pi, 0.0, 0.0])
+    )
+    linsys = library.linearize(plant, ctx)
+
+    # Precondition: this really is the singular-but-nonzero case.
+    A = np.asarray(linsys.A, dtype=np.float64)
+    assert np.linalg.matrix_rank(A) < A.shape[0]
+    assert np.linalg.norm(A) > 1.0
+
+    dt = 1e-3
+    d = discretize(linsys, dt=dt, method="zoh")
+    Ad_ref, Bd_ref = _augmented_expm_reference(A, np.asarray(linsys.B).reshape(4, 1), dt)
+
+    assert np.all(np.isfinite(np.asarray(d.B)))
+    np.testing.assert_allclose(np.asarray(d.A), Ad_ref, rtol=1e-6, atol=1e-9)
+    np.testing.assert_allclose(
+        np.asarray(d.B).reshape(4, 1), Bd_ref, rtol=1e-6, atol=1e-9
+    )
+
+
+def test_zoh_nonsingular_A_still_matches_the_inverse_formula():
+    """Guard against a regression in the well-conditioned case the old
+    solve branch handled correctly: B_d = A⁻¹(A_d − I)B."""
+    A = np.array([[-2.0, 1.0], [0.5, -3.0]])
+    B = np.array([[1.0], [0.0]])
+    linsys = LinearizedSystem(
+        A=jnp.asarray(A),
+        B=jnp.asarray(B),
+        C=jnp.array([[1.0, 0.0]]),
+        D=jnp.array([[0.0]]),
+        operating_point={"x": jnp.zeros(2), "u": jnp.zeros(1)},
+    )
+    dt = 0.1
+    d = discretize(linsys, dt=dt, method="zoh")
+
+    from scipy.linalg import expm
+
+    Ad_ref = expm(A * dt)
+    Bd_ref = np.linalg.solve(A, (Ad_ref - np.eye(2)) @ B)
+    np.testing.assert_allclose(np.asarray(d.A), Ad_ref, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(d.B), Bd_ref, rtol=1e-8, atol=1e-12)
 
 
 # ---------------------------------------------------------------------------

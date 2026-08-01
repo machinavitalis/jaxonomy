@@ -93,20 +93,22 @@ def discretize_forward_zoh(A, B, dt):
 
     x[k+1] = Ad x[k] + Bd u[k]
     """
-    Ad = jsp.linalg.expm(A * dt)
-    # Handle the case where A is singular or near-singular.  When A is
-    # well-conditioned we compute Bd = A^{-1}(Ad - I)B via a linear solve;
-    # when A is near-singular we fall back to the first-order Taylor
-    # approximation Bd ≈ (I + A*dt/2) * B * dt.
-    A_norm = jnp.linalg.norm(A)
-    threshold = 1e-10
-    is_singular = A_norm < threshold
-    # Stable path: solve A * X = (Ad - I) B
-    Bd_solve = jnp.linalg.solve(A, (Ad - jnp.eye(A.shape[0])) @ B)
-    # Near-singular / zero-A fallback
-    Bd_approx = (jnp.eye(A.shape[0]) + A * (dt / 2.0)) @ B * dt
-    Bd = jnp.where(is_singular, Bd_approx, Bd_solve)
-    return Ad, Bd
+    # Both blocks come from a single augmented matrix exponential
+    #
+    #     expm([[A, B], [0, 0]] * dt) = [[Ad, Bd], [0, I]],
+    #
+    # which is exact for every A, singular or not.  The textbook
+    # `Bd = A^{-1} (Ad - I) B` needs A invertible, and no norm-based guard
+    # can rescue it: a singular-but-nonzero A (any plant with an integrator
+    # state, i.e. most mechanical systems) has norm O(1), so the guard
+    # passes and the solve returns inf along the singular direction.
+    # Selecting a fallback with `jnp.where` would not help either — both
+    # branches are evaluated, so the inf/NaN still poisons gradients.
+    nx = A.shape[0]
+    nu = B.shape[1]
+    zeros = jnp.zeros((nu, nx + nu), dtype=jnp.result_type(A, B))
+    M = jsp.linalg.expm(jnp.block([[A, B], [zeros]]) * dt)
+    return M[:nx, :nx], M[:nx, nx:]
 
 
 def discretize_forward_euler(A, B, dt):

@@ -525,10 +525,6 @@ MANIFEST: tuple[Notebook, ...] = (
         WEEKLY,
         timeout=180,
         requires=("pal",),
-        note=(
-            "Blocked downstream of the same discretize bug as 03-energy-shaping "
-            "below; its LQG design runs on the discretized system."
-        ),
     ),
     Notebook(
         "docs/examples/quanser/03-energy-shaping.ipynb",
@@ -538,12 +534,11 @@ MANIFEST: tuple[Notebook, ...] = (
         binaries=("ffmpeg",),
         note=(
             "Sets HARDWARE = False, but still constructs library.QuanserHAL, whose "
-            "__init__ imports the `pal` SDK unconditionally. Beyond that it is "
-            "blocked by a library bug: discretize_forward_zoh "
-            "(library/state_estimators/utils.py) returns an infinite B_d for this "
-            "plant because its singularity guard tests norm(A) < 1e-10, which only "
-            "catches an all-zero A, not this singular-but-nonzero one. control.dlqr "
-            "then dies with a singular matrix pencil."
+            "__init__ imports the `pal` SDK unconditionally, so the `pal` gate is "
+            "what keeps it out of CI. Its control.dlqr step used to fail on top of "
+            "that, because discretize_forward_zoh returned an infinite B_d for this "
+            "singular-A plant; that bug is fixed and covered by "
+            "test/library/test_t_109_phase4_discretize.py."
         ),
     ),
     Notebook(

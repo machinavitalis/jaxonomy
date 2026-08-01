@@ -1286,11 +1286,11 @@ def discretize(
             required.
         dt: Sampling period in seconds. Must be positive.
         method: Discretization rule.
-            ``"zoh"`` (default) — exact zero-order-hold:
-            ``A_d = expm(A·dt)``,
-            ``B_d = A⁻¹ (A_d − I) B`` (with a first-order Taylor
-            fallback when ``A`` is near-singular, so integrator dynamics
-            ``A = 0`` work cleanly).
+            ``"zoh"`` (default) — exact zero-order-hold, read off the
+            augmented matrix exponential
+            ``expm([[A, B], [0, 0]]·dt) = [[A_d, B_d], [0, I]]``. Exact
+            for singular ``A`` too, so integrator dynamics need no
+            special-casing.
             ``"euler"`` — first-order forward-Euler:
             ``A_d = I + A·dt``, ``B_d = B·dt``. Cheap and JAX-clean but
             biased; use ``"zoh"`` unless you specifically need the
@@ -1316,7 +1316,7 @@ def discretize(
 
     Notes:
         Differentiable through ``A``, ``B``, ``C``, ``D``, and ``dt``
-        via the JAX-traceable matrix exponential and linear solve.
+        via the JAX-traceable matrix exponential.
         The diagram path is differentiable through whatever
         :func:`linearize` is itself differentiable through.
 

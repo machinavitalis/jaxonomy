@@ -783,6 +783,35 @@ def test_unscented_kalman_filter_discretization_methods(
         plt.show()
 
 
+def test_zoh_discretization_handles_singular_A():
+    """The estimator ZOH path must stay finite when A is singular.
+
+    A double integrator has ``norm(A) == 1`` yet ``A`` is singular, which
+    used to slip past the ``norm(A) < 1e-10`` guard into the
+    ``A⁻¹(A_d − I)B`` solve and return ``B_d = inf``. Closed form:
+    ``A_d = [[1, dt], [0, 1]]``, ``B_d = [dt²/2, dt]``.
+    """
+    from jaxonomy.library import LTISystem
+    from jaxonomy.library.state_estimators.utils import (
+        linearize_and_discretize_continuous_plant,
+    )
+
+    dt = 0.05
+    plant = LTISystem(
+        jnp.array([[0.0, 1.0], [0.0, 0.0]]),
+        jnp.array([[0.0], [1.0]]),
+        jnp.array([[1.0, 0.0]]),
+        jnp.array([[0.0]]),
+    )
+    _, Ad, Bd, *_ = linearize_and_discretize_continuous_plant(
+        plant, jnp.zeros(2), jnp.zeros(1), dt, discretization_method="zoh"
+    )
+
+    assert jnp.all(jnp.isfinite(Bd))
+    assert jnp.allclose(Ad, jnp.array([[1.0, dt], [0.0, 1.0]]), atol=1e-12)
+    assert jnp.allclose(Bd, jnp.array([[dt**2 / 2.0], [dt]]), atol=1e-12)
+
+
 if __name__ == "__main__":
     test_kalman_filter("zoh", discrete_time_plant=False, plot=True)
     # test_infinite_horizon_kalman_filter("zoh", discrete_time_plant=False, plot=True)
