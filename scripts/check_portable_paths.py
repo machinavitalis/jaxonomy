@@ -43,6 +43,19 @@ def tracked_files() -> list[str]:
     return out.stdout.splitlines()
 
 
+# A notebook line holding base64 image data is binary payload, not text: base64's
+# alphabet includes "/", so a large enough blob contains "/tmp/<16+ chars>" by
+# chance and trips the pattern below. Such a line is a single long JSON string
+# for an image/* (or application/pdf) key, so it is cheap to recognise and skip.
+_B64_PAYLOAD = re.compile(
+    r'^\s*"(?:image/(?:png|jpeg|gif)|application/pdf)":\s*"[A-Za-z0-9+/=\\n]+",?\s*$'
+)
+
+
+def is_base64_payload(line: str) -> bool:
+    return bool(_B64_PAYLOAD.match(line))
+
+
 def main() -> int:
     offenders: list[tuple[str, int, str]] = []
     for path in tracked_files():
@@ -56,6 +69,8 @@ def main() -> int:
             continue
         for lineno, line in enumerate(raw.decode("utf-8", "replace").splitlines(), 1):
             if "/home/runner/" in line:
+                continue
+            if is_base64_payload(line):
                 continue
             if any(p.search(line) for p in PATTERNS):
                 offenders.append((path, lineno, line.strip()[:160]))

@@ -11,6 +11,8 @@ notices the docs site is broken.
 
 from __future__ import annotations
 
+import binascii
+import json
 import re
 
 import pytest
@@ -65,6 +67,40 @@ def test_smoke_tier_stays_small():
     assert 4 <= len(smoke) <= 12, f"smoke tier has {len(smoke)} notebooks; keep it 4-12"
     budget = sum(nb.timeout for nb in smoke)
     assert budget <= 900, f"smoke tier timeout budget {budget}s is too generous"
+
+
+@pytest.mark.parametrize("nb", MANIFEST, ids=lambda nb: nb.path)
+def test_committed_image_outputs_decode(nb):
+    """Every embedded image in a committed output must be valid base64.
+
+    The execution gate deliberately ignores committed outputs, so a corrupt
+    stored image passes it — the notebook still runs fine. mkdocs-jupyter does
+    not: nbconvert's ExtractOutput preprocessor decodes every embedded image
+    when rendering, so one bad payload fails the whole docs build and takes the
+    published site down. That is not hypothetical; it happened, and went
+    unnoticed for two weeks because nothing checked.
+
+    Cheap enough for the default tier: parsing the corpus is well under a
+    second and nothing is executed.
+    """
+    document = json.loads(nb.full_path.read_text(encoding="utf-8"))
+
+    corrupt = []
+    for index, cell in enumerate(document.get("cells", [])):
+        for output in cell.get("outputs", []):
+            for mime, payload in output.get("data", {}).items():
+                if not mime.startswith("image/") or mime.endswith("svg+xml"):
+                    continue
+                encoded = payload if isinstance(payload, str) else "".join(payload)
+                try:
+                    binascii.a2b_base64(encoded)
+                except (binascii.Error, ValueError) as exc:
+                    corrupt.append(f"cell {index} [{mime}]: {exc}")
+
+    assert not corrupt, (
+        f"{nb.path} has undecodable embedded image data, which will fail the "
+        "docs build:\n  " + "\n  ".join(corrupt)
+    )
 
 
 def test_mkdocs_nav_notebooks_exist():
