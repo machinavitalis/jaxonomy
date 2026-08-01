@@ -58,7 +58,7 @@ def design_gains(dt):
     base_context = context.with_continuous_state(x_eq)
 
     # Linearize and discretize in time
-    lin_sys = library.linearize(plant, base_context).sample(dt)
+    lin_sys = library.discretize(library.linearize(plant, base_context), dt)
 
     # Design a state feedback controller
     n = 4

@@ -93,6 +93,10 @@ test = [
   # LTISystem lazily import `control`; DataSource / csv_utils / fmu need pandas.
   "control",
   "pandas ~= 2.2",
+  # The default tier executes the smoke-tier notebooks (test/docs/), which need
+  # a kernel. Without these they would skip rather than fail, so the PR-time
+  # gate against API drift in the tutorials would quietly do nothing.
+  "jaxonomy[notebooks]",
 ]
 
 # Full test matrix — adds every optional runtime extra that has test coverage
@@ -100,8 +104,7 @@ test = [
 # notebook-testing and media-I/O libraries that are test-only. Install with
 # `pip install -e .[test-full]`. CI's nightly job uses this.
 test-full = [
-  "jaxonomy[test,all,recommended]",
-  "nbval",
+  "jaxonomy[test,all,recommended,notebooks]",
   "gplearn",
   "onnx",
   "onnxruntime",
@@ -110,6 +113,17 @@ test-full = [
   "mediapy",
   "ipywidgets",
   "ipympl",
+]
+
+# Executes the shipped notebooks under docs/ (test/docs/test_notebooks.py).
+# Kept out of `test` so the PR-time job stays lightweight — the smoke tier that
+# runs there needs these too, but they are small and pure-Python. CI's weekly
+# notebook job installs this via test-full.
+notebooks = [
+  "nbclient >= 0.10",
+  "nbformat >= 5.9",
+  "ipykernel >= 6.29",
+  "matplotlib-inline >= 0.1",
 ]
 
 # NMPC requires IPOPT to be preinstalled and maybe cmake on macOS

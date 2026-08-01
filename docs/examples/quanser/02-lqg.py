@@ -30,7 +30,7 @@ base_context = context.with_continuous_state(x_eq)
 lin_sys = library.linearize(plant, base_context)
 
 dt = 0.01  # 100 Hz sampling rate
-dt_sys = lin_sys.sample(dt)
+dt_sys = library.discretize(lin_sys, dt)
 
 n = 4  # State dimension
 m = 1  # Input dimension

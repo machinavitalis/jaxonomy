@@ -78,11 +78,30 @@ maintainer (commit message / PR), not fixed as a drive-by on your branch.
   torch/tensorflow aren't installed (currently absent locally). A new
   failure on your branch is therefore yours to explain.
 - `pytest.ini` sets a global `--timeout=180` per test via pytest-timeout,
-  and its default `addopts` deselect `slow`/`dashboard`/`autodiff_full` —
-  pass `-m slow` explicitly to run slow tests. Genuinely long tests are
-  marked `@pytest.mark.slow` and, if they can exceed ~180s, carry a
-  per-test `@pytest.mark.timeout(N)` override (the global cap applies to
+  and its default `addopts` deselect
+  `slow`/`dashboard`/`autodiff_full`/`notebook` — pass `-m slow` explicitly
+  to run slow tests. Genuinely long tests are marked `@pytest.mark.slow`
+  and, if they can exceed ~180s, carry a per-test
+  `@pytest.mark.timeout(N)` override (the global cap applies to
   slow-marked tests too).
+- **Shipped notebooks are executed too** (`test/docs/`). Every `.ipynb`
+  under `docs/` has an entry in `test/docs/notebook_manifest.py`, and a
+  notebook added without one turns the (cheap, no-execution) manifest test
+  red. A small smoke tier runs in the default tier on every PR; the rest
+  carry the `notebook` marker and run in the weekly CI job — run them
+  locally with `pytest -m notebook test/docs/`. Passing means *executing
+  without an uncaught exception*; committed outputs are never compared.
+  If you re-execute a notebook, refresh it with `PYTHONWARNINGS=ignore`
+  and the inline matplotlib backend, then run
+  `python scripts/check_portable_paths.py` — a saved warning or traceback
+  bakes an absolute path into `docs/**` and that gate will reject it.
+  Notebooks run from their own directory, so the repo root is not on the
+  kernel's path and `import jaxonomy` would otherwise resolve through the
+  editable install — which, in a worktree, points at the checkout the
+  worktree was created from. `test/docs/test_notebooks.py` puts the repo
+  root on `PYTHONPATH` so the kernel imports the tree under test, and
+  `test_notebook_kernel_imports_repo_under_test` fails loudly if that ever
+  stops holding.
 - Optional cross-tool deps: `python-control 0.10.x` is available locally
   for SLICOT cross-validation; wrap such tests in `pytest.importorskip("control")`.
 

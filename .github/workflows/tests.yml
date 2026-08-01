@@ -116,10 +116,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test-full]"
 
-      - name: Run full suite (slow + autodiff_full, excludes dashboard)
+      # `notebook` is excluded explicitly: --override-ini drops pytest.ini's
+      # addopts (where it is deselected by default), and executing ~95 notebooks
+      # belongs to the weekly `notebooks` job, not to this daily one.
+      - name: Run full suite (slow + autodiff_full, excludes dashboard + notebooks)
         run: |
           pytest -q --tb=short \
-            -m "not dashboard" \
+            -m "not dashboard and not notebook" \
             --override-ini="addopts=--strict-markers"
 
   # ── compile-time regression gate ──────────────────────────────────────────
@@ -246,6 +249,64 @@ jobs:
 
       - name: Run memory benchmark with --check
         run: python benchmarks/memory.py --check
+
+  # ── shipped-notebook execution (weekly + manual only) ─────────────────────
+  # docs/** is a shippable surface, but a notebook's committed outputs keep
+  # rendering correctly on the docs site long after the code beneath them stops
+  # running — so drift there is invisible until a user hits it. This executes
+  # every notebook in the manifest against the current API.
+  #
+  # Weekly rather than nightly: ~95 notebooks is far too much to run daily, and
+  # the `notebook` marker is deselected in pytest.ini's addopts so the nightly
+  # job's cost is unchanged. The PR-time gate is the small smoke tier, which is
+  # unmarked and runs in the quick suite.
+  notebooks:
+    name: Weekly shipped-notebook execution suite
+    runs-on: ubuntu-latest
+    if: >-
+      ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
+      || github.event_name == 'workflow_dispatch')
+      && !inputs.rebaseline
+    # Four notebooks dominate: booster_part_4 alone runs ~41 min and
+    # battery_part_3 over 40 min (measured serially, uncontended). They are
+    # single serial chains, so -n auto cannot shorten them and the slowest one
+    # sets the floor. Nothing waits on this job, so it gets room rather than a
+    # tight cap; GitHub's own per-job ceiling is 6 h.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # cyipopt (via the `all` extra, used by the booster / limit-cycle
+      # notebooks) builds from source against the system IPOPT library.
+      - name: Install IPOPT (build dep of cyipopt)
+        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test-full]"
+
+      # ffmpeg backs the matplotlib animation writers a few notebooks use. It
+      # is preinstalled on ubuntu-latest; verify rather than assume, since the
+      # manifest skips those notebooks when it is absent and a silent skip
+      # would look like a pass.
+      - name: Verify ffmpeg is present
+        run: ffmpeg -version | head -1
+
+      - name: Execute shipped notebooks
+        run: |
+          pytest -q --tb=short -n auto \
+            -m notebook \
+            --override-ini="addopts=--strict-markers" \
+            test/docs/
 
   # ── public benchmark suite (weekly + manual only) ─────────────────────────
   # Cartpole / quadruped / sysid / linearization. NOT on PR or push: each
