@@ -20,6 +20,15 @@
     <flag eulerdamp="disable"/>
   </option>
 
+  <!-- Pin the visual scale to the VEHICLE, not the scene. MuJoCo derives the
+       near/far clipping planes from stat.extent (znear = map.znear * extent),
+       and extent is auto-computed from the model's bounding box. The road
+       spans ~125 m, which pushed the near plane out to ~6.5 m and clipped the
+       bike (5.2 m from the chase camera) out of every rendered frame while
+       leaving the distant road visible. Fixing extent at bike scale keeps the
+       near plane at ~0.1 m regardless of how long the road gets. -->
+  <statistic extent="2.5"/>
+
   <visual>
     <global offwidth="1280" offheight="720"/>
     <quality shadowsize="4096" offsamples="8"/>
@@ -40,10 +49,6 @@
     <material name="cargomat" rgba="0.75 0.60 0.32 1" reflectance="0.05"/>
     <material name="ridermat" rgba="0.20 0.35 0.62 1" reflectance="0.1"/>
     <material name="skinmat"  rgba="0.85 0.68 0.55 1"/>
-    <!-- size z (1.5 m) is the fixed elevation envelope: the collision hull is
-         compiled from this, so the loader must NOT enlarge it at runtime. Total
-         road relief (descent+climb) must stay under it. -->
-    <hfield name="road" nrow="110" ncol="1700" size="45 18 1.5 0.1"/>
   </asset>
 
   <default>
@@ -52,8 +57,12 @@
       <geom contype="0" conaffinity="0" group="1"/>
     </default>
     <default class="wheel">
-      <geom type="cylinder" material="tyremat" friction="1.3 0.01 0.001"
-            contype="1" conaffinity="1" condim="4" priority="1"
+      <!-- rolling-friction coefficient (3rd value, units of length) is set so
+           the equivalent rolling-resistance force rf*N/r matches the planar
+           model's Crr = 0.008: rf = Crr * r = 0.008 * 0.29 = 0.0023 m.
+           condim=6 activates the rolling-friction row. -->
+      <geom type="cylinder" material="tyremat" friction="1.3 0.01 0.0023"
+            contype="1" conaffinity="1" condim="6" priority="1"
             quat="0.7071068 0.7071068 0 0"/>
     </default>
     <default class="susp">
@@ -64,8 +73,18 @@
   <worldbody>
     <light name="sun" directional="true" diffuse="0.8 0.8 0.78" specular="0.25 0.25 0.25"
            pos="0 -4 8" dir="0.2 0.35 -1" castshadow="true"/>
-    <geom name="floor" type="hfield" hfield="road" material="roadmat" pos="30 0 0"
-          friction="1.3 0.01 0.001" condim="4"/>
+    <!-- ROAD: injected programmatically by ebike_mujoco_cosim.load_model()
+         as flat/ramp BOX segments plus a transverse capsule speed bump.
+         Deliberately NOT a heightfield: a wheel rolling on a triangulated
+         hfield picks up several contacts with slightly disagreeing normals
+         and the resulting micro-slip dissipates ~5x the intended rolling
+         resistance (measured Crr_eff 0.047 vs 0.008; a plane/box face gives
+         0.0087 = rolling 0.008 + bearing ~0.001). Box faces are locally
+         exact planes, so the contact is clean; the price is piecewise-linear
+         ramps with kinks at the segment joints (like real pavement joints).
+         The placeholder plane below is replaced at load time. -->
+    <geom name="road_placeholder" type="plane" size="200 20 0.1" material="roadmat"
+          friction="1.3 0.01 0.0023" condim="6"/>
 
     <!-- 3/4 follow cameras: track the bike's centre of mass, fixed offset,
          no rotation (mode=trackcom) so pitch/heave are seen, not chased -->
@@ -81,11 +100,13 @@
           <joint name="slide_z" type="slide" axis="0 0 1"/>
           <joint name="pitch" type="hinge" axis="0 1 0"/>
 
-          <!-- main frame tubes (visual + mass) -->
+          <!-- main frame tubes (visual + mass). The downtube carries the
+               battery + mid-drive motor mass. Total vehicle mass = 180 kg,
+               matching the planar model (bike+rider 120 + cargo/rack 60). -->
           <geom class="deco" name="downtube" type="capsule" material="framemat"
-                fromto="-0.55 0 -0.10  0.45 0 0.05" size="0.03" mass="6"/>
+                fromto="-0.55 0 -0.10  0.45 0 0.05" size="0.03" mass="14"/>
           <geom class="deco" name="toptube" type="capsule" material="framemat"
-                fromto="-0.28 0 0.16  0.42 0 0.14" size="0.028" mass="4"/>
+                fromto="-0.28 0 0.16  0.42 0 0.14" size="0.028" mass="6.5"/>
           <geom class="deco" name="seattube" type="capsule" material="framemat"
                 fromto="-0.28 0 0.16  -0.20 0 -0.06" size="0.026" mass="2"/>
           <geom class="deco" name="steerer" type="capsule" material="darkmat"
@@ -99,7 +120,7 @@
           <geom class="deco" name="rider_torso" type="capsule" material="ridermat"
                 fromto="-0.24 0 0.24  0.10 0 0.60" size="0.10" mass="46"/>
           <geom class="deco" name="rider_hips" type="box" material="ridermat"
-                pos="-0.26 0 0.22" size="0.12 0.11 0.09" mass="18"/>
+                pos="-0.26 0 0.22" size="0.12 0.11 0.09" mass="22"/>
           <geom class="deco" name="rider_head" type="sphere" material="skinmat"
                 pos="0.14 0 0.74" size="0.09" mass="5"/>
           <geom class="deco" name="rider_arm" type="capsule" material="ridermat"
@@ -121,7 +142,12 @@
             <geom class="deco" name="rear_stanchion" type="capsule" material="rimmat"
                   fromto="0 0 0.24  0 0 0.02" size="0.014" mass="0.5"/>
             <body name="rear_wheel" pos="0 0 0">
-              <joint name="rear_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.6"/>
+              <!-- damping is bearing-scale only (0.01 N*m*s/rad ~ 0.2 N*m at
+                   speed). Rolling resistance lives in the CONTACT (rolling
+                   friction above), not here: a 0.6 N*m*s/rad joint damping
+                   would burn ~600 W at cruise -- 4.5x the aero loss -- and
+                   silently dominate the energy budget. -->
+              <joint name="rear_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.01"/>
               <geom class="wheel" name="rear_tyre" size="0.29 0.035" mass="2.6"/>
               <geom class="deco" name="rear_rim" type="cylinder" size="0.24 0.037" material="rimmat"
                     quat="0.7071068 0.7071068 0 0" mass="0.2"/>
@@ -136,7 +162,7 @@
             <geom class="deco" name="front_stanchion" type="capsule" material="rimmat"
                   fromto="0 0 0.28  0 0 0.02" size="0.014" mass="0.5"/>
             <body name="front_wheel" pos="0 0 0">
-              <joint name="front_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.6"/>
+              <joint name="front_spin" type="hinge" axis="0 1 0" armature="0.05" damping="0.01"/>
               <geom class="wheel" name="front_tyre" size="0.29 0.035" mass="2.6"/>
               <geom class="deco" name="front_rim" type="cylinder" size="0.24 0.037" material="rimmat"
                     quat="0.7071068 0.7071068 0 0" mass="0.2"/>
@@ -152,10 +178,17 @@
   </actuator>
 
   <sensor>
-    <jointvel name="v_long"     joint="slide_x"/>
-    <jointpos name="pitch_pos"  joint="pitch"/>
-    <jointvel name="rear_wvel"  joint="rear_spin"/>
+    <!-- The control loop and all logging read THESE named sensors (the
+         "wiring harness"), not raw qpos/qvel -- the discipline a HIL
+         controller is forced into. NOTE the pitch joint is nose-DOWN
+         positive (right-hand rule about +y); the Python side negates it so
+         every logged/plotted pitch is nose-UP positive. -->
+    <jointvel name="v_long"      joint="slide_x"/>
+    <jointpos name="heave"       joint="slide_z"/>
+    <jointpos name="pitch_pos"   joint="pitch"/>
+    <jointvel name="rear_wvel"   joint="rear_spin"/>
     <jointpos name="rear_travel" joint="rear_susp"/>
     <jointpos name="front_travel" joint="front_susp"/>
+    <jointpos name="x_pos"       joint="slide_x"/>
   </sensor>
 </mujoco>

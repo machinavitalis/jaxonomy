@@ -294,7 +294,7 @@ MANIFEST: tuple[Notebook, ...] = (
         timeout=420,
     ),
     Notebook(
-        "docs/examples/ebike_smart_cargo_tutorial.ipynb",
+        "docs/examples/ebike_part1_smart_cargo.ipynb",
         WEEKLY,
         timeout=180,
     ),

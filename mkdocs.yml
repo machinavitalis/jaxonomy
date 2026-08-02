@@ -178,6 +178,12 @@ nav:
           - 04 - System identification: examples/motor_part_4_system_identification.ipynb
           - 05 - Design margins: examples/motor_part_5_design_margins.ipynb
           - 06 - Embedded deployment: examples/motor_part_6_embedded_deployment.ipynb
+      - Smart cargo e-bike series:
+          - 01 - Multi-domain model: examples/ebike_part1_smart_cargo.ipynb
+          - 02 - Design optimization and sensitivity: examples/ebike_part2_optimization.ipynb
+          - 03 - Physics-based batteries (PyBaMM): examples/ebike_part3_pybamm_battery.ipynb
+          - 04 - 3D multibody co-simulation (MuJoCo): examples/ebike_part4_mujoco_multibody.ipynb
+          - 05 - CFD and conjugate heat transfer (OpenFOAM): examples/ebike_part5_openfoam_cfd.ipynb
       - Quadcopter series:
           - 01 - Quadcopter model: examples/01_quadcopter_modelling.ipynb
           - 02 - Trajectory generation: examples/02_quadcopter_trajectory_generation.ipynb

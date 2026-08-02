@@ -14,11 +14,13 @@ current control).
 
 The distinguishing feature versus a "cute demo" is that the model is
 *instrumented for verification*: every power flow (human, battery-terminal,
-aero, rolling, grade, drivetrain damping, chain damping, motor heat) is
-integrated online into a dedicated energy accumulator, so the closing energy
-balance can be checked to within a few percent against the change in stored
-energy (kinetic + rotational + gravitational + chain-spring). See
-:func:`energy_audit` and :func:`validate`.
+aero, rolling, grade, drivetrain damping, chain damping, motor heat, motor
+shaft friction) is integrated online into a dedicated energy accumulator, so
+the closing energy balance can be checked to a fraction of a percent against
+the change in stored energy (kinetic + rotational + gravitational +
+chain-spring). The audit is sensitive enough to expose a single missing
+~3 W term over the 60 s cycle -- it caught exactly that once (see the
+walkthrough). See :func:`energy_audit` and :func:`validate`.
 
 Run directly to execute the reference drive cycle and print the audit:
 
@@ -224,16 +226,26 @@ class HighFidelityBatteryCellECM(elec.ElecTwoPin):
     """2-RC equivalent-circuit battery (lumped n_series string) with SOC/SOH,
     thermal core node, and temperature/SOC-dependent parameters.
 
+    The pack is 13S3P of ~5 Ah cells; each lumped "cell" here is one 3P group
+    (15 Ah). The RC defaults are the per-group values from the DFN-calibrated
+    fit in Part 3 of the tutorial series (per-cell R0 = 15.2 mOhm; diffusion
+    branch R1 = 9.0 mOhm / tau ~ 26 s -> R10/C10; fast charge-transfer branch
+    R2 = 7.7 mOhm / tau ~ 0.5 s -> R20/C20; R divided by 3 and C multiplied
+    by 3 for the parallel group). Part 3 re-runs that fit and checks these
+    shipped values against it, so they cannot silently drift. Diffusion slower
+    than ~100 s exists physically but lies outside Part 3's 380 s fit window
+    and is not modeled.
+
     Passive sign convention: ``Ip`` (current into the positive pin) is negative
     on discharge, so ``dSOC/dt = Ip/(n_series*cap*3600)`` decreases SOC when the
     pack drives the motor. Exports terminal power (V*Ip), chemical power
-    (n_series*OCV*Ip) and internal heat generation for the energy audit.
+    (n_series*OCV*Ip) and pack-level internal heat for the energy audit.
     """
 
     def __init__(self, ev, name=None, capacity_Ah=15.0, T_ref=298.15,
-                 R00=0.015, R10=0.01, R20=0.012, C10=2000.0, C20=10000.0,
-                 alpha_R=-0.005, beta_R=0.5, alpha_OCV_T=-0.0005,
-                 C_core=1500.0, R_core_case=0.5, k_aging=1e-4, alpha_aging=0.05,
+                 R00=0.00506, R10=0.00300, R20=0.00256, C10=8562.0, C20=183.0,
+                 alpha_R=-0.005, beta_R=0.5, alpha_OCV_T=-1e-4,
+                 C_core=1500.0, R_core_case=0.04, k_aging=1e-4, alpha_aging=0.05,
                  initial_soc=0.9, initial_soc_fixed=True, n_series=13):
         self.name = self.__class__.__name__ if name is None else name
         super().__init__(ev, self.name, V_ic=3.9 * n_series, I_ic=0.0)
@@ -277,13 +289,18 @@ class HighFidelityBatteryCellECM(elec.ElecTwoPin):
         OCV = (3.3 + 1.2 * soc_safe - 0.5 * soc_safe**2 + 0.15 * soc_safe**3
                + alpha_OCV_T * (T_core.s - T_ref))
 
+        # Resistances rise toward LOW SOC (charge-transfer/diffusion grow as the
+        # cell empties) and toward low temperature (alpha_R < 0).
         R0 = (R00 * (1.0 + alpha_R * (T_core.s - T_ref)) * (1.0 + beta_R * (1.0 - soc_safe))) / SOH.s
-        R1 = R10 * (1.0 + alpha_R * (T_core.s - T_ref)) / soc_safe
-        R2 = R20 * (1.0 + alpha_R * (T_core.s - T_ref)) / (1.0 - soc_safe + 1e-3)
-        C1 = C10 * (1.0 - alpha_R * (T_core.s - T_ref)) * soc_safe
-        C2 = C20 * (1.0 - alpha_R * (T_core.s - T_ref)) * (1.0 - soc_safe + 1e-3)
+        R1 = R10 * (1.0 + alpha_R * (T_core.s - T_ref)) * (1.0 + 0.5 * (1.0 - soc_safe))
+        R2 = R20 * (1.0 + alpha_R * (T_core.s - T_ref)) * (1.0 + 1.0 * (1.0 - soc_safe))
+        C1 = C10 * (1.0 - alpha_R * (T_core.s - T_ref))
+        C2 = C20 * (1.0 - alpha_R * (T_core.s - T_ref))
 
-        Q_gen = self.Ip.s**2 * R0 + V_RC1.s**2 / R1 + V_RC2.s**2 / R2 - self.Ip.s * T_core.s * alpha_OCV_T
+        # Pack-level heat: the per-group ohmic/RC/entropic terms scale by
+        # n_series (all groups carry the same current).
+        Q_gen = n_series * (self.Ip.s**2 * R0 + V_RC1.s**2 / R1 + V_RC2.s**2 / R2
+                            - self.Ip.s * T_core.s * alpha_OCV_T)
         cap_current = cap.s * SOH.s
 
         I_mag = sp.sqrt(self.Ip.s**2 + 1e-4)
@@ -308,8 +325,10 @@ class HighFidelityBatteryCellECM(elec.ElecTwoPin):
                 sp.Eq(dV_RC2.s, self.Ip.s / C2 - V_RC2.s / (R2 * C2)),
                 sp.Eq(dSOH.s, -I_mag / (cap.s * 3600.0) * k_aging * (1.0 + alpha_aging * (T_core.s - T_ref))),
                 sp.Eq(self.V.s, n_series * (OCV + R0 * self.Ip.s + V_RC1.s + V_RC2.s)),
+                # Q_gen is already pack-level, so the core node and the heat
+                # flowing out to the case use it (and R_core_case) directly.
                 sp.Eq(C_core * dT_core.s, Q_gen - (T_core.s - T_cell.s) / R_core_case),
-                sp.Eq(-Q_cell.s, n_series * (T_core.s - T_cell.s) / R_core_case),
+                sp.Eq(-Q_cell.s, (T_core.s - T_cell.s) / R_core_case),
             ]
         )
 
@@ -324,14 +343,18 @@ class HighFidelityPMSM(elec.ElecTwoPin):
     charges the pack. Exports mechanical, electrical and heat power.
     """
 
-    def __init__(self, ev, name=None, R_s=0.05, L_d0=0.0005, L_q0=0.0008, psi_m=0.10, P=4.0, J=0.01, B=0.001, C_core=1e-6,
-                 ksat_d=1.5e-5, ksat_q=2.5e-5, kcross=1.0e-5,
+    def __init__(self, ev, name=None, R_s=0.05, L_d0=0.0005, L_q0=0.0008, psi_m=0.07, P=4.0, J=0.01, B=0.001, C_core=1e-4,
+                 ksat_d=8e-6, ksat_q=1.2e-5, kcross=5e-6,
                  C_stator=600.0, C_rotor=200.0, R_stator_case=1.0, R_airgap=5.0, w_ic=0.0,
                  R_ds_on=0.005, f_sw=10000.0, k_sw=3e-7, enable_inverter_losses=True,
                  enable_demagnetization=True, alpha_mag=0.001):
-        # Torque constant Kt = 1.5*P*psi_m = 0.6 Nm/A (must match the assist
-        # policy's torque_constant). psi_m=0.10 and the reduced switching-loss
-        # coefficient k_sw give a realistic ~90% peak motor+inverter efficiency.
+        # Torque constant Kt = 1.5*P*psi_m = 0.42 Nm/A (must match the assist
+        # policy's torque_constant). psi_m = 0.07 puts the base speed -- where
+        # back-EMF psi*w_e meets the SVPWM limit V_dc/sqrt(3) -- at ~40 km/h,
+        # above any speed the bike reaches, so the current loop keeps authority
+        # (iq -> 0 on command) over the whole envelope without field weakening.
+        # A machine with the old psi_m = 0.10 saturated its inverter at
+        # ~29 km/h and could not regulate on the descent.
         self.name = self.__class__.__name__ if name is None else name
         super().__init__(ev, self.name, V_ic=48.0, I_ic=0.0)
 
@@ -366,6 +389,13 @@ class HighFidelityPMSM(elec.ElecTwoPin):
         T_stator_out = self.declare_symbol(ev, "T_stator_out", self.name, kind=SymKind.outp)
         self.declare_equation(sp.Eq(T_stator_out.s, T_stator.s), kind=EqnKind.outp)
 
+        # Shaft speed export: the FOC's back-EMF feedforward reads the motor's
+        # own "encoder" (this signal), not a vehicle-speed estimate -- during
+        # chain-compliance oscillations the two differ, and a feedforward blind
+        # to that difference rings against the drivetrain resonance.
+        w_out = self.declare_symbol(ev, "w_out", self.name, kind=SymKind.outp)
+        self.declare_equation(sp.Eq(w_out.s, w.s), kind=EqnKind.outp)
+
         T_mot, Q_mot = self.declare_thermal_port(ev, "heat")
         self.port_idx_to_name[2] = "heat"
 
@@ -381,16 +411,27 @@ class HighFidelityPMSM(elec.ElecTwoPin):
         else:
             psi_eff = psi_sym.s
 
-        Ld = safe_max(0.15 * L_d0, L_d0 - ksat_d * safe_abs(id_sym.s) - kcross * safe_abs(iq_sym.s))
-        Lq = safe_max(0.15 * L_q0, L_q0 - ksat_q * safe_abs(iq_sym.s) - kcross * safe_abs(id_sym.s))
+        # Saturation floor with a smoothing epsilon scaled to henries: the
+        # generic safe_max uses eps=1e-4, which is the same magnitude as the
+        # inductances themselves and once inflated Ld/Lq to ~5.5 mH at every
+        # operating point (7x nominal) -- the bogus cross-coupling voltage
+        # w_e*Lq*iq then saturated the inverter and silently throttled the
+        # motor at high assist current.
+        def _max_L(a, b):
+            return 0.5 * (a + b + sp.sqrt((a - b) ** 2 + 1e-16))
+
+        Ld = _max_L(0.15 * L_d0, L_d0 - ksat_d * safe_abs(id_sym.s) - kcross * safe_abs(iq_sym.s))
+        Lq = _max_L(0.15 * L_q0, L_q0 - ksat_q * safe_abs(iq_sym.s) - kcross * safe_abs(id_sym.s))
 
         w_e = P_sym.s * w.s
         tau_em = 1.5 * P_sym.s * (psi_eff * iq_sym.s + (Ld - Lq) * id_sym.s * iq_sym.s)
 
         Q_winding = 1.5 * Rs_sym.s * (id_sym.s**2 + iq_sym.s**2)
 
-        # Steinmetz core loss: hysteresis (k_h*w_e) + eddy currents (C_core*w_e^2)
-        k_h = 1e-4
+        # Steinmetz core loss: hysteresis (k_h*w_e) + eddy currents (C_core*w_e^2).
+        # Sized so core loss is ~8-12 W at cruise (w_e ~ 240 rad/s) -- a
+        # realistic share for a 250 W-class PMSM, not a decorative epsilon.
+        k_h = 0.02
         Q_core = k_h * safe_abs(w_e) + C_core_sym.s * w_e**2
 
         if enable_inverter_losses:
@@ -403,13 +444,19 @@ class HighFidelityPMSM(elec.ElecTwoPin):
         P_heat = Q_winding + Q_core + P_inverter
         V_safe = safe_max(1.0, self.V.s)
 
-        # Energy-audit exports
+        # Energy-audit exports.  p_shaft_fric is the viscous loss B*w^2 at the
+        # motor shaft: it leaves through the mechanical port (P_mech is
+        # electromagnetic power, of which B*w^2 never reaches the wheel), so
+        # the audit must count it as its own sink.  Omitting it once hid a
+        # ~190 J residual over the reference cycle.
         p_mech_out = self.declare_symbol(ev, "p_mech", self.name, kind=SymKind.outp)
         p_heat_out = self.declare_symbol(ev, "p_heat", self.name, kind=SymKind.outp)
         p_elec_out = self.declare_symbol(ev, "p_elec", self.name, kind=SymKind.outp)
+        p_fric_out = self.declare_symbol(ev, "p_shaft_fric", self.name, kind=SymKind.outp)
         self.declare_equation(sp.Eq(p_mech_out.s, P_mech), kind=EqnKind.outp)
         self.declare_equation(sp.Eq(p_heat_out.s, P_heat), kind=EqnKind.outp)
         self.declare_equation(sp.Eq(p_elec_out.s, self.V.s * self.Ip.s), kind=EqnKind.outp)
+        self.declare_equation(sp.Eq(p_fric_out.s, B_sym.s * w.s**2), kind=EqnKind.outp)
 
         self.add_eqs(
             [
@@ -444,8 +491,9 @@ class PlanarVehicleDynamics(ComponentBase):
         self.name = self.__class__.__name__ if name is None else name
         super().__init__()
 
+        # Wheel IC consistent with the vehicle's u_ic = 0.1 m/s: w = u/r_wheel.
         trq_rear, ang_rear, w_rear, alpha_rear = self.declare_rotational_port(
-            ev, "shaft_rear", w_ic=0.30303, w_ic_fixed=True, ang_ic=0.0, ang_ic_fixed=True
+            ev, "shaft_rear", w_ic=0.1 / r_wheel, w_ic_fixed=True, ang_ic=0.0, ang_ic_fixed=True
         )
         self.port_idx_to_name = {1: "shaft_rear"}
 
@@ -564,16 +612,25 @@ def _smooth_bump(t, t0, t1, width=1.0):
 
 
 class DriveCycleSource(LeafSystem):
-    """Open-loop reference: rider torque, smooth road grade, smooth steering.
+    """Open-loop reference: rider torque, road grade, smooth steering.
 
-    Grade and steering use tanh transitions rather than step discontinuities so
-    the ODE solver does not have to integrate across kinks in the continuous
-    plant inputs.
+    The grade is a function of **position**, not time: the route *is* the
+    route, so two designs ridden at different speeds still climb the same
+    hill and gain the same altitude. (A time-indexed grade would hand a
+    slower design a shorter, easier climb -- which silently corrupts any
+    energy comparison between designs.) The position input comes from the
+    vehicle's own integrated x, sampled into a discrete state at 100 Hz
+    (a ZOH "route lookup"), which also breaks any feedthrough loop with the
+    compiled plant.
+
+    Grade and steering use tanh transitions rather than step discontinuities
+    so the ODE solver does not have to integrate across kinks.
     """
 
-    def __init__(self, name="drive_cycle",
-                 trq_startup=25.0, trq_cruise=15.0, trq_amplitude=5.0,
+    def __init__(self, name="drive_cycle", dt=0.01,
+                 trq_startup=25.0, trq_cruise=18.0, trq_amplitude=6.0,
                  pedal_freq=1.5, t_ramp=1.5, grade_max=0.06, descent=-0.03,
+                 climb_start_m=25.0, climb_end_m=90.0, descent_start_m=150.0,
                  grade_hold=None):
         super().__init__(name=name)
         self.trq_startup = trq_startup
@@ -583,11 +640,20 @@ class DriveCycleSource(LeafSystem):
         self.t_ramp = t_ramp
         self.grade_max = grade_max
         self.descent = descent
+        self.climb_start_m = climb_start_m
+        self.climb_end_m = climb_end_m
+        self.descent_start_m = descent_start_m
         self.grade_hold = grade_hold
 
+        self.declare_input_port(name="pos_x")
+        self.declare_discrete_state(default_value=jnp.zeros(1))  # sampled x
+        self.declare_periodic_update(self._sample_pos, period=dt, offset=0.0)
         self.declare_output_port(self.calc_human_trq, name="human_trq", requires_inputs=False)
         self.declare_output_port(self.calc_slope, name="slope", requires_inputs=False)
         self.declare_output_port(self.calc_steer_angle, name="steer_angle", requires_inputs=False)
+
+    def _sample_pos(self, time, state, *inputs, **params):
+        return jnp.array([jnp.squeeze(inputs[0])])
 
     def calc_human_trq(self, time, state, *inputs, **params):
         human_trq_raw = jnp.where(
@@ -599,12 +665,14 @@ class DriveCycleSource(LeafSystem):
 
     def calc_slope(self, time, state, *inputs, **params):
         if self.grade_hold is not None:
-            # Sustained constant grade (thermal stress test), ramped smoothly.
+            # Sustained constant grade (thermal stress test), ramped smoothly
+            # in time so the solver starts from a level road.
             slope = self.grade_hold * 0.5 * (1.0 + jnp.tanh((time - 3.0) / 1.5))
             return jnp.array([slope])
-        # Smooth climb between 5-20 s, smooth descent after 30 s.
-        slope = (self.grade_max * _smooth_bump(time, 5.0, 20.0, width=1.5)
-                 + self.descent * 0.5 * (1.0 + jnp.tanh((time - 33.0) / 1.5)))
+        x = state.discrete_state[0]
+        # Route profile: 6% climb over [25, 90] m, then -3% descent from 150 m.
+        slope = (self.grade_max * _smooth_bump(x, self.climb_start_m, self.climb_end_m, width=6.0)
+                 + self.descent * 0.5 * (1.0 + jnp.tanh((x - self.descent_start_m) / 8.0)))
         return jnp.array([slope])
 
     def calc_steer_angle(self, time, state, *inputs, **params):
@@ -615,14 +683,21 @@ class DriveCycleSource(LeafSystem):
 
 
 class HumanRiderBiomechanics(LeafSystem):
-    """W'-balance rider model: cadence-limited power envelope plus anaerobic work
-    capacity (W') depletion above critical power (CP). Sampled (ZOH) to avoid an
-    algebraic loop with the plant cadence.
+    """W'-balance rider model: cadence-limited torque envelope plus anaerobic
+    work capacity (W') depletion above critical power (CP). Sampled (ZOH) to
+    avoid an algebraic loop with the plant cadence.
+
+    The cadence envelope is a quartic roll-off to ``w_max`` = 16 rad/s
+    (~153 rpm): torque is near-full through the useful 50-110 rpm band and
+    dies at sprint cadence. (The single fixed gear puts the crank at half
+    wheel speed, so 25 km/h is ~110 rpm -- a parabolic envelope zeroing at
+    120 rpm would strangle the rider to a few watts at cruise, which is how
+    an earlier version of this model ended up with a 32 W "rider".)
     """
 
     def __init__(self, name="rider_biomechanics", dt=0.01,
-                 trq_startup=25.0, trq_cruise=15.0, trq_amplitude=5.0,
-                 pedal_freq=1.5, t_ramp=1.5, w_max=12.57,
+                 trq_startup=25.0, trq_cruise=18.0, trq_amplitude=6.0,
+                 pedal_freq=1.5, t_ramp=1.5, w_max=16.0,
                  W0=20000.0, CP=150.0):
         super().__init__(name=name)
         self.dt = dt
@@ -650,7 +725,7 @@ class HumanRiderBiomechanics(LeafSystem):
             self.trq_startup,
             self.trq_cruise + self.trq_amplitude * jnp.sin(2.0 * jnp.pi * self.pedal_freq * time),
         )
-        cadence_factor = jnp.clip(1.0 - (cadence / self.w_max) ** 2, 0.0, 1.0)
+        cadence_factor = jnp.clip(1.0 - (cadence / self.w_max) ** 4, 0.0, 1.0)
         human_trq_requested = human_trq_raw * cadence_factor
 
         P_demanded = human_trq_requested * cadence
@@ -675,8 +750,14 @@ class HumanRiderBiomechanics(LeafSystem):
 
 class AssistPolicy(LeafSystem):
     """Torque-assist manager: proportional assist with speed fade to the legal
-    cutoff, battery/motor thermal derating, and optional regenerative braking.
-    Runs at a fixed control rate and outputs a q-axis current reference.
+    cutoff and battery/motor thermal derating. Runs at a fixed control rate and
+    outputs a q-axis current reference.
+
+    Deliberately assist-only: there is no regenerative-braking path.  A regen
+    command issued above the cutoff would have to pass the hybrid enable gate
+    that (correctly) zeroes every motor command, so a braking feature belongs
+    on its own gate -- left as an exercise in the walkthrough rather than
+    shipped as dead code.
     """
 
     def __init__(self, name="assist_policy", dt=0.01,
@@ -685,8 +766,7 @@ class AssistPolicy(LeafSystem):
                  T_derate_bat_start=315.0, T_derate_bat_end=330.0,
                  T_derate_motor_start=340.0, T_derate_motor_end=360.0,
                  max_assist_torque=12.0,
-                 v_regen_start=7.78, K_regen=5.0, max_regen_torque=15.0,
-                 torque_constant=0.60):  # Nm/A, must equal motor Kt = 1.5*P*psi_m
+                 torque_constant=0.42):  # Nm/A, must equal motor Kt = 1.5*P*psi_m
         super().__init__(name=name)
         self.dt = dt
         self.v_cutoff = v_cutoff
@@ -696,9 +776,6 @@ class AssistPolicy(LeafSystem):
         self.T_derate_motor_start = T_derate_motor_start
         self.T_derate_motor_end = T_derate_motor_end
         self.max_assist_torque = max_assist_torque
-        self.v_regen_start = v_regen_start
-        self.K_regen = K_regen
-        self.max_regen_torque = max_regen_torque
         self.torque_constant = torque_constant
 
         self.declare_input_port(name="cadence")
@@ -747,15 +824,7 @@ class AssistPolicy(LeafSystem):
         k_sat = 10.0
         assist_trq = max_assist_torque - jnp.logaddexp(0.0, k_sat * (max_assist_torque - assist_trq)) / k_sat
 
-        regen_trq = jnp.where(
-            speed > self.v_regen_start,
-            -self.K_regen * (speed - self.v_regen_start),
-            0.0,
-        )
-        regen_trq = -self.max_regen_torque + jnp.logaddexp(0.0, k_sat * (regen_trq + self.max_regen_torque)) / k_sat
-
-        total_trq = assist_trq + regen_trq
-        iq_ref = total_trq / self.torque_constant
+        iq_ref = assist_trq / self.torque_constant
         return jnp.array([iq_ref, jnp.squeeze(speed)])
 
     def calc_iq_ref(self, time, state, *inputs, **params):
@@ -766,23 +835,63 @@ class AssistPolicy(LeafSystem):
 
 
 class FOCController(LeafSystem):
-    """Field-oriented current controller: two discrete PI loops (d,q) with SVPWM
-    voltage-magnitude saturation. id_ref = 0 (non-flux-weakening region).
+    """Field-oriented current controller: two discrete PI loops (d,q) with
+    back-EMF/cross-coupling feedforward, SVPWM voltage-magnitude saturation,
+    and back-calculation anti-windup. id_ref = 0 (non-flux-weakening region).
+
+    Design, stated rather than assumed:
+
+    * **Gains by pole placement, scheduled on saturation.** For the axis
+      plant ``L di/dt = v - R i`` a continuous PI with ``Kp = L*w_bw``,
+      ``Ki = R*w_bw`` places the closed loop at bandwidth ``w_bw``. We target
+      ~48 Hz (300 rad/s): above the electrical cross-coupling frequency
+      ``w_e`` (~240 rad/s at cruise, so the d/q interaction is well damped),
+      a factor ~5 below the 500 Hz sampling rate, and orders above the
+      vehicle/assist dynamics (~0.1 Hz). **Kp is recomputed each step from
+      the saturation-aware inductance estimate** -- with a fixed Kp sized for
+      the unsaturated L, deep saturation (L -> 0.15 L0 at full assist
+      current) multiplies the loop gain ~7x, pushing the discrete loop's
+      bandwidth into the sampling rate and producing a +/-25 A limit cycle
+      around the setpoint. A production drive would run at PWM rate
+      (10 kHz); 500 Hz keeps the stiff DAE tractable while honouring the
+      same separation argument.
+    * **Feedforward.** The steady q-axis voltage is dominated by the back-EMF
+      ``w_e*psi`` (tens of volts at speed) -- without feedforward the
+      integrator must hold that entire disturbance. Both decoupling terms
+      (``-w_e*Lq*iq`` on d, ``w_e*(Ld*id + psi)`` on q) are applied from the
+      measured speed **using the machine's saturation law** for Ld/Lq: with
+      nominal (unsaturated) inductances the decoupling overcompensates by
+      ~25% at full assist current, which drove ~10 A of parasitic d-current
+      and a seconds-long d/q ringing transient at the cutoff.
+    * **Anti-windup.** When SVPWM saturation clips the request, each
+      integrator is bled by the clipped excess (back-calculation, T_aw =
+      Kp/Ki), so the loop recovers command authority immediately after
+      leaving saturation instead of unwinding a stale integral -- the failure
+      mode that once kept the motor pushing ~300 W after the legal cutoff.
     """
 
-    def __init__(self, name="foc_controller", dt=0.01,
-                 Kp_d=0.5, Ki_d=50.0, Kp_q=0.5, Ki_q=50.0):
+    def __init__(self, name="foc_controller", dt=0.002, w_bw=300.0,
+                 R_s=0.05, L_d0=0.0005, L_q0=0.0008, psi_m=0.07, P=4.0,
+                 ksat_d=8e-6, ksat_q=1.2e-5, kcross=5e-6):
         super().__init__(name=name)
         self.dt = dt
-        self.Kp_d = Kp_d
-        self.Ki_d = Ki_d
-        self.Kp_q = Kp_q
-        self.Ki_q = Ki_q
+        self.w_bw = w_bw
+        self.Ki_d = R_s * w_bw
+        self.Ki_q = R_s * w_bw
+        self.R_s = R_s
+        self.L_d0 = L_d0
+        self.L_q0 = L_q0
+        self.psi_m = psi_m
+        self.P = P
+        self.ksat_d = ksat_d
+        self.ksat_q = ksat_q
+        self.kcross = kcross
 
         self.declare_input_port(name="iq_ref")
         self.declare_input_port(name="id_curr")
         self.declare_input_port(name="iq_curr")
         self.declare_input_port(name="v_dc")
+        self.declare_input_port(name="w_motor")
 
         self.declare_discrete_state(default_value=jnp.array([0.0, 0.0, 0.0, 0.0]))
         self.declare_output_port(self.calc_vd_ctrl, name="vd_ctrl", requires_inputs=False)
@@ -794,18 +903,34 @@ class FOCController(LeafSystem):
         id_curr = jnp.squeeze(inputs[1])
         iq_curr = jnp.squeeze(inputs[2])
         v_dc = jnp.squeeze(inputs[3])
+        w_motor = jnp.squeeze(inputs[4])
 
         id_ref = 0.0
         e_d = id_ref - id_curr
         e_q = iq_ref - iq_curr
 
+        # Back-EMF / cross-coupling feedforward from the motor's own measured
+        # shaft speed (its encoder), with the same current-dependent inductance
+        # law as the machine so the decoupling stays accurate at full current.
+        w_e = self.P * w_motor
+        Ld_hat = jnp.maximum(0.15 * self.L_d0,
+                             self.L_d0 - self.ksat_d * jnp.abs(id_curr) - self.kcross * jnp.abs(iq_curr))
+        Lq_hat = jnp.maximum(0.15 * self.L_q0,
+                             self.L_q0 - self.ksat_q * jnp.abs(iq_curr) - self.kcross * jnp.abs(id_curr))
+        vd_ff = -w_e * Lq_hat * iq_curr
+        vq_ff = w_e * (Ld_hat * id_curr + self.psi_m)
+
+        # Gain schedule: constant loop bandwidth over the saturation range
+        Kp_d = Ld_hat * self.w_bw
+        Kp_q = Lq_hat * self.w_bw
+
         z_vd = state.discrete_state[2]
         z_vq = state.discrete_state[3]
-        z_vd_next = z_vd + e_d * self.dt
-        z_vq_next = z_vq + e_q * self.dt
+        z_vd_trial = z_vd + e_d * self.dt
+        z_vq_trial = z_vq + e_q * self.dt
 
-        vd_req = self.Kp_d * e_d + self.Ki_d * z_vd_next
-        vq_req = self.Kp_q * e_q + self.Ki_q * z_vq_next
+        vd_req = vd_ff + Kp_d * e_d + self.Ki_d * z_vd_trial
+        vq_req = vq_ff + Kp_q * e_q + self.Ki_q * z_vq_trial
 
         v_max = v_dc / jnp.sqrt(3.0)
         v_mag = jnp.sqrt(vd_req**2 + vq_req**2 + 1e-4)
@@ -813,6 +938,11 @@ class FOCController(LeafSystem):
 
         vd_ctrl = vd_req * scale
         vq_ctrl = vq_req * scale
+
+        # Back-calculation anti-windup: bleed each integrator by the clipped
+        # excess (v_ctrl - v_req), scaled by 1/Kp (i.e. T_aw = Kp/Ki).
+        z_vd_next = z_vd_trial + (vd_ctrl - vd_req) * self.dt / Kp_d
+        z_vq_next = z_vq_trial + (vq_ctrl - vq_req) * self.dt / Kp_q
         return jnp.array([vd_ctrl, vq_ctrl, z_vd_next, z_vq_next])
 
     def calc_vd_ctrl(self, time, state, *inputs, **params):
@@ -928,7 +1058,9 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
 
     pack = bat.battery_pack(ev, ad, n_modules=1, n_cells_per_module=1,
                             cell_factory=cell_factory, name="battery")
-    motor = HighFidelityPMSM(ev, name="motor", w_ic=0.757575,
+    # Motor IC consistent with u_ic = 0.1 m/s through the rigid 2.5:1 chain:
+    # w_motor = 2.5 * u/r_wheel.
+    motor = HighFidelityPMSM(ev, name="motor", w_ic=2.5 * 0.1 / config.r_wheel,
                              enable_inverter_losses=True, enable_demagnetization=True)
     pack.connect_pos(ad, motor, "p")
     pack.connect_neg(ad, motor, "n")
@@ -983,8 +1115,10 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
 
     # Rider + crank
     human_trq = rot.TorqueSource(ev, name="human_trq", enable_torque_port=True, enable_flange_b=False)
+    # Crank IC consistent with u_ic = 0.1 m/s: w_crank = 0.5 * u/r_wheel.
     crank_inertia = rot.Inertia(ev, name="crank_inertia", I=0.1, initial_angle=0.0,
-                                initial_angle_fixed=False, initial_velocity=0.151515,
+                                initial_angle_fixed=False,
+                                initial_velocity=0.5 * 0.1 / config.r_wheel,
                                 initial_velocity_fixed=True)
     ad.connect(human_trq, "flange_a", crank_inertia, "flange")
     crank_cadence_sensor = rot.MotionSensor(ev, name="crank_cadence_sensor", enable_flange_b=False, enable_velocity_port=True)
@@ -1027,7 +1161,20 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
         v_cutoff=config.v_cutoff_kmh / 3.6, v_fade_start=config.v_fade_kmh / 3.6,
         max_assist_torque=config.max_assist_torque,
     ))
-    foc = builder.add(FOCController(dt=0.01))
+    foc = builder.add(FOCController(dt=0.002))
+
+    # The torque constant Kt = 1.5*P*psi_m appears in three places that must
+    # agree: the machine, the assist policy (which converts a torque request to
+    # a current reference), and the FOC's feedforward. If they drift, the assist
+    # silently delivers the wrong torque and every energy number is wrong in a
+    # way no plot reveals -- so check it here rather than trusting comments.
+    _Kt_machine = 1.5 * 4.0 * 0.07
+    if abs(assist_policy.torque_constant - _Kt_machine) > 1e-9:
+        raise ValueError(
+            f"AssistPolicy.torque_constant={assist_policy.torque_constant} does not match "
+            f"the motor's Kt=1.5*P*psi_m={_Kt_machine}. Update both together.")
+    if abs(foc.psi_m - 0.07) > 1e-9 or abs(foc.P - 4.0) > 1e-9:
+        raise ValueError("FOCController's psi_m/P must match HighFidelityPMSM's.")
     rider_bio = builder.add(HumanRiderBiomechanics())
 
     builder.connect(_find_port(phys_sys, "crank_cadence_sensor_w_rel"), assist_policy.input_ports[0])
@@ -1057,6 +1204,8 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
     builder.connect(_find_port(phys_sys, "motor_id_out"), foc.input_ports[1])
     builder.connect(_find_port(phys_sys, "motor_iq_out"), foc.input_ports[2])
     builder.connect(_find_port(phys_sys, "battery_mod0_cell0_v_out"), foc.input_ports[3])
+    # Motor encoder speed for the back-EMF feedforward
+    builder.connect(_find_port(phys_sys, "motor_w_out"), foc.input_ports[4])
 
     builder.connect(foc.output_ports[0], _find_in_port(phys_sys, "motor_vd_ctrl"))
     builder.connect(foc.output_ports[1], _find_in_port(phys_sys, "motor_vq_ctrl"))
@@ -1066,6 +1215,9 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
     builder.connect(rider_bio.output_ports[0], _find_in_port(phys_sys, "human_trq_tau"))
     trq_signal = rider_bio.output_ports[0]
 
+    # Route grade is position-indexed: feed the vehicle's integrated x back to
+    # the drive cycle (loop broken by the position integrator).
+    builder.connect(_find_port(phys_sys, "vehicle_pos_x_out"), drive_cycle.input_ports[0])
     builder.connect(drive_cycle.output_ports[1], _find_in_port(phys_sys, "vehicle_slope"))
     builder.connect(drive_cycle.output_ports[2], _find_in_port(phys_sys, "vehicle_steer_angle"))
 
@@ -1095,6 +1247,7 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
     _integrate(_find_port(phys_sys, "battery_mod0_cell0_p_term"), "batt_term")
     _integrate(_find_port(phys_sys, "battery_mod0_cell0_q_heat"), "batt_heat")
     _integrate(_find_port(phys_sys, "motor_p_heat"), "motor_heat")
+    _integrate(_find_port(phys_sys, "motor_p_shaft_fric"), "shaft_fric")
     _integrate(_find_port(phys_sys, "vehicle_p_aero"), "aero")
     _integrate(_find_port(phys_sys, "vehicle_p_roll"), "roll")
     _integrate(_find_port(phys_sys, "vehicle_p_climb"), "climb")
@@ -1129,12 +1282,14 @@ def make_ebike_diagram(config: EbikeConfig | None = None, name="ebike_system",
     builder.export_output(_find_port(phys_sys, "chain_defl"), "chain_defl")
     builder.export_output(trq_signal, "human_trq")
     builder.export_output(rider_bio.output_ports[1], "w_prime")
+    builder.export_output(drive_cycle.output_ports[1], "slope")
     if speed_limiter is not None:
         builder.export_output(speed_limiter.output_ports[0], "assist_enable")
 
     diagram = builder.build(name=name)
     if return_handles:
-        return diagram, {"assist_policy": assist_policy, "speed_limiter": speed_limiter}
+        return diagram, {"assist_policy": assist_policy, "speed_limiter": speed_limiter,
+                         "foc": foc}
     return diagram
 
 
@@ -1145,7 +1300,7 @@ def simulate_ebike(config: EbikeConfig | None = None, tf=None):
         tf = config.tf
     diagram = make_ebike_diagram(config)
     context = diagram.create_context()
-    options = SimulatorOptions(enable_autodiff=False, rtol=5e-4, atol=5e-6, buffer_length=120000)
+    options = SimulatorOptions(enable_autodiff=False, rtol=5e-4, atol=5e-6, buffer_length=260000)
     recorded_signals = {port.name: port for port in diagram.output_ports}
     return jaxonomy.simulate(diagram, context, (0.0, tf), options=options, recorded_signals=recorded_signals)
 
@@ -1176,6 +1331,7 @@ def energy_audit(results, config: EbikeConfig):
         E_bearing     wheel-bearing viscous dissipation
         E_chain_damp  chain-damper dissipation
         E_motor_heat  motor copper + core + inverter heat
+        E_shaft_fric  motor shaft viscous friction (B*w^2)
 
     (Battery-internal heat is *not* a sink here because we use terminal, not
     chemical, energy as the electrical source; it is reported separately.)
@@ -1217,15 +1373,16 @@ def energy_audit(results, config: EbikeConfig):
         "E_roll": last("E_roll"),
         "E_bearing": last("E_bearing"),
         "E_slip": last("E_slip"),
-        "E_chain": last("E_chain"),     # net into freewheel = stored + dissipated
+        "E_chain": last("E_chain"),     # net into chain = stored + dissipated
         "E_motor_heat": last("E_motor_heat"),
+        "E_shaft_fric": last("E_shaft_fric"),
         "E_batt_heat": last("E_batt_heat"),  # reported, not in the balance
     }
 
     E_in = terms["E_human"] + terms["E_batt_term"]
     E_out = (terms["dKE"] + terms["E_climb"] + terms["E_aero"]
              + terms["E_roll"] + terms["E_bearing"] + terms["E_slip"]
-             + terms["E_chain"] + terms["E_motor_heat"])
+             + terms["E_chain"] + terms["E_motor_heat"] + terms["E_shaft_fric"])
     residual = E_in - E_out
     closure_pct = abs(residual) / (abs(E_in) + 1e-9) * 100.0
 
@@ -1238,7 +1395,7 @@ def energy_audit(results, config: EbikeConfig):
     return terms
 
 
-def validate(results, config: EbikeConfig, closure_tol_pct=3.0):
+def validate(results, config: EbikeConfig, closure_tol_pct=0.5):
     """Run sanity checks and return (ok, messages)."""
     o = results.outputs
     msgs = []
@@ -1250,6 +1407,29 @@ def validate(results, config: EbikeConfig, closure_tol_pct=3.0):
         msgs.append(f"[FAIL] energy closure error {audit['closure_error_pct']:.2f}% > {closure_tol_pct}%")
     else:
         msgs.append(f"[ok]   energy closure error {audit['closure_error_pct']:.2f}% (<= {closure_tol_pct}%)")
+
+    # The legal cutoff must actually remove motor torque, not just clear a
+    # flag: check |tau_em| stays small wherever assist has been disabled for
+    # longer than the loop's disturbance-rejection transient (measured decay
+    # time constant ~0.35 s; 1 s covers ~3 of them).
+    if "assist_enable" in o and "iq_curr" in o:
+        t_arr = np.asarray(results.time).squeeze()
+        en = np.asarray(o["assist_enable"]).squeeze()
+        iq = np.asarray(o["iq_curr"]).squeeze()
+        Kt = 0.42  # must match motor Kt = 1.5*P*psi_m
+        settle = 1.0  # s after each enable transition to ignore
+        off = en < 0.5
+        trans_t = t_arr[1:][np.abs(np.diff(en)) > 0.5]
+        settled = off.copy()
+        for tt in trans_t:
+            settled &= ~((t_arr >= tt) & (t_arr < tt + settle))
+        if settled.any():
+            tau_off_max = float(np.max(np.abs(iq[settled]))) * Kt
+            if tau_off_max > 0.5:
+                ok = False
+                msgs.append(f"[FAIL] motor torque {tau_off_max:.2f} Nm while assist disabled (> 0.5 Nm)")
+            else:
+                msgs.append(f"[ok]   motor torque <= {tau_off_max:.3f} Nm while assist disabled")
 
     v_max_kmh = float(np.max(np.asarray(o["speed"]))) * 3.6
     if not (5.0 < v_max_kmh < 60.0):
@@ -1304,8 +1484,9 @@ def print_report(results, config: EbikeConfig):
     print(f"  {'OUT rolling loss':<26}: {audit['E_roll']:10.1f}")
     print(f"  {'OUT bearing loss':<26}: {audit['E_bearing']:10.1f}")
     print(f"  {'OUT tyre-slip loss':<26}: {audit['E_slip']:10.1f}")
-    print(f"  {'OUT freewheel (net)':<26}: {audit['E_chain']:10.1f}")
+    print(f"  {'OUT chain (net)':<26}: {audit['E_chain']:10.1f}")
     print(f"  {'OUT motor heat':<26}: {audit['E_motor_heat']:10.1f}")
+    print(f"  {'OUT motor shaft friction':<26}: {audit['E_shaft_fric']:10.1f}")
     print(f"  {'TOTAL OUT':<26}: {audit['E_out']:10.1f}")
     print("  " + "-" * 50)
     print(f"  {'RESIDUAL':<26}: {audit['residual']:10.1f}")
