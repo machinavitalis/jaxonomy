@@ -9,4 +9,4 @@
 # major update shouldn't happen for now
 # NOTE: semver-style breaking changes should increment the major version.
 # Track breaking changes in CHANGELOG.md before releasing a new major version.
-__version__ = "3.1.0"
+__version__ = "3.2.0"
