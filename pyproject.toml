@@ -113,6 +113,10 @@ test-full = [
   "mediapy",
   "ipywidgets",
   "ipympl",
+  # Optional LazyResults backend (`with_polars_backend` / `to_polars`). Without
+  # it test_lazy_results_polars.py importorskips away and the battery-pack
+  # scaling notebook fails on import.
+  "polars",
 ]
 
 # Executes the shipped notebooks under docs/ (test/docs/test_notebooks.py).

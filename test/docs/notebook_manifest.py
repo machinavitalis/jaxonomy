@@ -25,7 +25,12 @@ Fields
 ``timeout``  Per-notebook seconds. Required because ``pytest.ini`` caps every
              test at 180 s globally and several notebooks legitimately exceed
              it; the value here is roughly 3x the measured local runtime, to
-             leave headroom on slower CI hardware.
+             leave headroom on slower CI hardware. Measure serially, but budget
+             for the weekly job's ``-n auto``: notebooks run concurrently there
+             and contend for CPU, so wall time per notebook is well above its
+             uncontended runtime. A budget near the serial measurement will
+             pass locally and time out in CI. The weekly step reports
+             ``--durations``, so size these from the CI numbers, not local ones.
 ``requires`` Modules to ``importorskip`` before executing. Optional heavy deps
              (torch, mujoco, cyipopt, ...) are installed in the weekly job but
              not in the default test extra, so a notebook needing one skips
@@ -145,12 +150,12 @@ MANIFEST: tuple[Notebook, ...] = (
         "docs/examples/battery_pack_10k_scaling.ipynb",
         WEEKLY,
         timeout=180,
-        requires=("psutil",),
+        requires=("psutil", "polars"),
     ),
     Notebook(
         "docs/examples/battery_pack_thermal.ipynb",
         WEEKLY,
-        timeout=420,
+        timeout=1200,
     ),
     Notebook(
         "docs/examples/battery_part_1_ecm_model.ipynb",
@@ -165,7 +170,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/battery_part_3_parameter_estimation_real_data.ipynb",
         WEEKLY,
-        timeout=1320,
+        timeout=7200,
     ),
     Notebook(
         "docs/examples/battery_part_4_data_driven_models_DMDc.ipynb",
@@ -175,7 +180,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/battery_part_5_data_driven_models_eDMDc.ipynb",
         WEEKLY,
-        timeout=240,
+        timeout=720,
     ),
     Notebook(
         "docs/examples/battery_part_6_data_driven_models_SINDyc.ipynb",
@@ -275,7 +280,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/ebike_part2_optimization.ipynb",
         WEEKLY,
-        timeout=240,
+        timeout=720,
     ),
     Notebook(
         "docs/examples/ebike_part3_pybamm_battery.ipynb",
@@ -286,12 +291,12 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/ebike_part4_mujoco_multibody.ipynb",
         WEEKLY,
-        timeout=180,
+        timeout=600,
     ),
     Notebook(
         "docs/examples/ebike_part5_openfoam_cfd.ipynb",
         WEEKLY,
-        timeout=420,
+        timeout=1200,
     ),
     Notebook(
         "docs/examples/ebike_part1_smart_cargo.ipynb",
@@ -341,7 +346,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/fast_restart_and_batched_sweeps.ipynb",
         WEEKLY,
-        timeout=660,
+        timeout=1800,
     ),
     Notebook(
         "docs/examples/fmi_export_roundtrip.ipynb",
@@ -452,7 +457,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/neural_dae_pendulum_drag.ipynb",
         WEEKLY,
-        timeout=720,
+        timeout=1800,
     ),
     Notebook(
         "docs/examples/openmodelica_plant_fmu_cosim.ipynb",

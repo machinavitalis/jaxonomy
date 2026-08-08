@@ -322,8 +322,14 @@ jobs:
         run: ffmpeg -version | head -1
 
       - name: Execute shipped notebooks
+        # --durations reports the slowest notebooks under the contended -n auto
+        # run, which is the only place their real cost is visible; the manifest
+        # timeouts are sized from these numbers rather than from serial local
+        # measurements. -rA keeps every failure's traceback: with -n auto the
+        # default short summary drops most of them, which makes a red run
+        # undiagnosable from the log alone.
         run: |
-          pytest -q --tb=short -n auto \
+          pytest -q --tb=short -n auto -rA --durations=25 \
             -m notebook \
             --override-ini="addopts=--strict-markers" \
             test/docs/
