@@ -138,7 +138,7 @@ nmpc = ["cyipopt ~= 1.6.1", "osqp >=0.6.5,<2"]
 safe = [
   "control ~= 0.9.4",
   "pandas ~= 2.2",
-  "pysindy ~= 1.7.5",
+  "pysindy ~= 2.1.0",
   "pytwin ~= 0.6.0",
   "sympy ~= 1.13",
   "tensorflow ~= 2.21.0",
@@ -155,7 +155,7 @@ all = [
   "cyipopt ~= 1.6.1",
   "osqp >=0.6.5,<2",
   "pandas ~= 2.2",
-  "pysindy ~= 1.7.5",
+  "pysindy ~= 2.1.0",
   "pytwin ~= 0.6.0",
   "sympy ~= 1.13",
   "tensorflow ~= 2.21.0",
