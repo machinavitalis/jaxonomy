@@ -109,7 +109,10 @@ jobs:
       # cyipopt (pulled in via the `all` extra) builds from source against the
       # system IPOPT library; without it the whole `test-full` install fails.
       - name: Install IPOPT (build dep of cyipopt)
-        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev
+        # coinor-libipopt-dev pulls only the runtime libblas3 / liblapack3, but
+        # cyipopt links -lblas -llapack, which needs the unversioned .so
+        # symlinks the -dev packages ship.
+        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev
 
       - name: Install
         run: |
@@ -287,7 +290,10 @@ jobs:
       # cyipopt (via the `all` extra, used by the booster / limit-cycle
       # notebooks) builds from source against the system IPOPT library.
       - name: Install IPOPT (build dep of cyipopt)
-        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev
+        # coinor-libipopt-dev pulls only the runtime libblas3 / liblapack3, but
+        # cyipopt links -lblas -llapack, which needs the unversioned .so
+        # symlinks the -dev packages ship.
+        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev
 
       - name: Install
         run: |
