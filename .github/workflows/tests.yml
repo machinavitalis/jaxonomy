@@ -281,8 +281,10 @@ jobs:
     # battery_part_3 over 40 min (measured serially, uncontended). They are
     # single serial chains, so -n auto cannot shorten them and the slowest one
     # sets the floor. Nothing waits on this job, so it gets room rather than a
-    # tight cap; GitHub's own per-job ceiling is 6 h.
-    timeout-minutes: 240
+    # tight cap; GitHub's own per-job ceiling is 6 h, which this now sits at.
+    # The whole tier reached 79 % in 240 min once every notebook actually
+    # executed, so 240 was sized for a run where a third of them aborted early.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v5
         with:
@@ -328,8 +330,14 @@ jobs:
         # measurements. -rA keeps every failure's traceback: with -n auto the
         # default short summary drops most of them, which makes a red run
         # undiagnosable from the log alone.
+        # --session-timeout sits below the job's timeout-minutes so pytest ends
+        # the session itself and still prints the summary, tracebacks and
+        # durations. When the job cap hits first the runner kills pytest
+        # mid-write and the whole log is lost, which is no use for sizing the
+        # per-notebook budgets.
         run: |
           pytest -q --tb=short -n auto -rA --durations=25 \
+            --session-timeout=19800 \
             -m notebook \
             --override-ini="addopts=--strict-markers" \
             test/docs/
