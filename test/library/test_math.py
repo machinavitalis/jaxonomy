@@ -68,7 +68,10 @@ class TestAbs:
 
         block.input_ports[0].fix_value(np.sin(t))
         x = block.output_ports[0].eval(ctx)
-        assert np.allclose(x, np.abs(jnp.sin(t)))
+        # jnp.sin and np.sin agree only to a few ULP, and at float16 that is
+        # far coarser than np.allclose's float64-grade default tolerance.
+        tol = max(1e-5, 4 * float(np.finfo(dtype).eps))
+        assert np.allclose(x, np.abs(jnp.sin(t)), rtol=tol, atol=tol)
         assert isinstance(x, npa.ndarray)
         assert x.shape == t.shape
         assert x.dtype == dtype
