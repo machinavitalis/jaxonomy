@@ -459,6 +459,7 @@ class ModelicaFMU(LeafSystem):
         # the first step at ``t=0``, eliminating the one-sample phase
         # lag for users who exported the FMU with that semantics. See
         # the constructor docstring.
+        self._first_step_at_zero = first_step_at_zero
         self.declare_periodic_update(
             _step,
             period=dt,
@@ -643,13 +644,21 @@ class ModelicaFMU(LeafSystem):
                         values_flat.extend(arr.tolist())
                 getattr(fmu, grp["accessor"])(grp["refs"], values_flat)
 
-            # Advance the FMU in time. The periodic update fires at t=dt,
-            # 2dt, ..., but doStep expects currentCommunicationPoint to be
-            # the *start* of the step interval — i.e. the FMU's current
-            # internal time, which is one period earlier. Strict FMUs
-            # (e.g. Reference-FMUs/BouncingBall) error otherwise.
+            # Advance the FMU in time. doStep wants currentCommunicationPoint
+            # to be the *start* of the step interval — the FMU's own internal
+            # time — and strict FMUs (e.g. Reference-FMUs/BouncingBall) error
+            # otherwise. That start follows whichever grid the periodic update
+            # runs on: firing at dt, 2dt, ... it is one period back, while
+            # first_step_at_zero fires at 0, dt, ... and it is the update time
+            # itself. Subtracting a period unconditionally would step from -dt
+            # on the first call and leave the phase lag the flag exists to
+            # remove.
             fmu.doStep(
-                currentCommunicationPoint=float(time) - self.dt,
+                currentCommunicationPoint=(
+                    float(time)
+                    if getattr(self, "_first_step_at_zero", False)
+                    else float(time) - self.dt
+                ),
                 communicationStepSize=self.dt,
             )
 
