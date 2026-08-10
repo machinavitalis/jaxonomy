@@ -115,8 +115,18 @@ def test_FMU_StartTime(start_time, show_plot=False):
     # blocks
     input_val = 2.0
     two = builder.add(Constant(input_val, name="two"))
+    # The expectations below are phrased against outputs that leave their
+    # initial value at t=0, so fire the first step there. The block default
+    # offsets the first step to t=dt (Modelica clocked-block convention),
+    # which shifts every sample by one.
     fmu_block = builder.add(
-        ModelicaFMU(fmu_file, 1.0, name="fmu_block", start_time=start_time)
+        ModelicaFMU(
+            fmu_file,
+            1.0,
+            name="fmu_block",
+            start_time=start_time,
+            first_step_at_zero=True,
+        )
     )
 
     # connections

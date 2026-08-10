@@ -150,7 +150,7 @@ MANIFEST: tuple[Notebook, ...] = (
         "docs/examples/battery_pack_10k_scaling.ipynb",
         WEEKLY,
         timeout=180,
-        requires=("psutil", "polars"),
+        requires=("psutil", "polars", "duckdb"),
     ),
     Notebook(
         "docs/examples/battery_pack_thermal.ipynb",
@@ -170,7 +170,7 @@ MANIFEST: tuple[Notebook, ...] = (
     Notebook(
         "docs/examples/battery_part_3_parameter_estimation_real_data.ipynb",
         WEEKLY,
-        timeout=7200,
+        timeout=10800,
     ),
     Notebook(
         "docs/examples/battery_part_4_data_driven_models_DMDc.ipynb",
@@ -188,9 +188,12 @@ MANIFEST: tuple[Notebook, ...] = (
         timeout=180,
         requires=("pysindy",),
         note=(
-            "Passes on the pinned pysindy ~=1.7.5. Fails on pysindy >=2, which "
-            "rejects the t=None that jaxonomy.library.Sindy forwards for "
-            "discrete-time fits — a library incompatibility, not a notebook one."
+            "Known red. The pysindy >=2 t=None rejection is handled in "
+            "jaxonomy.library.sindy, which now falls back to unit spacing, but "
+            "the notebook constructs Sindy without dt= and then compares the "
+            "simulated trajectory against data sampled at dt=0.1, so the two "
+            "differ by that factor and the RMS-error cell raises. Fixing it "
+            "means passing dt through in the notebook and re-executing it."
         ),
     ),
     Notebook(

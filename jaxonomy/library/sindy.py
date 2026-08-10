@@ -129,6 +129,12 @@ def train(
     if isinstance(time, np.ndarray) and time.ndim == 0:
         time = time.item()
 
+    # pysindy < 2 defaulted `t` to unit spacing; 2.x takes it as a required
+    # argument and rejects None. Samples with no supplied time sit one step
+    # apart, which is what the old default meant.
+    if time is None:
+        time = 1
+
     if discrete_time:
         model.fit(x_train, u=u_train, x_next=x_dot_train, t=time)
     else:

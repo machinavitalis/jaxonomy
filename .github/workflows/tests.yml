@@ -94,7 +94,9 @@ jobs:
     if: >-
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && !inputs.rebaseline
-    timeout-minutes: 90
+    # The tier runs ~82 min once every optional library is installed and no
+    # collection aborts early, which left almost nothing against the old 90.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v5
         with:
@@ -130,8 +132,11 @@ jobs:
       # addopts (where it is deselected by default), and executing ~95 notebooks
       # belongs to the weekly `notebooks` job, not to this daily one.
       - name: Run full suite (slow + autodiff_full, excludes dashboard + notebooks)
+        # Session cap below the job cap, so an overrun still prints its summary
+        # instead of being killed mid-write with the log lost.
         run: |
           pytest -q --tb=short \
+            --session-timeout=8100 \
             -m "not dashboard and not notebook" \
             --override-ini="addopts=--strict-markers"
 
@@ -285,6 +290,12 @@ jobs:
     # The whole tier reached 79 % in 240 min once every notebook actually
     # executed, so 240 was sized for a run where a third of them aborted early.
     timeout-minutes: 360
+    # The mujoco notebooks render offscreen. The runner has no display, so
+    # mujoco needs a software GL backend named up front; without one it aborts
+    # with "an OpenGL platform library has not been loaded into this process".
+    env:
+      MUJOCO_GL: osmesa
+      PYOPENGL_PLATFORM: osmesa
     steps:
       - uses: actions/checkout@v5
         with:
@@ -302,7 +313,7 @@ jobs:
         # coinor-libipopt-dev pulls only the runtime libblas3 / liblapack3, but
         # cyipopt links -lblas -llapack, which needs the unversioned .so
         # symlinks the -dev packages ship.
-        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev
+        run: sudo apt-get update && sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev libosmesa6-dev
 
       - name: Install
         # cyipopt is source-only on PyPI, so pip compiles it in an isolated
