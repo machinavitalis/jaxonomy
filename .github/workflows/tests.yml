@@ -25,8 +25,14 @@ on:
     # 06:00 UTC every Monday → weekly public benchmark suite
     - cron: "0 6 * * 1"
 
+# Keyed by ref, event, and — for schedules — the cron that fired. A new push
+# or PR update should still supersede the run it replaces, but the two crons
+# are both `schedule` on `main`, so a ref-only group put the Monday weekly
+# and the daily nightly in one bucket. The weekly notebook tier runs for
+# hours and the nightly cron follows about an hour behind it, so the weekly
+# was cancelled partway through every time it ran.
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.ref }}-${{ github.event_name }}-${{ github.event.schedule }}
   cancel-in-progress: true
 
 jobs:
