@@ -89,7 +89,7 @@ finite_diff_gradient(…)   →    grad(simulate)(params)         exact gradient
 | 🧠 **Data-driven modeling** | Neural ODEs, Universal Differential Equations, SINDy symbolic regression, neural-network blocks (`MLP` / `PyTorch` / `TensorFlow` / `ONNX`), differentiable lookup-table fitting, and statistical surrogates (Gaussian process, polynomial chaos, RBF) |
 | 📉 **Reduced-order modeling** | `jaxonomy.library.rom`: linear MOR (balanced truncation, `minreal`, modal / residualization), POD–Galerkin with DEIM hyper-reduction, and data-driven operator ROM (DMD / DMDc / ERA, Koopman / eDMD lifted-linear predictors). One `reduce(...)` front door; every reduced model is a differentiable, simulatable block |
 | 🎲 **Uncertainty & sensitivity** | First-class `jaxonomy.uq` workflow: Monte Carlo with parameter distributions, Latin Hypercube + quasi-Monte Carlo sampling, Sobol sensitivity decomposition, Morris screening |
-| 🤝 **FMI 2.0 / 3.0 interop** | Import any FMI co-simulation FMU (`ModelicaFMU`) with mixed-type and array I/O; export a Jaxonomy diagram as a binary `.fmu` via `build_fmu` for use in Simulink / Dymola / OpenModelica |
+| 🤝 **FMI 2.0 / 3.0 interop** | Import FMI co-simulation FMUs (`ModelicaFMU`, mixed-type and array I/O) or model-exchange FMUs (`ModelicaFMUME`, integrated by Jaxonomy's own solver with FMI event indicators as zero-crossings); export a diagram as a binary `.fmu` via `build_fmu`. Verified against the Reference FMUs, OpenModelica, and the `fmusim` reference simulator in CI |
 | 🧩 **150+ library blocks** | Integrators, filters, state machines, look-up tables, coordinate transforms, container blocks, bus / mux family, stochastic sources, and more |
 
 ---
@@ -530,7 +530,7 @@ Over **150 built-in blocks** covering the full signal-processing and control too
 | **Physics & coordinates** | `CoordinateRotation`, `RigidBody`, `BatteryCell` |
 | **ML / Data** | `MLP` (Equinox), `Sindy`, `PyTorch`, `TensorFlow`, `ONNX` / `ONNXJax` |
 | **ROM & surrogates** | `reduce(...)` → `ReducedOrderModel`; linear MOR (`balred` / `minreal` / `modal_truncation` / `residualize`), `galerkin_reduce` + `deim` (POD–DEIM), `dmd` / `dmdc` / `era`, `DMDForecaster` / `KoopmanPredictor`, and surrogate blocks `GaussianProcess` / `PolynomialChaos` / `RadialBasisSurrogate` |
-| **Interop** | `ModelicaFMU` (FMI 2.0 / 3.0 co-simulation import) + FMU export via `build_fmu`; `MuJoCo` / `MJX`; `Ros2Publisher` / `Ros2Subscriber`; `QuanserHAL`; `PyTwin` |
+| **Interop** | `ModelicaFMU` / `ModelicaFMUME` (FMI 2.0 / 3.0 co-simulation and model-exchange import) + FMU export via `build_fmu`; `MuJoCo` / `MJX`; `Ros2Publisher` / `Ros2Subscriber`; `QuanserHAL`; `PyTwin` |
 | **Custom** | `CustomPythonBlock`, `CustomJaxBlock` for user-authored algorithms with persistent per-instance state |
 
 Custom blocks are first-class beyond the wrappers above: subclass `LeafSystem`, declare ports and states, and your block integrates with the full framework including JIT, autodiff, and event detection.

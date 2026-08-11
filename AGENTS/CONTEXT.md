@@ -108,7 +108,7 @@ scope includes:
     optimal control (LinearQuadraticRegulator, DiscreteTimeLQR,
     LinearDiscreteTimeMPC, LinearDiscreteTimeMPC_OSQP), state machines,
     hardware/vendor wrappers (Quanser HAL, PyTwin/Ansys, ROS2 via
-    rclpy), and FMU co-simulation import
+    rclpy), and FMU co-simulation / model-exchange import
   - Hierarchical submodels for component reuse via nested `Diagram`s
   - Custom Python and Custom JAX blocks (`CustomPythonBlock`,
     `CustomJaxBlock`) for user-defined algorithms, with persistent
@@ -167,10 +167,15 @@ scope includes:
     every reduced model is a differentiable, simulatable block. Scope
     boundary vs PDE-field surrogates in `docs/scope/rom.md`.
 - **Interop**
-  - FMU import for FMI 2.0 / 3.0 co-simulation, including mixed-type
-    and array/vector I/O; FMU export via `build_fmu` (pythonfmu-based).
-    No model-exchange import; no FMI 3 scheduledExecution. See
-    DECISIONS.md DEC-031, DEC-032.
+  - FMU import for FMI 2.0 / 3.0, both co-simulation (`ModelicaFMU`,
+    including mixed-type and array/vector I/O) and model exchange
+    (`ModelicaFMUME`, integrated by our solver with event indicators as
+    zero-crossings); FMU export via `build_fmu` (pythonfmu-based, so
+    co-simulation only and tool-coupled — the importing side needs
+    Python with jaxonomy on its path, and a non-Python master needs the
+    wrapper from `scripts/build_pythonfmu_wrapper.sh`). No FMI 3
+    scheduledExecution. See DECISIONS.md DEC-031, DEC-032, and
+    KNOWN_GAPS.md for the export limits.
   - JSON model serialization (legacy Collimator format, maintained for
     round-trip fidelity)
   - Jupyter notebook support as a first-class workflow

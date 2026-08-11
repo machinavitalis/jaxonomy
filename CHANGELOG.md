@@ -15,6 +15,8 @@ Pure internal refactors live in commits, not here.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-08-10
+
 ### Added
 
 - **Model-exchange FMU import** (`jaxonomy.library.ModelicaFMUME`): imports an FMI 2.0 / 3.0 model-exchange FMU as a continuous-time block, with jaxonomy's solver owning the integration and each FMI event indicator declared as a zero-crossing whose reset map runs the FMU's own event iteration. A co-simulation import is capped by its communication step; against OpenModelica's reference solution for the same plant, co-simulation reaches 4.0e-2 m at `dt=0.01` while model exchange reaches 5.4e-8 m. Model exchange is also the only interface some tools accept — OpenModelica exports it and its importer takes nothing else. Not `vmap`-safe and not differentiable, as with the co-simulation block.
