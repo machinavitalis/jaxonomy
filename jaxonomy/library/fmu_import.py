@@ -5,6 +5,7 @@ basic FMU import block based on FMPy package and the example:
 https://github.com/CATIA-Systems/FMPy/blob/main/fmpy/examples/custom_input.py
 """
 
+import ctypes
 from collections import namedtuple
 from math import prod
 from typing import TYPE_CHECKING
@@ -671,3 +672,397 @@ class ModelicaFMU(LeafSystem):
         xd = jax.tree_util.tree_map(npa.asarray, xd)
 
         return self.DiscreteStateType(**xd)
+
+
+class ModelicaFMUME(LeafSystem):
+    """Import an FMI **model-exchange** FMU as a continuous-time block.
+
+    Where :class:`ModelicaFMU` imports a co-simulation FMU (the FMU owns
+    a solver; this block samples it on a fixed communication grid), a
+    model-exchange FMU exposes only its right-hand side and leaves
+    integration to the importer. Jaxonomy's solvers take that over, which
+    buys two things over the co-simulation path:
+
+    - **No communication-step error.** A co-simulation import holds its
+      inputs constant across each step, so agreement with the exporting
+      tool is first-order in ``dt``. Here the FMU's derivatives are
+      evaluated inside the adaptive solver and accuracy is set by
+      ``rtol``/``atol`` instead.
+    - **Events resolved by the host.** Each FMI event indicator becomes a
+      jaxonomy zero-crossing, so the solver localizes the crossing and
+      then runs the FMU's event iteration, rather than stepping over it.
+
+    This is also the interface many tools export: OpenModelica emits
+    model exchange, and its own importer accepts nothing else.
+
+    Args:
+        file_name (str): path to the FMU file.
+        name (str, optional): name of the block.
+        input_names (list[str], optional): if set, expose only these inputs.
+        output_names (list[str], optional): if set, expose only these outputs.
+        parameters (dict, optional): parameter overrides applied during
+            initialization.
+        start_time (float, optional): FMI experiment start time.
+
+    .. warning:: An FMU instance is a stateful C object reached through
+        ``io_callback``, so this block is **not** ``vmap``-safe and is not
+        differentiable — the same boundary caveats as
+        :class:`ModelicaFMU`. Every derivative evaluation re-sends time,
+        state, and inputs before reading, which keeps the callback a pure
+        function of ``(t, x, u)`` and therefore safe under the rejected
+        steps and stage evaluations of an adaptive solver.
+
+    .. note:: ``fmi2CompletedIntegratorStep`` is not called: jaxonomy's
+        solvers expose no accepted-step hook to drive it from. FMUs that
+        rely on it to flag step events (rather than on event indicators)
+        may miss those events.
+
+    .. important:: Every callback here passes ``ordered=True``. An FMU is
+        a stateful C object and the event reset *mutates* it (the FMI
+        event iteration advances discrete state), so with the default
+        unordered ``io_callback`` XLA is free to schedule that mutation
+        against the derivative, guard, and output reads in any order.
+        The result was nondeterministic — identical inputs produced a
+        correct bounce on one run and a ball falling through the floor
+        on the next. Reads alone would tolerate reordering, since each
+        re-sends ``(t, x, u)`` before reading; the mutation is what makes
+        ordering load-bearing. Do not drop it.
+    """
+
+    def __init__(
+        self,
+        file_name,
+        name=None,
+        input_names: list[str] = None,
+        output_names: list[str] = None,
+        parameters: dict = None,
+        start_time: float = 0.0,
+        **kwargs,
+    ):
+        try:
+            super().__init__(name=name)
+            self._init_me(
+                file_name,
+                name=name or f"fmu_me_{self.system_id}",
+                input_names=input_names,
+                output_names=output_names,
+                parameters=parameters,
+                start_time=start_time,
+            )
+        except BlockInitializationError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Failed to initialize model-exchange FMU block %s (%s): %s",
+                name, self.system_id, e,
+            )
+            raise BlockInitializationError(str(e), system=self)
+
+    @parameters(static=["file_name"])
+    def _init_me(
+        self,
+        file_name,
+        name: str,
+        input_names: list[str] = None,
+        output_names: list[str] = None,
+        parameters: dict = None,
+        start_time: float = 0.0,
+    ):
+        model_description = fmpy.read_model_description(file_name)
+        unzipdir = fmpy.extract(file_name)
+        self._fmi_version = "3.0" if _is_fmi3(model_description) else "2.0"
+
+        me = model_description.modelExchange
+        if me is None:
+            raise BlockInitializationError(
+                f"FMU {file_name} has no model-exchange interface. Use "
+                f"ModelicaFMU for a co-simulation FMU.",
+                system=self,
+            )
+
+        if self._fmi_version == "3.0":
+            self.fmu = fmu = fmi3.FMU3Model(
+                guid=model_description.guid,
+                unzipDirectory=unzipdir,
+                modelIdentifier=me.modelIdentifier,
+                instanceName=name,
+            )
+            fmu.instantiate()
+            fmu.enterInitializationMode(startTime=start_time)
+        else:
+            self.fmu = fmu = fmi2.FMU2Model(
+                guid=model_description.guid,
+                unzipDirectory=unzipdir,
+                modelIdentifier=me.modelIdentifier,
+                instanceName=name,
+            )
+            fmu.instantiate()
+            fmu.setupExperiment(startTime=start_time)
+            fmu.enterInitializationMode()
+
+        self._in_event_mode = False
+        self.fmu_inputs, self.fmu_input_vars = [], []
+        self.fmu_outputs, self.fmu_output_vars = [], []
+        inputs_by_name, outputs_by_name = {}, {}
+
+        for variable in model_description.modelVariables:
+            if variable.causality == "input":
+                inputs_by_name[variable.name] = variable
+            elif variable.causality == "output":
+                outputs_by_name[variable.name] = variable
+            elif variable.causality == "parameter" and parameters is not None:
+                value = parameters.get(variable.name.replace(".", "_"))
+                if value is not None:
+                    self._set_value(fmu, variable, value, name)
+
+        _NON_JAX_TYPES = {"String", "Binary"}
+
+        def _selected(by_name, requested, role):
+            if requested is None:
+                return [
+                    (n, v) for n, v in by_name.items()
+                    if v.type not in _NON_JAX_TYPES
+                ]
+            missing = [n for n in requested if n not in by_name]
+            if missing:
+                raise BlockInitializationError(
+                    f"{role} port(s) {missing} not found in FMU {file_name}",
+                    system=self,
+                )
+            return [(n, by_name[n]) for n in requested]
+
+        for in_name, variable in _selected(inputs_by_name, input_names, "Input"):
+            self.fmu_inputs.append(variable.valueReference)
+            self.fmu_input_vars.append(variable)
+            self.declare_input_port(name=in_name)
+
+        for out_name, variable in _selected(outputs_by_name, output_names, "Output"):
+            # FMI 3 alias variables share a valueReference (Reference-FMUs'
+            # BouncingBall exposes ``h`` and ``h_ft`` on vr=1). Reading either
+            # returns the same underlying value, so a second port would carry
+            # a duplicate trace under a name promising different units.
+            # Declare the first name and name the alias in a warning.
+            if variable.valueReference in self.fmu_outputs:
+                existing = self.fmu_output_vars[
+                    self.fmu_outputs.index(variable.valueReference)
+                ]
+                logger.warning(
+                    "FMU %s: output %r aliases %r (both valueReference %d); "
+                    "exposing only %r, since the FMI accessors cannot "
+                    "distinguish them",
+                    name, out_name, existing.name,
+                    variable.valueReference, existing.name,
+                )
+                continue
+            self.fmu_outputs.append(variable.valueReference)
+            self.fmu_output_vars.append(variable)
+
+        fmu.exitInitializationMode()
+        # The initial event iteration has to run before the first derivative
+        # evaluation is meaningful. FMI 2.0.4 section 3.2.2 requires an
+        # explicit enterEventMode after initialization; FMI 3.0 leaves the
+        # FMU in event mode already, so entering again is both unnecessary
+        # and (for some FMUs) a state-machine violation.
+        if self._fmi_version == "2.0":
+            fmu.enterEventMode()
+        self._iterate_events(fmu)
+        fmu.enterContinuousTimeMode()
+
+        self._nx = int(getattr(model_description, "numberOfContinuousStates", 0) or 0)
+        self._nz = int(getattr(model_description, "numberOfEventIndicators", 0) or 0)
+        if self._nx == 0:
+            raise BlockInitializationError(
+                f"FMU {file_name} declares no continuous states, so there is "
+                f"nothing for a model-exchange import to integrate. Import it "
+                f"as co-simulation with ModelicaFMU instead.",
+                system=self,
+            )
+
+        self._x_buf = (ctypes.c_double * self._nx)()
+        self._dx_buf = (ctypes.c_double * self._nx)()
+        self._z_buf = (ctypes.c_double * self._nz)() if self._nz else None
+
+        self._get_states(fmu, self._x_buf)
+        x0 = np.array(self._x_buf, dtype=np.float64)
+
+        self.declare_continuous_state(
+            default_value=npa.asarray(x0),
+            ode=self._ode,
+            requires_inputs=len(self.fmu_inputs) > 0,
+        )
+
+        self._dx_template = jax.ShapeDtypeStruct((self._nx,), np.float64)
+
+        for index, variable in enumerate(self.fmu_output_vars):
+            self.declare_output_port(
+                self._make_output_callback(index, variable),
+                name=variable.name,
+                prerequisites_of_calc=[DependencyTicket.xc],
+                requires_inputs=len(self.fmu_inputs) > 0,
+            )
+
+        for index in range(self._nz):
+            self.declare_zero_crossing(
+                guard=self._make_guard(index),
+                reset_map=self._event_reset,
+                name=f"{name}_event_{index}",
+                direction="crosses_zero",
+            )
+
+    # ── FMI-version-dispatched primitives ────────────────────────────
+
+    def _get_states(self, fmu, buf):
+        fmu.getContinuousStates(buf, self._nx)
+
+    def _get_derivatives(self, fmu, buf):
+        if self._fmi_version == "3.0":
+            fmu.getContinuousStateDerivatives(buf, self._nx)
+        else:
+            fmu.getDerivatives(buf, self._nx)
+
+    def _iterate_events(self, fmu, max_iterations: int = 100):
+        """Run the FMU's discrete-state iteration to a fixed point."""
+        if self._fmi_version == "3.0":
+            for _ in range(max_iterations):
+                result = fmu.updateDiscreteStates()
+                # fmpy returns a tuple whose first element is
+                # discreteStatesNeedUpdate.
+                needs_update = result[0] if isinstance(result, tuple) else result
+                if not needs_update:
+                    return
+        else:
+            for _ in range(max_iterations):
+                event_info = fmu.newDiscreteStates()
+                if not getattr(event_info, "newDiscreteStatesNeeded", False):
+                    return
+        logger.warning(
+            "FMU %s: discrete-state iteration did not converge in %d passes",
+            self.name, max_iterations,
+        )
+
+    # ── numpy-side callbacks (run outside the JAX trace) ─────────────
+
+    def _ensure_continuous_time_mode(self):
+        """Leave event mode if we are in it.
+
+        The FMI state machine rejects ``setContinuousStates`` outside
+        continuous-time mode, and a solver may evaluate a guard or an
+        output between our entering event mode and leaving it. Tracking
+        the mode ourselves makes every entry point self-correcting
+        instead of order-dependent.
+        """
+        if self._in_event_mode:
+            self.fmu.enterContinuousTimeMode()
+            self._in_event_mode = False
+
+    def _sync(self, time, x, inputs):
+        """Push (t, x, u) into the FMU before any read.
+
+        Doing this on every call is what makes the callback a pure
+        function of its arguments: an adaptive solver evaluates stages
+        out of order and discards rejected steps, so the FMU must never
+        be assumed to hold the state we last wrote.
+        """
+        fmu = self.fmu
+        fmu.setTime(float(time))
+        x_flat = np.asarray(x, dtype=np.float64).reshape(-1)
+        for i in range(self._nx):
+            self._x_buf[i] = float(x_flat[i])
+        fmu.setContinuousStates(self._x_buf, self._nx)
+        for variable, value in zip(self.fmu_input_vars, inputs):
+            self._set_value(fmu, variable, value, self.name)
+
+    def _exec_derivatives(self, time, x, *inputs):
+        try:
+            self._sync(time, x, inputs)
+            self._get_derivatives(self.fmu, self._dx_buf)
+        except (*_fmi_call_exception(),) as e:
+            raise BlockRuntimeError(str(e), system=self) from e
+        return np.array(self._dx_buf, dtype=np.float64)
+
+    def _exec_output(self, index, time, x, *inputs):
+        try:
+            self._sync(time, x, inputs)
+            value = self._get_value(self.fmu, self.fmu_output_vars[index])
+        except (*_fmi_call_exception(),) as e:
+            raise BlockRuntimeError(str(e), system=self) from e
+        return np.asarray(value, dtype=np.float64)
+
+    def _exec_guard(self, index, time, x, *inputs):
+        try:
+            self._sync(time, x, inputs)
+            self.fmu.getEventIndicators(self._z_buf, self._nz)
+        except (*_fmi_call_exception(),) as e:
+            raise BlockRuntimeError(str(e), system=self) from e
+        return np.float64(self._z_buf[index])
+
+    def _exec_event(self, time, x, *inputs):
+        """Run the FMU's event handling and return the reinitialized state."""
+        try:
+            self._sync(time, x, inputs)
+            self.fmu.enterEventMode()
+            self._iterate_events(self.fmu)
+            self.fmu.enterContinuousTimeMode()
+            self._get_states(self.fmu, self._x_buf)
+        except (*_fmi_call_exception(),) as e:
+            raise BlockRuntimeError(str(e), system=self) from e
+        return np.array(self._x_buf, dtype=np.float64)
+
+    # ── JAX-side wiring ──────────────────────────────────────────────
+
+    def _ode(self, time, state, *inputs, **parameters):
+        return io_callback(
+            self._exec_derivatives,
+            self._dx_template,
+            time,
+            state.continuous_state,
+            *inputs,
+            ordered=True,
+        )
+
+    def _make_output_callback(self, index, variable):
+        template = jax.ShapeDtypeStruct(_variable_shape(variable), np.float64)
+
+        def _output(time, state, *inputs, **parameters):
+            return io_callback(
+                self._exec_output,
+                template,
+                index,
+                time,
+                state.continuous_state,
+                *inputs,
+                ordered=True,
+            )
+
+        return _output
+
+    def _make_guard(self, index):
+        template = jax.ShapeDtypeStruct((), np.float64)
+
+        def _guard(time, state, *inputs, **parameters):
+            return io_callback(
+                self._exec_guard,
+                template,
+                index,
+                time,
+                state.continuous_state,
+                *inputs,
+                ordered=True,
+            )
+
+        return _guard
+
+    def _event_reset(self, time, state, *inputs, **parameters):
+        new_x = io_callback(
+            self._exec_event,
+            self._dx_template,
+            time,
+            state.continuous_state,
+            *inputs,
+            ordered=True,
+        )
+        return state.with_continuous_state(new_x)
+
+    # Reuse the co-simulation block's typed accessor helpers.
+    _set_value = ModelicaFMU._set_value
+    _get_value = ModelicaFMU._get_value

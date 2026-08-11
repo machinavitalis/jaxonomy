@@ -244,6 +244,122 @@ jobs:
               sed 's/^/| pytest summary | /; s/$/ |/'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # ── FMU interoperability gate ─────────────────────────────────────────────
+  # The static validators (fmpy.validate_fmu, VDMCheck) read
+  # modelDescription.xml and never load the platform binary, so an FMU that
+  # cannot be instantiated at all passes them clean. This job covers what they
+  # cannot, in both directions:
+  #
+  #   import — the FMI Reference FMUs, co-simulation and model exchange, in
+  #            FMI 2.0 and 3.0. Previously opt-in behind a locally built
+  #            corpus; built here so it gates every push.
+  #   export — an FMU we produced, run by fmusim (the Modelica Association's
+  #            reference simulator, Rust, no Python in the process).
+  #
+  # The wrapper build is part of the gate, not setup: the wrapper pythonfmu
+  # ships links no libpython, and an export made with it fails in every
+  # non-Python master while the validators stay green.
+  fmu-interop:
+    name: FMU interoperability (Reference FMUs + fmusim)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' && !inputs.rebaseline
+    env:
+      REFERENCE_FMUS_VERSION: "v0.0.39"
+      FMUSIM_VERSION: "0.6.0"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cache the Reference-FMU corpus
+        id: corpus-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.fmu-corpus
+          key: reference-fmus-${{ env.REFERENCE_FMUS_VERSION }}-${{ runner.os }}
+
+      - name: Build the Reference FMUs
+        if: steps.corpus-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$REFERENCE_FMUS_VERSION" \
+            https://github.com/modelica/Reference-FMUs.git ~/reference-fmus
+          cd ~/reference-fmus
+          # Build only the models the suites use. The corpus compiles with
+          # -Werror, and its Resource example trips -Wstringop-truncation on
+          # gcc 12+; naming targets sidesteps upstream's warning policy
+          # deciding whether this gate can run, and is faster besides.
+          # StateSpace is FMI 3 only (array variables are an FMI 3 feature).
+          MODELS="BouncingBall VanDerPol Dahlquist Stair Feedthrough"
+          # Clocks is FMI 3 scheduled-execution, which the corpus suite
+          # asserts we reject rather than import; building it keeps that
+          # check from skipping.
+          cmake -B b2 -DFMI_VERSION=2 -DCMAKE_BUILD_TYPE=Release
+          cmake --build b2 --config Release --target $MODELS
+          cmake -B b3 -DFMI_VERSION=3 -DCMAKE_BUILD_TYPE=Release
+          cmake --build b3 --config Release --target $MODELS StateSpace Clocks
+          mkdir -p ~/.fmu-corpus/2.0 ~/.fmu-corpus/3.0
+          cp b2/fmus/*.fmu ~/.fmu-corpus/2.0/
+          cp b3/fmus/*.fmu ~/.fmu-corpus/3.0/
+
+      - name: Cache fmusim
+        id: fmusim-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/fmusim
+          key: fmusim-${{ env.FMUSIM_VERSION }}-${{ runner.os }}
+
+      - name: Install fmusim
+        if: steps.fmusim-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSL -o /tmp/fmusim.zip \
+            "https://github.com/modelica/fmusim/releases/download/v${FMUSIM_VERSION}/fmusim-x86_64-linux.zip"
+          unzip -o /tmp/fmusim.zip -d /tmp/fmusim
+          install -m 0755 "$(find /tmp/fmusim -type f -name fmusim | head -1)" ~/.local/bin/fmusim
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,fmu]"
+
+      - name: Build a loadable PythonFMU wrapper
+        # Without this the export half of the gate cannot run at all: the
+        # bundled wrapper leaves libpython unresolved, so fmusim fails at
+        # dlopen. The script self-verifies and exits non-zero if the result
+        # still fails either check.
+        run: bash scripts/build_pythonfmu_wrapper.sh
+
+      - name: Run the interoperability suite
+        run: |
+          set -o pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          export JAXONOMY_FMU_CORPUS="$HOME/.fmu-corpus"
+          pytest -q --tb=short -m slow \
+            test/library/test_fmu_reference_corpus.py \
+            test/library/test_fmu_me_import.py \
+            test/library/test_fmu_fmusim_master.py \
+            | tee fmu_interop.log
+
+      - name: Publish interoperability summary
+        if: always()
+        run: |
+          {
+            echo "## FMU interoperability results"
+            echo ""
+            echo "Reference FMUs \`${REFERENCE_FMUS_VERSION}\`, fmusim \`${FMUSIM_VERSION}\`."
+            echo ""
+            echo '| Check | Result |'
+            echo '|---|---|'
+            tail -3 fmu_interop.log | head -1 | \
+              sed 's/^/| pytest summary | /; s/$/ |/'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ── memory regression gate ────────────────────────────────────────────────
   # Re-runs the memory benchmark and fails if any case's peak RSS regresses
   # beyond the threshold encoded in benchmarks/memory.py (currently +50 %).

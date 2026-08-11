@@ -15,6 +15,15 @@ Pure internal refactors live in commits, not here.
 
 ## [Unreleased]
 
+### Added
+
+- **Model-exchange FMU import** (`jaxonomy.library.ModelicaFMUME`): imports an FMI 2.0 / 3.0 model-exchange FMU as a continuous-time block, with jaxonomy's solver owning the integration and each FMI event indicator declared as a zero-crossing whose reset map runs the FMU's own event iteration. A co-simulation import is capped by its communication step; against OpenModelica's reference solution for the same plant, co-simulation reaches 4.0e-2 m at `dt=0.01` while model exchange reaches 5.4e-8 m. Model exchange is also the only interface some tools accept — OpenModelica exports it and its importer takes nothing else. Not `vmap`-safe and not differentiable, as with the co-simulation block.
+- **`wrapper_diagnostics()` and `scripts/build_pythonfmu_wrapper.sh`**: `build_fmu` bundles the pre-built wrapper from the installed pythonfmu wheel, which is x86-64 and links no libpython — so a stock install silently produces FMUs that load only on x86-64, and only under a Python FMI master. The FMI validators cannot see either, since they read `modelDescription.xml` and never load the binary. The script builds a wrapper for the host ISA that links libpython, promotes it to global scope so numpy resolves under an `RTLD_LOCAL` master, and skips the `Py_Finalize` that segfaults on `fmi2Terminate` once numpy/jax are loaded; `wrapper_diagnostics()` reports what is installed and `build_fmu` warns when it would emit an FMU that cannot load. With it, `fmusim` — the Modelica Association's reference simulator, no Python in the process — runs an exported FMU end to end.
+
+### Fixed
+
+- **FMI 3 alias outputs no longer produce duplicate ports**: alias variables share a value reference (Reference-FMUs' `BouncingBall` exposes `h` and `h_ft` on the same one), so both ports carried an identical trace under names promising different units. The first name is exposed and the alias named in a warning.
+
 ## [3.2.0] - 2026-08-02
 
 ### Added

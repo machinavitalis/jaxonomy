@@ -58,31 +58,21 @@ if _REPO_ROOT not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
 # time so whatever wrapper is installed enables the round-trip path
 # automatically.
 def _runtime_host_ok() -> bool:
-    import os
-    import pythonfmu
-    pf_dir = os.path.dirname(pythonfmu.__file__)
-    if sys.platform == "win32":
-        platform = "win64"
-        ext = "dll"
-    elif sys.platform == "darwin":
-        platform = "darwin64"
-        ext = "dylib"
-    elif sys.platform.startswith("linux"):
-        platform = "linux64"
-        ext = "so"
-    else:
-        return False
-    wrapper_dir = os.path.join(pf_dir, "resources", "binaries", platform)
-    if not os.path.isdir(wrapper_dir):
-        return False
-    return any(f.endswith("." + ext) for f in os.listdir(wrapper_dir))
+    # The presence of a wrapper file is not enough: pythonfmu's platform
+    # folders name a word size, not an instruction set, so on aarch64 the
+    # bundled x86-64 binary sits in ``linux64`` under the right name and
+    # fails to load. Gate on the ISA actually matching this host.
+    from jaxonomy.library.fmu_export import wrapper_diagnostics
+
+    info = wrapper_diagnostics()
+    return bool(info["present"] and info["arch_matches_host"])
 
 
 _RUNTIME_HOST_OK = _runtime_host_ok()
 _RUNTIME_REASON = (
-    f"no pythonfmu wrapper binary installed for sys.platform={sys.platform!r}; "
-    f"upgrade to pythonfmu >= 0.7.0 (ships darwin64) or run T-025b's "
-    f"source build to install one. Structural checks still apply."
+    f"no loadable pythonfmu wrapper for sys.platform={sys.platform!r} on this "
+    f"architecture; run scripts/build_pythonfmu_wrapper.sh to build one. "
+    f"Structural checks still apply."
 )
 
 
@@ -525,3 +515,72 @@ def test_round_trip_init_priming_exported_input_and_x0(tmp_path: Path):
     assert x1 == pytest.approx(2.2, abs=1e-6), (
         f"exported input port ignored or x0 not applied: x(0.1)={x1}"
     )
+
+
+# ── 4. Wrapper diagnostics: the two silent unloadable-FMU modes ───────
+
+
+def test_wrapper_diagnostics_reports_host_slot():
+    """The diagnostic names this host's platform folder and reads the
+    bundled binary's ISA, so an unloadable FMU is detectable before it
+    ships. The validators cannot see either property."""
+    from jaxonomy.library.fmu_export import wrapper_diagnostics
+
+    info = wrapper_diagnostics()
+    expected_slot = {
+        "win32": "win64", "darwin": "darwin64",
+    }.get(sys.platform, "linux64")
+    assert info["platform"] == expected_slot
+    assert info["host_machine"] in ("x86-64", "aarch64", "x86")
+    if info["present"]:
+        # An unreadable/unknown format is reported as None rather than
+        # guessed; anything else must be a machine name we recognize.
+        assert info["machine"] is None or isinstance(info["machine"], str)
+        assert info["arch_matches_host"] == (info["machine"] == info["host_machine"])
+
+
+def test_binary_machine_reads_elf_and_pe_headers(tmp_path: Path):
+    """Header parsing is format-driven, not extension-driven, and a
+    non-binary file yields None instead of raising."""
+    from jaxonomy.library.fmu_export import _binary_machine
+
+    elf = tmp_path / "aarch64.so"
+    header = bytearray(64)
+    header[0:4] = b"\x7fELF"
+    header[4] = 2       # ELF64
+    header[5] = 1       # little endian
+    header[18:20] = (0xB7).to_bytes(2, "little")   # aarch64
+    elf.write_bytes(bytes(header))
+    assert _binary_machine(str(elf)) == "aarch64"
+
+    header[18:20] = (0x3E).to_bytes(2, "little")   # x86-64
+    elf.write_bytes(bytes(header))
+    assert _binary_machine(str(elf)) == "x86-64"
+
+    junk = tmp_path / "notes.txt"
+    junk.write_text("not a binary at all, just some text to read")
+    assert _binary_machine(str(junk)) is None
+    assert _binary_machine(str(tmp_path / "missing.so")) is None
+
+
+def test_links_libpython_ignores_the_wrappers_own_name(tmp_path: Path):
+    """``libpythonfmu-export`` contains the substring ``libpython``, so a
+    naive scan reports every wrapper as linking Python. Verified against
+    both real binaries: the stock wrapper links nothing, the one built by
+    scripts/build_pythonfmu_wrapper.sh links libpython3.x."""
+    from jaxonomy.library.fmu_export import _links_libpython
+
+    stock = tmp_path / "stock.so"
+    stock.write_bytes(b"\x7fELF" + b"\x00" * 60 + b"libpythonfmu-export.so\x00")
+    assert _links_libpython(str(stock)) is False
+
+    embed = tmp_path / "embed.so"
+    embed.write_bytes(
+        b"\x7fELF" + b"\x00" * 60
+        + b"libpythonfmu-export.so\x00libpython3.12.so.1.0\x00"
+    )
+    assert _links_libpython(str(embed)) is True
+
+    windows = tmp_path / "wrapper.dll"
+    windows.write_bytes(b"MZ" + b"\x00" * 60 + b"python312.dll\x00")
+    assert _links_libpython(str(windows)) is True

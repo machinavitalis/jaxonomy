@@ -247,6 +247,7 @@ if not IS_JAXLITE:
 
     from .fmu_import import (
         ModelicaFMU,
+        ModelicaFMUME,
     )
 
     from .sindy import (
@@ -376,6 +377,7 @@ else:
     MLP = _invalid("MLP")
     QuadraticCost = _invalid("QuadraticCost")
     ModelicaFMU = _invalid("ModelicaFMU")
+    ModelicaFMUME = _invalid("ModelicaFMUME")
     Sindy = _invalid("Sindy")
     PyTwin = _invalid("PyTwin")
     Ros2Publisher = _invalid("Ros2Publisher")
@@ -465,6 +467,7 @@ __all__ = [
     "MatrixMultiplication",
     "MatrixTransposition",
     "ModelicaFMU",
+    "ModelicaFMUME",
     "MinMax",
     "Multiplexer",
     "MultiPortSwitch",

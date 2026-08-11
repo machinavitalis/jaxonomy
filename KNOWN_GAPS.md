@@ -181,10 +181,32 @@ Each entry has the same shape:
   (`test/library/test_fmu_slave.py`,
   `test/library/test_fmu_export_binary.py`).
 - **What doesn't**: no model-exchange import; no FMI 3
-  scheduledExecution; macOS export needs pythonfmu >= 0.7.0 (older
-  releases require a one-time source build documented in `build_fmu`'s
-  docstring); validator coverage is FMI 2.0 export only (imports are
-  exercised by round-trip tests, not the static checkers)
+  scheduledExecution; validator coverage is FMI 2.0 export only
+  (imports are exercised by round-trip tests, not the static checkers)
+- **Exported FMUs are tool-coupled**: the slave runs as Python, so the
+  importing side needs a Python environment with jaxonomy importable.
+  There is no self-contained binary export.
+- **The bundled wrapper limits where an export can run.** `build_fmu`
+  compiles nothing; it bundles the pre-built wrapper from the installed
+  pythonfmu wheel, and that wrapper is x86-64 and links no libpython.
+  So a stock install produces FMUs that load only on x86-64, and only
+  under a Python FMI master (FMPy, jaxonomy) — a C/C++ master fails at
+  `dlopen` with `undefined symbol: _Py_NoneStruct`. Neither shows up as
+  a validator finding, because `fmpy.validate_fmu` and VDMCheck read
+  `modelDescription.xml` and never load the binary.
+  `scripts/build_pythonfmu_wrapper.sh` builds a host wrapper that fixes
+  the ISA, links libpython, promotes it to global scope (so numpy's C
+  extensions resolve under an `RTLD_LOCAL` master), and skips the
+  `Py_Finalize` that otherwise segfaults on `fmi2Terminate` /
+  `fmi2FreeInstance`. With it, a pure-C master runs an exported FMU on
+  both x86-64 and aarch64 Linux. `wrapper_diagnostics()` reports which
+  wrapper is installed, and `build_fmu` warns when it would produce an
+  FMU that cannot load.
+- **OpenModelica cannot import our FMUs, for its own reasons**:
+  `importFMU` in OpenModelica 1.27.0 accepts FMI 2.0 model exchange
+  only and rejects every co-simulation FMU, including ones OpenModelica
+  itself exported. Our export is co-simulation only, so that pairing
+  needs ME export (not implemented) rather than a fix on this side.
 
 ### State machines
 
