@@ -1,5 +1,6 @@
 mkdocs
 mkdocs-jupyter
+mkdocs-llmstxt
 mkdocs-material
 mkdocstrings[python]
 

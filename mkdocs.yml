@@ -81,10 +81,55 @@ plugins:
       ignore_h1_titles: true
       execute: false
       include_source: true
+  # Machine-readable views of this site for LLMs and coding agents
+  # (https://llmstxt.org/). Keep last so it sees fully-rendered pages.
+  # `agents.md` is a symlink to the repo-root SKILL.md and is listed first on
+  # purpose: it carries the when-to-use / when-NOT-to-use guidance and the
+  # pitfalls that most often break an agent's first script.
+  - llmstxt:
+      markdown_description: >-
+        Jaxonomy is a JAX-native Python engine for simulating hybrid dynamical
+        systems built as block diagrams — wired blocks, continuous and discrete
+        state, zero-crossing events, and acausal multi-physics networks
+        (electrical, mechanical, thermal, hydraulic). Every simulation is
+        JIT-compilable, vmap-batchable, and differentiable end to end, so
+        calibration, trajectory optimization and controller tuning are ordinary
+        gradient-based optimizations over the simulation itself. It ships 150+
+        library blocks including LQR, MPC, PID and Kalman/EKF/UKF, plus FMI 2.0
+        co-simulation and a reduced-order-modeling suite. MIT licensed.
+      full_output: llms-full.txt
+      # Drops mkdocstrings' duplicated "Source code in ..." blocks; see the
+      # module docstring. Keeps llms-full.txt fetchable in one request.
+      preprocess: scripts/llmstxt_preprocess.py
+      sections:
+        Start here:
+          - index.md: What Jaxonomy is, how to install it, and where to go next.
+          - agents.md: >-
+              Operating manual for AI agents using Jaxonomy — when to use it,
+              when to reach for something else instead, the core API surface,
+              and the known pitfalls that break a first script.
+          - installation.md: Install, optional extras, and development installs.
+        API reference:
+          - framework.md: DiagramBuilder, LeafSystem, ports, Context, dependency tickets.
+          - library.md: The standard block library.
+          - simulation.md: simulate, solvers, SimulatorOptions, results handling.
+          - optimization.md: Training and optimization helpers.
+          - analysis.md: Linearization, frequency response, influence graphs.
+        Guides and scope:
+          - tutorials/index.md: Index of the tutorial notebooks.
+          - examples/index.md: Index of the applied example notebooks.
+          - scope/pinn.md: What Jaxonomy does and does not do for PINNs and PDEs.
+          - scope/rom.md: Reduced-order modeling and surrogates.
+          - benchmarks.md: Performance benchmarks and how to read them.
+          - distributed.md: Batch and distributed simulation.
+          - jit_cache.md: JIT caching behaviour.
+          - memory.md: Memory footprint and recorder buffers.
+          - about.md: Project scope, provenance, and licensing.
 
 nav:
   - index.md
   - installation.md
+  - Using Jaxonomy from an AI agent: agents.md
   - Scope — PINNs & PDEs: scope/pinn.md
   - Scope — ROM & surrogates: scope/rom.md
   - API Reference:

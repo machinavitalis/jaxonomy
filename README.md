@@ -35,13 +35,25 @@ C, D = jnp.eye(2), jnp.zeros((2, 1))
 Q, R = jnp.eye(2), jnp.array([[1.]])
 
 builder = jx.DiagramBuilder()
-plant      = builder.add(jx.library.LTISystem(A, B, C, D))
+# Start displaced from the origin, so the regulator has something to do.
+plant      = builder.add(jx.library.LTISystem(A, B, C, D,
+                                              initialize_states=jnp.array([1.0, 0.0])))
 controller = builder.add(jx.library.LinearQuadraticRegulator(A, B, Q, R))
 builder.connect(plant.output_ports[0],      controller.input_ports[0])
 builder.connect(controller.output_ports[0], plant.input_ports[0])
 
 diagram = builder.build()
-results = jx.simulate(diagram, diagram.create_context(), (0.0, 10.0))
+results = jx.simulate(
+    diagram,
+    diagram.create_context(),
+    (0.0, 10.0),
+    # Nothing is stored unless you name it here: without recorded_signals,
+    # results.time and results.outputs come back as None.
+    recorded_signals={"x": plant.output_ports[0],
+                      "u": controller.output_ports[0]},
+)
+
+results.outputs["x"]    # (T, 2) — position and velocity, driven back to zero
 ```
 
 ---
@@ -208,6 +220,15 @@ Then register the server with your agent client. For Claude Desktop, add to
 Use the interpreter where `jaxonomy[mcp]` is installed (or the `jaxonomy-mcp`
 entry point). Full tool reference and configuration notes:
 [`jaxonomy/mcp/README.md`](https://github.com/machinavitalis/jaxonomy/blob/main/jaxonomy/mcp/README.md).
+
+If you'd rather just point an agent at the documentation, start it on
+[`SKILL.md`](SKILL.md) — when to use Jaxonomy, when to reach for something else,
+the core API, and the pitfalls that most often break a first script. The docs
+site also publishes [llms.txt](https://llmstxt.org/) views:
+[py.jaxonomy.com/llms.txt](https://py.jaxonomy.com/llms.txt) for an index of
+every page, and
+[py.jaxonomy.com/llms-full.txt](https://py.jaxonomy.com/llms-full.txt) for the
+whole documentation set as one Markdown file.
 
 ---
 
@@ -439,9 +460,16 @@ compiler = AcausalCompiler(ev, ad)
 rc_block = compiler()         # → LeafSystem, JIT-compiled ODE
 
 builder = jx.DiagramBuilder()
-builder.add(rc_block)
+rc = builder.add(rc_block)
 diagram = builder.build()
-results = jx.simulate(diagram, diagram.create_context(), (0.0, 5.0))
+results = jx.simulate(
+    diagram,
+    diagram.create_context(),
+    (0.0, 5.0),
+    recorded_signals={"rc": rc.output_ports[0]},
+)
+
+results.outputs["rc"]   # capacitor charges 0 → 0.993 V over 5 τ (R = C = 1)
 ```
 
 The same pipeline handles **multi-domain systems** — an electro-mechanical actuator connecting `electrical`, `rotational`, and `translational` domains compiles to a single optimized system.

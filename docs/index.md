@@ -35,9 +35,29 @@ Use a virtual environment when possible. Platform notes, optional extras (`[safe
 ## Minimal pattern
 
 1. Add blocks with `DiagramBuilder`, `connect` outputs to inputs, then `build()`.
-2. Call `jaxonomy.simulate(diagram, start_time, end_time, ...)` (see [Simulation](simulation.md) for `SimulatorOptions` and results handling).
+2. Call `jaxonomy.simulate(diagram, context, t_span, ...)`, where `t_span` is a `(start, stop)` tuple (see [Simulation](simulation.md) for `SimulatorOptions` and results handling).
+3. Pass `recorded_signals={name: port}` for anything you want back — without it, `results.time` and `results.outputs` are `None`.
 
 The [Getting started](tutorials/01-getting-started.ipynb) tutorial builds a simple mass–spring–damper-style diagram step by step.
+
+---
+
+## Using Jaxonomy from an AI agent
+
+If you are pointing an AI coding agent at Jaxonomy, start it on the
+**[agent guide](agents.md)** — when to use the library, when to reach for
+something else, the core API, and the pitfalls that most often break a first
+script.
+
+Machine-readable views of this site, following the
+[llms.txt](https://llmstxt.org/) convention:
+
+| File | Contents |
+|------|----------|
+| [`/llms.txt`](llms.txt) | Index of the documentation, with a short description of each page |
+| [`/llms-full.txt`](llms-full.txt) | The full documentation as a single Markdown file |
+
+Jaxonomy also ships an [MCP server](https://github.com/machinavitalis/jaxonomy/blob/main/jaxonomy/mcp/README.md) that exposes the engine as tools an agent can call directly.
 
 ---
 

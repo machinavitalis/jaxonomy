@@ -63,15 +63,27 @@ builder.connect(controller.output_ports[0], plant.input_ports[0])
 
 diagram = builder.build()
 context = diagram.create_context()          # holds state + parameters
-results = jx.simulate(diagram, context, stop_time=5.0)
+results = jx.simulate(
+    diagram,
+    context,
+    (0.0, 5.0),                             # t_span, a (start, stop) tuple
+    recorded_signals={"x": plant.output_ports[0]},
+)
+print(results.time.shape, results.outputs["x"].shape)
 ```
 
 - `DiagramBuilder.add(block)` returns a handle whose `.input_ports[i]` /
   `.output_ports[i]` you wire with `builder.connect(src_out, dst_in)`.
 - The `Context` is an immutable carrier of state and parameters — thread it
   through; don't mutate it in place.
-- `jx.simulate(...)` is the entry point; the whole call is differentiable and
-  `jit`/`vmap`-friendly.
+- `jx.simulate(system, context, t_span, ...)` is the entry point; the whole call
+  is differentiable and `jit`/`vmap`-friendly. The time span is a
+  `(start, stop)` tuple, passed positionally or as `t_span=` — there is no
+  `stop_time`, `start_time`, or `end_time` keyword.
+- **Nothing is recorded unless you ask for it.** Without `recorded_signals=`,
+  the run still succeeds but `results.time` and `results.outputs` are both
+  `None`. This is the most common reason a first Jaxonomy script appears to
+  produce nothing.
 
 ### Library blocks
 
@@ -140,8 +152,11 @@ Hard-won usage tips (harvested from prior consumer sessions):
 - **Symmetric saturation shorthand:** `Saturate(limit=L)` instead of
   `upper_limit=+L, lower_limit=-L`.
 - **`simulate` specifics:** `context` is a required positional arg (no
-  context-less shortcut) and `options` must be a `SimulatorOptions`, not a dict;
-  read results via `res.time` and `res.outputs[name]`.
+  context-less shortcut), the time span is one `(start, stop)` tuple rather than
+  two scalars, and `options` must be a `SimulatorOptions`, not a dict. Results
+  come back empty — `res.time is None` — unless you pass
+  `recorded_signals={name: port}`; with it, read `res.time` and
+  `res.outputs[name]`.
 - **Long / stiff / multi-rate runs:** bump `SimulatorOptions(buffer_length=...)`
   (the recorder silently truncates to the *tail* when its ring buffer fills) and
   use `ode_solver_method="bdf"` for stiff fast+slow coupling (the explicit

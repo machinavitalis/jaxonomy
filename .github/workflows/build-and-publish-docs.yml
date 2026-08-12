@@ -11,6 +11,12 @@ on:
       - mkdocs.yml
       - requirements.docs.txt
       - .github/workflows/build-and-publish-docs.yml
+      # docs/agents.md is a symlink to SKILL.md, which is itself a symlink to
+      # the canonical file below — a push editing it changes neither docs/** nor
+      # mkdocs.yml, so the site would go stale without these.
+      - SKILL.md
+      - .claude/skills/**
+      - scripts/llmstxt_preprocess.py
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
