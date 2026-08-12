@@ -1,56 +1,38 @@
 # Jaxonomy MCP Server
 
-Exposes Jaxonomy simulation as tools for Claude and other AI agents.
+Exposes Jaxonomy simulation as tools for AI agents over stdio.
 
-## Installation
+**User documentation lives at [py.jaxonomy.com/mcp](https://py.jaxonomy.com/mcp/)**
+— install, client configuration, the tool reference, and limitations. Keep that
+page canonical; this file covers only what a contributor needs.
 
-```bash
-pip install jaxonomy[mcp]
-```
+## Layout
 
-## Claude Desktop Configuration
+- `server.py` — the `FastMCP` instance and the `main()` entry point. Tool
+  modules are imported at the bottom because their `@mcp.tool()` decorators
+  need `mcp` to exist first.
+- `tools/model_tools.py` — `list_blocks`, `validate_model`, `explain_model`
+- `tools/simulate_tools.py` — `run_simulation`, `fit_parameters`
+- `tools/analysis_tools.py` — `linearize_model`, `influence_subgraph`
+- `_helpers.py` — shared model-JSON deserialization and result formatting
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Tests are in `test/mcp/test_mcp_tools.py`.
 
-```json
-{
-  "mcpServers": {
-    "jaxonomy": {
-      "command": "python",
-      "args": ["-m", "jaxonomy.mcp.server"]
-    }
-  }
-}
-```
-
-Use the same Python interpreter where `jaxonomy` and `jaxonomy[mcp]` are installed (or use `jaxonomy-mcp` if installed via pip entry point).
-
-## Available Tools
-
-- **list_blocks**: catalog of library block types (`LeafSystem` subclasses)
-- **validate_model**: check model JSON for structural / validation issues
-- **explain_model**: plain-text summary of blocks and parameters
-- **run_simulation**: execute a simulation from model JSON
-- **fit_parameters**: fit selected parameters to CSV data (finite-difference gradients + Adam)
-- **linearize_model**: compute linearized A, B, C, D and eigenvalues
-- **influence_subgraph**: serialize what actually drives a signal — the model's
-  dependency structure weighted by autodiff Jacobians, expanded strongest-edge-
-  first from a focus point, enriched with units and rates, under a token budget
-
-## Usage with Claude
-
-Once configured, Claude can run simulations directly, for example:
-
-> Build a mass-spring-damper model and show me how damping ratio affects settling time
-
-The agent can call `list_blocks`, construct model JSON, run `run_simulation`, and interpret results.
-
-## Console entry point
-
-After install:
+## Running it locally
 
 ```bash
-jaxonomy-mcp
+pip install -e .[mcp]
+jaxonomy-mcp          # or: python -m jaxonomy.mcp.server
 ```
 
-This runs the same MCP server as `python -m jaxonomy.mcp.server`.
+## Registry entry
+
+The server is published to the [MCP Registry](https://registry.modelcontextprotocol.io)
+as `io.github.machinavitalis/jaxonomy`, described by `server.json` at the repo
+root. Two things must stay in step when the package is released:
+
+- the three version fields in `server.json` (`version`, and the package's
+  `version` and pinned `--from` extra) must match the released PyPI version;
+- the `mcp-name:` comment in the root `README.md` must match `server.json`'s
+  `name` — the registry reads it from the README as published to PyPI to verify
+  package ownership, so a release without it will fail validation.

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.machinavitalis/jaxonomy",
+  "title": "Jaxonomy — hybrid dynamical systems on JAX",
+  "description": "Build, simulate and calibrate JAX block-diagram models of hybrid dynamical systems.",
+  "repository": {
+    "url": "https://github.com/machinavitalis/jaxonomy",
+    "source": "github"
+  },
+  "websiteUrl": "https://py.jaxonomy.com/mcp/",
+  "version": "3.4.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "jaxonomy",
+      "version": "3.4.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "jaxonomy[mcp]==3.4.0",
+          "isRequired": true,
+          "description": "The server ships behind Jaxonomy's optional [mcp] extra, so the runner installs the extra rather than the bare package."
+        },
+        {
+          "type": "positional",
+          "valueHint": "command",
+          "value": "jaxonomy-mcp",
+          "isRequired": true,
+          "description": "Console entry point that starts the stdio MCP server."
+        }
+      ]
+    }
+  ]
+}

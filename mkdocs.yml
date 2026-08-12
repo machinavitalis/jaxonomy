@@ -109,6 +109,10 @@ plugins:
               when to reach for something else instead, the core API surface,
               and the known pitfalls that break a first script.
           - installation.md: Install, optional extras, and development installs.
+          - mcp.md: >-
+              The MCP server that lets an agent drive the engine directly —
+              install, client configuration, the seven tools it exposes, and
+              what they cannot do.
         API reference:
           - framework.md: DiagramBuilder, LeafSystem, ports, Context, dependency tickets.
           - library.md: The standard block library.
@@ -130,6 +134,7 @@ nav:
   - index.md
   - installation.md
   - Using Jaxonomy from an AI agent: agents.md
+  - MCP server: mcp.md
   - Scope — PINNs & PDEs: scope/pinn.md
   - Scope — ROM & surrogates: scope/rom.md
   - API Reference:

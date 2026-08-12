@@ -191,6 +191,12 @@ results = jx.simulate(
 
 ## 🤖 Driving Jaxonomy from an AI agent (MCP)
 
+<!--
+  The line below is the MCP Registry's package-ownership proof. The registry
+  reads it from this README as published to PyPI (pyproject sets
+  readme = "README.md") and requires it to match the "name" in server.json
+  exactly. Do not remove or reword it, and keep it on its own line.
+-->
 <!-- mcp-name: io.github.machinavitalis/jaxonomy -->
 
 Jaxonomy ships an [MCP](https://modelcontextprotocol.io) server that exposes the
@@ -220,8 +226,10 @@ Then register the server with your agent client. For Claude Desktop, add to
 ```
 
 Use the interpreter where `jaxonomy[mcp]` is installed (or the `jaxonomy-mcp`
-entry point). Full tool reference and configuration notes:
-[`jaxonomy/mcp/README.md`](https://github.com/machinavitalis/jaxonomy/blob/main/jaxonomy/mcp/README.md).
+entry point). The server is listed in the
+[MCP Registry](https://registry.modelcontextprotocol.io) as
+`io.github.machinavitalis/jaxonomy`; full tool reference, client configuration
+and limitations are at [py.jaxonomy.com/mcp](https://py.jaxonomy.com/mcp/).
 
 If you'd rather just point an agent at the documentation, start it on
 [`SKILL.md`](SKILL.md) — when to use Jaxonomy, when to reach for something else,
