@@ -57,9 +57,12 @@ jobs:
           cache: pip
 
       - name: Install
+        # `mcp` is included so test/mcp/ actually runs: those tests open with
+        # `importorskip("mcp")`, so without the extra they skip silently and the
+        # MCP server has no coverage at all.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
+          pip install -e ".[test,mcp]"
 
       - name: Run quick suite (excludes slow, dashboard, autodiff_full)
         run: pytest -q --tb=short -n auto

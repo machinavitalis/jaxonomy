@@ -71,7 +71,11 @@ jaxonomy-mcp = "jaxonomy.mcp.server:main"
 
 [project.optional-dependencies]
 
-mcp = ["mcp>=1.0.0"]
+# Upper bound is load-bearing: `jaxonomy/mcp/server.py` imports
+# `mcp.server.fastmcp`, which the SDK removed in 2.0.0. Without the cap a fresh
+# `pip install jaxonomy[mcp]` resolves to 2.x and the server fails to start.
+# Lifting it means migrating server.py off FastMCP first.
+mcp = ["mcp>=1.2,<2"]
 
 # Optional: pint-backed string parser for jaxonomy.framework.units.parse_unit
 # (T-104-followup-pint-bridge). When this extra is installed,
