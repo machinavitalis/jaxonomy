@@ -211,14 +211,26 @@ BUILT="$WORK/PythonFMU/pythonfmu/resources/binaries/$SLOT/$LIBNAME"
 [[ -f "$BUILT" ]] || { echo "build produced no $BUILT" >&2; exit 1; }
 
 mkdir -p "$DEST_DIR/$SLOT"
-if [[ -f "$DEST_DIR/$SLOT/$LIBNAME" && ! -f "$DEST_DIR/$SLOT/$LIBNAME.stock" ]]; then
-    cp "$DEST_DIR/$SLOT/$LIBNAME" "$DEST_DIR/$SLOT/$LIBNAME.stock"
+INSTALLED="$DEST_DIR/$SLOT/$LIBNAME"
+if [[ -f "$INSTALLED" && ! -f "$INSTALLED.stock" ]]; then
+    cp "$INSTALLED" "$INSTALLED.stock"
     echo "kept the shipped wrapper as $LIBNAME.stock"
 fi
-cp "$BUILT" "$DEST_DIR/$SLOT/$LIBNAME"
-echo "installed $SLOT wrapper into $DEST_DIR/$SLOT/"
 
-"$PYTHON" - <<'PY'
+# Roll back if the freshly built wrapper fails its own checks. A wrapper that
+# cannot satisfy them is not merely useless: on macOS the source build
+# produces one that aborts the host process, so leaving it installed is worse
+# than the stock file it replaced. Verification has to run against the
+# installed path (that is what wrapper_diagnostics inspects), so install,
+# check, and restore on failure.
+ROLLBACK=""
+if [[ -f "$INSTALLED" ]]; then
+    ROLLBACK="$WORK/previous-$LIBNAME"
+    cp "$INSTALLED" "$ROLLBACK"
+fi
+cp "$BUILT" "$INSTALLED"
+
+if "$PYTHON" - <<'PY'
 from jaxonomy.library.fmu_export import wrapper_diagnostics
 
 info = wrapper_diagnostics()
@@ -229,3 +241,16 @@ print(f"  embeds python:   {info['embeds_python']}")
 if not (info["arch_matches_host"] and info["embeds_python"]):
     raise SystemExit("wrapper still does not satisfy both checks")
 PY
+then
+    echo "installed $SLOT wrapper into $DEST_DIR/$SLOT/"
+else
+    if [[ -n "$ROLLBACK" ]]; then
+        cp "$ROLLBACK" "$INSTALLED"
+        echo "restored the previous wrapper; nothing was changed" >&2
+    else
+        rm -f "$INSTALLED"
+        echo "removed the failed build; no wrapper is installed" >&2
+    fi
+    echo "the build produced a wrapper that fails its own checks — see above" >&2
+    exit 1
+fi

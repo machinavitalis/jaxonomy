@@ -102,7 +102,7 @@ environment; the `.onnx` itself rides inside the FMU's `resources/`.
 | `fmusim validate` | 0.6.0 | Validator | Clean — ZIP archive, model description, build description |
 | FMPy | 0.3.x | Importing master | Instantiates, steps, round-trips against the in-process model |
 | Jaxonomy `ModelicaFMU` | 3.3.0 | Importing master | Round-trips |
-| **fmusim** | 0.6.0 | **Importing master, no Python in the process** | Instantiates and steps all 13 exported FMUs, including the Integer/Boolean/String and array-valued ones; driven by a CSV input it tracks the resonant response to within 0.50% of an independent OpenModelica solution of the same equations |
+| **fmusim** | 0.6.0 | **Importing master, no Python in the process** | Instantiates and steps all 13 exported FMUs, including the Integer/Boolean/String and array-valued ones. Eleven need nothing but the wrapper below; `MixedTypes` additionally needs a post-3.3.0 Jaxonomy visible to the embedded interpreter and `ONNXPolicy` needs `onnx` and `jaxonnxruntime`, as noted above. driven by a CSV input it tracks the resonant response to within 0.50% of an independent OpenModelica solution of the same equations |
 
 **Not tested, and one known refusal.** OpenModelica's importer accepts model
 exchange only and rejects every co-simulation FMU — including ones
