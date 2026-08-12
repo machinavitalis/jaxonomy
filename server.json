@@ -8,13 +8,13 @@
     "source": "github"
   },
   "websiteUrl": "https://py.jaxonomy.com/mcp/",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jaxonomy",
-      "version": "3.4.0",
+      "version": "3.4.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -23,7 +23,7 @@
         {
           "type": "named",
           "name": "--from",
-          "value": "jaxonomy[mcp]==3.4.0",
+          "value": "jaxonomy[mcp]==3.4.1",
           "isRequired": true,
           "description": "The server ships behind Jaxonomy's optional [mcp] extra, so the runner installs the extra rather than the bare package."
         },

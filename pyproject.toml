@@ -12,7 +12,7 @@ dynamic = ["dependencies"]
 license = { text = "MIT" }
 
 # Keep in sync with version.py
-version = "3.4.0"
+version = "3.4.1"
 
 # Lead with the disambiguating tokens: "jaxonomy" collides with "taxonomy" in
 # search and embedding indexes, so the package must be findable by what it does.
