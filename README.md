@@ -191,6 +191,8 @@ results = jx.simulate(
 
 ## 🤖 Driving Jaxonomy from an AI agent (MCP)
 
+<!-- mcp-name: io.github.machinavitalis/jaxonomy -->
+
 Jaxonomy ships an [MCP](https://modelcontextprotocol.io) server that exposes the
 engine as tools an AI agent can call directly — it can enumerate library blocks,
 build and validate a model, run a simulation, fit parameters to data, and

@@ -5,22 +5,46 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jaxonomy"
 readme = "README.md"
-description = "Jaxonomy core simulation engine and API client"
+description = "JAX-native simulation engine for hybrid dynamical systems: block-diagram modeling, ODE/DAE solvers, events, acausal physics, and end-to-end autodiff"
 requires-python = ">=3.10"
 authors = [{ name = "Jaxonomy", email = "support@jaxonomy.com" }]
 dynamic = ["dependencies"]
 license = { text = "MIT" }
 
 # Keep in sync with version.py
-version = "3.3.0"
+version = "3.4.0"
+
+# Lead with the disambiguating tokens: "jaxonomy" collides with "taxonomy" in
+# search and embedding indexes, so the package must be findable by what it does.
+keywords = [
+  "jax",
+  "simulation",
+  "dynamical-systems",
+  "block-diagram",
+  "differentiable-simulation",
+  "autodiff",
+  "ode",
+  "dae",
+  "acausal-modeling",
+  "control-systems",
+  "mpc",
+  "kalman-filter",
+  "system-identification",
+  "scientific-computing",
+]
 
 # See https://pypi.org/classifiers/
+# Python versions here must match the CI matrix — tests run on 3.11 only, so
+# do not add 3.12/3.13 without extending .github/workflows/tests.yml first.
 classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Operating System :: OS Independent",
   "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
   "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: Scientific/Engineering :: Mathematics",
   "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: MIT License",
 ]
