@@ -1,0 +1,6 @@
+StartTime, 0.0
+StopTime, 2.5500000000000003
+StepSize, 0.01
+RelTol, 1e-06
+SolverType, FixedStep
+OutputIntervalLength, 0.01

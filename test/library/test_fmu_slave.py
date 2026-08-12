@@ -29,7 +29,12 @@ pythonfmu = pytest.importorskip("pythonfmu")
 from pythonfmu import Fmi2Causality, Fmi2Variability  # noqa: E402
 
 import jaxonomy  # noqa: E402
-from jaxonomy.library import Constant, Gain, Integrator  # noqa: E402
+from jaxonomy.library import (  # noqa: E402
+    Comparator,
+    Constant,
+    Gain,
+    Integrator,
+)
 from jaxonomy.library.fmu_slave import JaxonomyDiagramSlave  # noqa: E402
 
 
@@ -375,3 +380,133 @@ def test_reuse_simulator_kernel_object_is_stable(tmp_path):
     assert slave._kernel is kernel_first
     assert slave.do_step(0.25, 0.5) is True  # larger step: rebuild
     assert slave._kernel is not kernel_first
+
+
+def test_discrete_lti_matrices_do_not_escape_the_trace():
+    """`LTISystemDiscrete` must not stash traced parameters on itself.
+
+    Its callbacks assigned `params["A"]` onto `self.A`, so a tracer
+    outlived the trace that made it. A single `simulate` never noticed,
+    but an FMU slave re-traces once per communication step, and the
+    second step converted a dead tracer:
+    `TracerArrayConversionError ... depends on the value of ctx[...]['A']`.
+    Asserting the attributes stay concrete catches it without an FMU.
+    """
+    import numpy as np
+    import jaxonomy
+    from jaxonomy import simulate, SimulatorOptions
+    from jaxonomy.library import Constant, LTISystemDiscrete
+
+    dt = 0.1
+    builder = jaxonomy.DiagramBuilder()
+    source = builder.add(Constant(1.0, name="u"))
+    block = builder.add(LTISystemDiscrete(
+        A=np.array([[1.0]]), B=np.array([[dt]]),
+        C=np.array([[1.0]]), D=np.array([[0.0]]), dt=dt, name="integral",
+    ))
+    builder.connect(source.output_ports[0], block.input_ports[0])
+    diagram = builder.build()
+
+    simulate(diagram, diagram.create_context(), (0.0, 1.0),
+             options=SimulatorOptions(max_major_step_length=dt))
+
+    for name in ("A", "B", "C", "D"):
+        value = getattr(block, name)
+        # A tracer raises here; a concrete array converts fine.
+        np.asarray(value)
+
+
+# ── FMI variable types ────────────────────────────────────────────────
+
+
+def _build_mixed_types():
+    """Real, Integer and Boolean signals side by side."""
+    bld = jaxonomy.DiagramBuilder()
+    real = bld.add(Constant(1.5, name="u_real"))
+    integer = bld.add(Constant(np.int64(3), name="u_int"))
+    boolean = bld.add(Constant(np.bool_(True), name="u_bool"))
+    threshold = bld.add(Constant(1.0, name="threshold"))
+    compare = bld.add(Comparator(operator=">", name="compare"))
+    bld.connect(real.output_ports[0], compare.input_ports[0])
+    bld.connect(threshold.output_ports[0], compare.input_ports[1])
+    bld.export_output(real.output_ports[0], name="y_real")
+    bld.export_output(integer.output_ports[0], name="y_int")
+    bld.export_output(boolean.output_ports[0], name="y_bool")
+    bld.export_output(compare.output_ports[0], name="y_compare")
+    return bld.build()
+
+
+class MixedTypeSlave(JaxonomyDiagramSlave):
+    DIAGRAM_FACTORY = staticmethod(_build_mixed_types)
+    EXPOSE_STRINGS = {"model_note": "mixed"}
+
+
+def test_variable_fmi_type_follows_signal_dtype(tmp_path):
+    """Integer and boolean signals must not export as Real.
+
+    Every variable was registered as `Real` and coerced through
+    `float()`, so an integer signal reached the master as a Real and a
+    boolean as 1.0/0.0 — the dtype was available on the port and simply
+    discarded.
+    """
+    from pythonfmu import Boolean, Integer, Real, String
+
+    slave = _make_slave(MixedTypeSlave, tmp_path)
+    kinds = {var.name: type(var) for var in slave.vars.values()}
+
+    assert kinds["y_real"] is Real
+    assert kinds["y_int"] is Integer
+    assert kinds["y_bool"] is Boolean
+    assert kinds["y_compare"] is Boolean
+    assert kinds["u_int"] is Integer
+    assert kinds["u_bool"] is Boolean
+    assert kinds["model_note"] is String
+
+
+def test_non_real_variables_are_discrete(tmp_path):
+    """FMI 2.0 §2.2.7 allows `continuous` only for Real, so Integer and
+    Boolean variables must carry an explicit `discrete` variability —
+    inheriting the default emits XML the validators reject."""
+    slave = _make_slave(MixedTypeSlave, tmp_path)
+    variability = {var.name: var.variability for var in slave.vars.values()}
+
+    for name in ("y_int", "y_bool", "y_compare", "u_int", "u_bool"):
+        assert variability[name] == Fmi2Variability.discrete, name
+    # Reals keep the (continuous) default.
+    assert variability["y_real"] is None
+
+
+def test_values_keep_their_python_type_across_a_step(tmp_path):
+    """Reads and writes preserve bool/int rather than collapsing to
+    float, at initialization and after a step."""
+    slave = _make_slave(MixedTypeSlave, tmp_path)
+    slave.exit_initialization_mode()
+    checkpoints = [dict(slave._values)]
+    assert slave.do_step(0.0, 0.01) is True
+    checkpoints.append(dict(slave._values))
+
+    for values in checkpoints:
+        assert isinstance(values["y_int"], int)
+        assert not isinstance(values["y_int"], bool)
+        assert isinstance(values["y_bool"], bool)
+        assert isinstance(values["y_compare"], bool)
+        assert isinstance(values["y_real"], float)
+        assert values["y_int"] == 3
+        assert values["y_bool"] is True
+        assert values["y_compare"] is True  # 1.5 > 1.0
+
+
+def test_string_parameter_round_trips(tmp_path):
+    """`EXPOSE_STRINGS` carries metadata across the boundary: the master
+    can set it during initialization and read it back."""
+    slave = _make_slave(MixedTypeSlave, tmp_path)
+    assert slave._values["model_note"] == "mixed"
+
+    (var,) = [v for v in slave.vars.values() if v.name == "model_note"]
+    var.setter("edited")
+    assert slave._values["model_note"] == "edited"
+    assert var.getter() == "edited"
+    # A string parameter feeds nothing, so stepping leaves it alone.
+    slave.exit_initialization_mode()
+    assert slave.do_step(0.0, 0.01) is True
+    assert slave._values["model_note"] == "edited"

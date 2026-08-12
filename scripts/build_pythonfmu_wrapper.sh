@@ -47,7 +47,33 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-PYTHON="${PYTHON:-python3}"
+# The wrapper must be built against the interpreter that will host the FMU,
+# which is the one holding pythonfmu — not necessarily whatever `python3`
+# resolves to. Under pyenv or conda those differ, and building against the
+# wrong one links a libpython the host never loads. Probe candidates unless
+# PYTHON was set explicitly.
+_find_python() {
+    local candidate
+    local pyenv_python=""
+    if command -v pyenv >/dev/null 2>&1; then
+        pyenv_python="$(pyenv which python 2>/dev/null || true)"
+    fi
+    for candidate in "${PYTHON:-}" python3 python "$pyenv_python"; do
+        [[ -n "$candidate" ]] || continue
+        command -v "$candidate" >/dev/null 2>&1 || continue
+        if "$candidate" -c "import pythonfmu" >/dev/null 2>&1; then
+            command -v "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+PYTHON="$(_find_python)" || {
+    echo "no interpreter found that can import pythonfmu (tried PYTHON, python3, python, pyenv)" >&2
+    echo "install it, or set PYTHON to the interpreter that has it" >&2
+    exit 1
+}
+echo "building against $PYTHON"
 command -v cmake >/dev/null || { echo "cmake is required" >&2; exit 1; }
 command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
 
@@ -102,6 +128,20 @@ replacement = (
     "endif ()"
 )
 open(src_cml, "w").write(text.replace(anchor, replacement))
+
+# 0. PythonFMU guards a destructor attribute for Windows and Linux only and
+#    hard-fails anywhere else ("#error port the code"), so the source build
+#    is impossible on macOS until __APPLE__ is accepted too.
+slave = "src/pythonfmu/PySlaveInstance.cpp"
+text = open(slave).read()
+if "defined(__linux__) || defined(__APPLE__)" not in text:
+    if "#elif defined(__linux__)" not in text:
+        raise SystemExit("PythonFMU layout changed: platform guard not found")
+    open(slave, "w").write(
+        text.replace("#elif defined(__linux__)",
+                     "#elif defined(__linux__) || defined(__APPLE__)")
+    )
+    print("patched PySlaveInstance.cpp for macOS")
 
 state = "src/pythonfmu/PyState.hpp"
 text = open(state).read()

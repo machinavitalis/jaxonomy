@@ -52,6 +52,16 @@ read needs to be on ``diagram.output_ports``. Per FMI 2.0 §4.2.4 the
 outputs are primed during ``exit_initialization_mode`` so a master
 reading right after initialization sees the true t=0 values.
 
+FMI types:
+
+A variable's FMI type follows the signal's numpy dtype: boolean ports
+and Constants register as ``Boolean``, integer ports as ``Integer``,
+everything else as ``Real``. Non-Real variables are pinned to
+``discrete`` variability, since FMI 2.0 §2.2.7 permits ``continuous``
+only for Real. Jaxonomy has no string-valued signal; set
+``EXPOSE_STRINGS = {"name": "default", ...}`` to carry ``String``
+metadata parameters across the boundary.
+
 Initial states:
 
 Set ``EXPOSE_INITIAL_STATES = {"fmi_param_name": "block_name", ...}``
@@ -82,7 +92,15 @@ from typing import Callable, Iterable
 # Lazy: pythonfmu is only needed when actually running inside an FMU.
 # Import at class-definition time is fine because the slave script is
 # only ever loaded inside the FMU's embedded Python.
-from pythonfmu import Fmi2Slave, Fmi2Causality, Fmi2Variability, Real
+from pythonfmu import (
+    Boolean,
+    Fmi2Causality,
+    Fmi2Slave,
+    Fmi2Variability,
+    Integer,
+    Real,
+    String,
+)
 
 import numpy as np
 
@@ -115,6 +133,15 @@ class JaxonomyDiagramSlave(Fmi2Slave):
     #: Real per element (``name[i]``).
     EXPOSE_INITIAL_STATES: dict[str, str] | None = None
 
+    #: Opt-in map of FMI variable name -> default string, registered as
+    #: ``String`` parameters (variability ``fixed``). Jaxonomy has no
+    #: string-valued signal, so these carry model metadata across the
+    #: FMI boundary rather than feeding the diagram: the master can set
+    #: them during initialization and read them back, and nothing else
+    #: consumes them. They exist so an exported FMU can present the
+    #: String surface an importer's conformance suite expects.
+    EXPOSE_STRINGS: dict[str, str] | None = None
+
     #: Reuse one built Simulator + JIT kernel across ``do_step`` calls
     #: (the kernel takes the segment endpoints as traced arguments, so
     #: advancing time hits the JAX compile cache). Cuts the per-step
@@ -122,6 +149,16 @@ class JaxonomyDiagramSlave(Fmi2Slave):
     #: well under 1 ms. Set to ``False`` to fall back to one
     #: :func:`jaxonomy.simulate` call per segment.
     REUSE_SIMULATOR: bool = True
+
+    #: Extra :class:`~jaxonomy.simulation.SimulatorOptions` fields for
+    #: the embedded per-step simulation, e.g. ``{"ode_solver_method":
+    #: "bdf", "rtol": 1e-8}``. Without this a stiff model has no way to
+    #: reach a stiff solver: the slave rebuilds its options on every
+    #: communication step, so the default adaptive non-stiff solver is
+    #: re-entered from scratch each time. ``return_context=True`` is
+    #: always forced — the slave needs the context back to carry state
+    #: across steps.
+    SIMULATOR_OPTIONS: dict | None = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -159,7 +196,11 @@ class JaxonomyDiagramSlave(Fmi2Slave):
         # setter pair targeting that dict, so variable names with
         # bracket / comma syntax (vector elements) don't require a
         # valid Python identifier.
-        self._values: dict[str, float] = {}
+        self._values: dict[str, float | int | bool | str] = {}
+        # FMI variable name -> Python type it is carried as, so reads
+        # and writes keep a Boolean a bool and an Integer an int
+        # instead of collapsing everything onto float.
+        self._value_types: dict[str, type] = {}
         self._output_specs: list[tuple[object, tuple[int, ...]]] = []
         # T-025c: FMI-variable-name-keyed maps from Constant blocks to
         # context locations. Scalars map to ``(system_id, parameter)``;
@@ -178,7 +219,7 @@ class JaxonomyDiagramSlave(Fmi2Slave):
         existing_names: set[str] = {
             varname
             for port in self._diagram.output_ports
-            for varname, _idx in _expand_port(port)
+            for varname, _idx, _dtype in _expand_port(port)
         }
 
         # Injected input-port Constants first, so exported input ports
@@ -196,12 +237,14 @@ class JaxonomyDiagramSlave(Fmi2Slave):
                 )
 
         for port in self._diagram.output_ports:
-            for varname, idx in _expand_port(port):
-                self._values[varname] = 0.0
+            for varname, idx, dtype in _expand_port(port):
                 # Outputs default to initial=calculated; FMI forbids
                 # passing a start= value alongside that, so register
                 # without one.
-                self._register_real(varname, None, Fmi2Causality.output)
+                self._register_variable(
+                    varname, None, Fmi2Causality.output, dtype=dtype
+                )
+                self._values[varname] = self._value_types[varname](0)
                 self._output_specs.append((port, idx))
 
         # T-025c: walk leaf systems and expose any Constant block as
@@ -216,23 +259,73 @@ class JaxonomyDiagramSlave(Fmi2Slave):
         if self.EXPOSE_INITIAL_STATES:
             self._register_initial_state_params(existing_names)
 
-    def _register_real(self, name: str, start, causality, variability=None):
-        """Register one Real variable with a closure-based
+        if self.EXPOSE_STRINGS:
+            self._register_string_params(existing_names)
+
+    def _register_string_params(self, existing_names: set[str]):
+        """Register EXPOSE_STRINGS entries as FMI ``String`` parameters.
+
+        These are metadata: jaxonomy has no string-valued signal, so a
+        master's write is stored and readable but reaches no block.
+        """
+        for name, default in self.EXPOSE_STRINGS.items():
+            if name in existing_names:
+                raise RuntimeError(
+                    f"EXPOSE_STRINGS: FMI variable name {name!r} is "
+                    f"already registered"
+                )
+
+            def _get(_n=name):
+                return self._values[_n]
+
+            def _set(value, _n=name):
+                self._values[_n] = str(value)
+
+            self._values[name] = str(default)
+            self._value_types[name] = str
+            self.register_variable(String(
+                name,
+                causality=Fmi2Causality.parameter,
+                variability=Fmi2Variability.fixed,
+                start=str(default),
+                getter=_get,
+                setter=_set,
+            ))
+            existing_names.add(name)
+
+    def _register_variable(
+        self, name: str, start, causality, variability=None, dtype=None
+    ):
+        """Register one FMI scalar variable with a closure-based
         getter/setter that targets ``self._values[name]``.
 
-        ``start`` may be ``None`` (omits the start attribute, required
-        when ``initial=calculated``, the default for outputs).
+        The FMI type follows the signal's numpy dtype: boolean ports
+        become ``Boolean``, integer ports ``Integer``, everything else
+        ``Real``. ``start`` may be ``None`` (omits the start attribute,
+        required when ``initial=calculated``, the default for outputs).
+
+        FMI 2.0 §2.2.7 allows ``continuous`` variability only for Real,
+        so a non-Real variable that would otherwise inherit the default
+        is pinned to ``discrete``; leaving it implicit emits a
+        modelDescription the validators reject.
         """
+        vclass, pytype = _fmi_type_for(dtype)
+        self._value_types[name] = pytype
+
         def _g(_n=name):
             return self._values[_n]
-        def _s(v, _n=name):
-            self._values[_n] = float(v)
+
+        def _s(v, _n=name, _t=pytype):
+            self._values[_n] = _t(v)
+
         kwargs: dict = {"causality": causality, "getter": _g, "setter": _s}
         if start is not None:
-            kwargs["start"] = start
+            kwargs["start"] = pytype(start)
+        if variability is None and vclass is not Real:
+            variability = Fmi2Variability.discrete
         if variability is not None:
             kwargs["variability"] = variability
-        self.register_variable(Real(name, **kwargs))
+        self.register_variable(vclass(name, **kwargs))
 
     def _register_constant_input(self, leaf, existing_names: set[str]) -> bool:
         """Register one Constant block as FMI input variable(s).
@@ -258,9 +351,11 @@ class JaxonomyDiagramSlave(Fmi2Slave):
             if varname in existing_names:
                 all_registered = False
                 continue
-            initial = float(value[idx]) if idx else float(value)
-            self._values[varname] = initial
-            self._register_real(varname, initial, Fmi2Causality.input)
+            initial = value[idx] if idx else value[()]
+            self._register_variable(
+                varname, initial, Fmi2Causality.input, dtype=value.dtype
+            )
+            self._values[varname] = self._value_types[varname](initial)
             if idx:
                 self._constant_array_inputs[varname] = (leaf.system_id, idx)
             else:
@@ -304,9 +399,9 @@ class JaxonomyDiagramSlave(Fmi2Slave):
                     )
                 initial = float(xc[idx]) if idx else float(xc)
                 self._values[varname] = initial
-                self._register_real(
+                self._register_variable(
                     varname, initial, Fmi2Causality.parameter,
-                    variability=Fmi2Variability.fixed,
+                    variability=Fmi2Variability.fixed, dtype=xc.dtype,
                 )
                 self._initial_state_params[varname] = (leaf.system_id, idx)
                 existing_names.add(varname)
@@ -359,11 +454,11 @@ class JaxonomyDiagramSlave(Fmi2Slave):
         """Hook: read every FMI output variable's current value from
         ``ctx``. Default uses ``port.eval(ctx)`` and unpacks elements
         by index. Override to customize."""
-        out: dict[str, float] = {}
+        out: dict[str, float | int | bool] = {}
         for port, idx in self._output_specs:
             value = port.eval(ctx)
             varname = _flat_name(port, idx)
-            out[varname] = float(_index(value, idx))
+            out[varname] = self._value_types[varname](_index(value, idx))
         return out
 
     # ── Fmi2Slave implementation ──────────────────────────────────────
@@ -412,13 +507,14 @@ class JaxonomyDiagramSlave(Fmi2Slave):
 
     # ── internals ─────────────────────────────────────────────────────
 
-    def _collect_input_values(self) -> dict[str, float]:
+    def _collect_input_values(self) -> dict[str, float | int | bool]:
         names = list(self._constant_inputs) + list(self._constant_array_inputs)
-        return {name: float(self._values[name]) for name in names}
+        return {name: self._value_types[name](self._values[name])
+                for name in names}
 
     def _write_outputs(self, ctx):
         for varname, value in self.read_outputs(ctx).items():
-            self._values[varname] = float(value)
+            self._values[varname] = self._value_types[varname](value)
 
     def _apply_initial_states(self, ctx):
         """Fold EXPOSE_INITIAL_STATES parameter values into the
@@ -442,14 +538,22 @@ class JaxonomyDiagramSlave(Fmi2Slave):
         # and so that pythonfmu's bundling doesn't have to
         # see jaxonomy.simulate.
         import jaxonomy
-        from jaxonomy.simulation import SimulatorOptions
         results = jaxonomy.simulate(
             self._diagram,
             self._ctx,
             (current_time, current_time + step_size),
-            options=SimulatorOptions(return_context=True),
+            options=self._simulator_options(),
         )
         return results.context if results.context is not None else self._ctx
+
+    def _simulator_options(self):
+        """Build the per-step ``SimulatorOptions``, folding in the
+        subclass's ``SIMULATOR_OPTIONS`` overrides."""
+        from jaxonomy.simulation import SimulatorOptions
+
+        overrides = dict(self.SIMULATOR_OPTIONS or {})
+        overrides["return_context"] = True
+        return SimulatorOptions(**overrides)
 
     def _advance_cached(self, current_time: float, step_size: float):
         """Advance one segment through a persistent JIT kernel.
@@ -477,12 +581,11 @@ class JaxonomyDiagramSlave(Fmi2Slave):
     def _build_kernel(self, step_size: float):
         import jax
         from jaxonomy.backend import ODESolver
-        from jaxonomy.simulation import SimulatorOptions
         from jaxonomy.simulation.simulator import Simulator, _check_options
 
         options = _check_options(
             self._diagram,
-            SimulatorOptions(return_context=True),
+            self._simulator_options(),
             (0.0, step_size),
             None,
         )
@@ -516,6 +619,28 @@ class JaxonomyDiagramSlave(Fmi2Slave):
 
 
 # ── helpers ───────────────────────────────────────────────────────────
+
+
+#: numpy dtype kind -> (pythonfmu variable class, Python coercion). FMI
+#: 2.0 has exactly three numeric-ish scalar types; everything that is
+#: not boolean or an integer kind is carried as a Real.
+_FMI_TYPES: dict[str, tuple[type, type]] = {
+    "b": (Boolean, bool),
+    "i": (Integer, int),
+    "u": (Integer, int),
+}
+
+
+def _fmi_type_for(dtype) -> tuple[type, type]:
+    """Map a numpy dtype onto ``(pythonfmu variable class, Python type)``.
+
+    ``dtype`` may be ``None`` when a port's shape/dtype could not be
+    resolved, in which case the variable is carried as a Real — the
+    FMI type that every master supports.
+    """
+    if dtype is None:
+        return Real, float
+    return _FMI_TYPES.get(np.dtype(dtype).kind, (Real, float))
 
 
 def _wrap_exported_inputs(diagram):
@@ -574,21 +699,25 @@ def _iter_constants(diagram) -> Iterable[object]:
             yield leaf
 
 
-def _expand_port(port) -> Iterable[tuple[str, tuple[int, ...]]]:
-    """Yield ``(flat_name, multi_index)`` for each element of ``port``.
-    Scalar ports yield one entry with multi_index ``()``."""
+def _expand_port(port) -> Iterable[tuple[str, tuple[int, ...], object]]:
+    """Yield ``(flat_name, multi_index, dtype)`` for each element of
+    ``port``. Scalar ports yield one entry with multi_index ``()``.
+
+    ``dtype`` is ``None`` when the port carries no resolved default
+    value, which leaves the caller to fall back to Real.
+    """
     name = port.name or f"port_{getattr(port, 'index', 0)}"
     default = getattr(port, "default_value", None)
     if default is None:
-        yield name, ()
+        yield name, (), None
         return
     arr = np.asarray(default)
     if arr.ndim == 0:
-        yield name, ()
+        yield name, (), arr.dtype
         return
     for i in range(arr.size):
         idx = np.unravel_index(i, arr.shape)
-        yield _flat_element_name(name, idx), idx
+        yield _flat_element_name(name, idx), idx, arr.dtype
 
 
 def _flat_element_name(name: str, idx: tuple[int, ...]) -> str:

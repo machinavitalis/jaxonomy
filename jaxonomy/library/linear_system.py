@@ -766,12 +766,17 @@ class LTISystemDiscrete(LTISystemBase):
 
     def _eval_output(self, time, state, *inputs, **params):
         x = state.discrete_state
-        self.C, self.D = params["C"], params["D"]
-        y = npa.matmul(self.C, npa.atleast_1d(x))
+        # Read the matrices into locals. Assigning them onto ``self`` lets a
+        # tracer escape the trace it belongs to: the next concrete use of
+        # ``self.C`` (a re-trace, or ``ss``) then converts a dead tracer and
+        # raises TracerArrayConversionError. Surfaced by an FMU slave, which
+        # re-traces once per communication step.
+        C, D = params["C"], params["D"]
+        y = npa.matmul(C, npa.atleast_1d(x))
 
         if self.is_feedthrough:
             (u,) = inputs
-            y += npa.matmul(self.D, npa.atleast_1d(u))
+            y += npa.matmul(D, npa.atleast_1d(u))
 
         # Handle the special case of scalar output
         if self.scalar_output:
@@ -781,9 +786,9 @@ class LTISystemDiscrete(LTISystemBase):
 
     def _update(self, time, state, u, **params):
         x = state.discrete_state
-        self.A, self.B = params["A"], params["B"]
-        Ax = npa.matmul(self.A, npa.atleast_1d(x))
-        Bu = npa.matmul(self.B, npa.atleast_1d(u))
+        A, B = params["A"], params["B"]  # locals, not self — see _eval_output
+        Ax = npa.matmul(A, npa.atleast_1d(x))
+        Bu = npa.matmul(B, npa.atleast_1d(u))
         return Ax + Bu
 
     @property
