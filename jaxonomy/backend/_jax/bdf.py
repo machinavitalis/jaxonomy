@@ -726,10 +726,11 @@ class BDFSolver(ODESolverImpl):
 
         # If the factor is negative, then the step is accepted.  Otherwise, we have to
         # update the step size and LU factorization for the next iteration.
-        (state, accepted) = jax.tree.map(
-            partial(jnp.where, factor > 0),
-            (self._update_dt(state, factor), False),
-            (state, True),
+        state, accepted = lax.cond(
+            factor > 0,
+            lambda s: (self._update_dt(s, factor), jnp.asarray(False)),
+            lambda s: (s, jnp.asarray(True)),
+            state,
         )
 
         return state, accepted, y_new, d, n_iter, fail_diag
