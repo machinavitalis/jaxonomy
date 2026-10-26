@@ -12,6 +12,42 @@ from jax.experimental import io_callback
 
 from ..results_data import AbstractResultsData
 
+
+def _compact_if(pred, compact, operand):
+    """``lax.cond(pred, compact, identity, operand)`` that stays cheap under vmap.
+
+    vmap turns a cond with a batched predicate into a select that runs both
+    branches, i.e. a full pass over the recording buffers on every step.  The
+    batching rule below compacts only when some member is full, and then
+    selects per member, so the result is the same as the select.
+    """
+
+    @jax.custom_batching.custom_vmap
+    def f(pred, operand):
+        return lax.cond(pred, compact, lambda op: op, operand)
+
+    @f.def_vmap
+    def _rule(axis_size, in_batched, pred, operand):
+        pred_b, op_b = in_batched
+        if not pred_b:
+            pred = jnp.broadcast_to(pred, (axis_size,))
+        operand = jax.tree.map(
+            lambda x, b: x if b else jnp.broadcast_to(x, (axis_size, *x.shape)),
+            operand, op_b,
+        )
+
+        def _some_full(op):
+            new = jax.vmap(compact)(op)
+            return jax.tree.map(
+                lambda n, o: jnp.where(pred.reshape((-1,) + (1,) * (n.ndim - 1)), n, o),
+                new, op,
+            )
+
+        out = lax.cond(jnp.any(pred), _some_full, lambda op: op, operand)
+        return out, jax.tree.map(lambda _: True, operand)
+
+    return f(pred, operand)
+
 if TYPE_CHECKING:
     from ...framework import SystemCallback, ContextBase
     from ..typing import Array
@@ -352,6 +388,10 @@ class JaxResultsData(AbstractResultsData):
     # ``{"kind": "default"}``.  See ``ResultsRecorder.classify_signal_cadence``.
     per_signal_classifications: Optional[dict[str, dict]] = None
 
+    # Static: set while the update runs under jax.vmap inside the simulator's
+    # batched loops (_recording_while_loop); selects the vmap-friendly paths.
+    vmapped: bool = False
+
     # T-012a-followup: per-step solver-interpolant buffer.  When non-None,
     # ``update`` accepts an ``ode_solver_state`` and snapshots its
     # ``(t_prev, t, interp_coeff)`` into the ring; finalize emits the
@@ -396,8 +436,11 @@ class JaxResultsData(AbstractResultsData):
         # Index of the current major step in the solution data buffer.
         index = self.buffer_index
 
-        # initialize the time buffer
-        self.time = jnp.where(index == 0, jnp.full_like(self.time, jnp.inf), self.time)
+        # initialize the time buffer (a no-op once created; skipped under vmap,
+        # where it is a full pass over the batched buffer on every step)
+        if not self.vmapped:
+            self.time = jnp.where(index == 0, jnp.full_like(self.time, jnp.inf), self.time)
+
 
         # T-138 decimation: only every ``record_stride``-th update call
         # consumes a buffer slot.  Unfired calls write to an out-of-bounds
@@ -447,9 +490,12 @@ class JaxResultsData(AbstractResultsData):
             new_outs = {k: v.at[:half].set(v[::2]) for k, v in outs.items()}
             return new_t, new_outs
 
-        time, outputs = lax.cond(
-            buffer_full, _compact, lambda operand: operand, (time, outputs)
-        )
+        if self.vmapped:
+            time, outputs = _compact_if(buffer_full, _compact, (time, outputs))
+        else:
+            time, outputs = lax.cond(
+                buffer_full, _compact, lambda operand: operand, (time, outputs)
+            )
         buffer_index = jnp.where(buffer_full, half, buffer_index)
         record_stride = jnp.where(
             buffer_full, self.record_stride * 2, self.record_stride
@@ -604,6 +650,7 @@ def _solution_flatten(solution: JaxResultsData):
         solution.buffer_length,
         solution.np_data,
         solution.per_signal_classifications,
+        solution.vmapped,
     )
     return children, aux_data
 
@@ -620,7 +667,7 @@ def _solution_unflatten(aux_data, children):
         per_signal_buffers,
         interpolant_buffer,
     ) = children
-    source_dict, buffer_length, np_data, per_signal_classifications = aux_data
+    source_dict, buffer_length, np_data, per_signal_classifications, vmapped = aux_data
     return JaxResultsData(
         source_dict=source_dict,
         time=time,
@@ -633,6 +680,7 @@ def _solution_unflatten(aux_data, children):
         np_data=np_data,
         per_signal_buffers=per_signal_buffers,
         per_signal_classifications=per_signal_classifications,
+        vmapped=vmapped,
         interpolant_buffer=interpolant_buffer,
     )
 

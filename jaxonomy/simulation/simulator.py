@@ -205,6 +205,22 @@ def _recorded_signal_key(recorded_signals) -> tuple:
     )
 
 
+def _under_vmap() -> bool:
+    """Whether ``simulate`` is being called under ``jax.vmap``.
+
+    O(1): looks at the current JAX trace instead of the context's leaves
+    (flattening a context costs microseconds per call).  Falls back to False
+    (the generic loops) if JAX internals move.
+    """
+    try:
+        from jax._src import core as _core
+        from jax._src.interpreters import batching as _batching
+
+        return isinstance(_core.trace_ctx.trace, _batching.BatchTrace)
+    except Exception:  # pragma: no cover - defensive against JAX internals
+        return False
+
+
 def _simulate_cache_key(system, options, t_span, context) -> tuple | None:
     """Build the cache key, or return ``None`` if this call must not be cached."""
     from ..framework.event import IntegerTime
@@ -1022,11 +1038,14 @@ def simulate(
     # Only the traced path has a compiled kernel worth keeping; the NumPy
     # backend runs a plain Python loop, so caching would pin a Simulator for
     # no gain.
+    batched = _under_vmap()
     cache_key = (
         _simulate_cache_key(system, options, t_span, context)
         if options.enable_tracing and options.reuse_compiled_kernel
         else None
     )
+    if cache_key is not None:
+        cache_key = (*cache_key, batched)
 
     entry = _SIMULATE_CACHE.get(cache_key) if cache_key is not None else None
     if entry is not None and entry.system_ref() is not system:
@@ -1040,6 +1059,7 @@ def simulate(
     if entry is None:
         ode_solver = ODESolver(system, options=options.ode_options)
         sim = Simulator(system, ode_solver=ode_solver, options=options)
+        sim.batched = batched
         logger.info("Simulator ready to start: %s, %s", options, ode_solver)
         run = _build_kernel(sim, options, t_span, context)
         if cache_key is not None:
@@ -1641,6 +1661,9 @@ class Simulator:
         # Should the simulation be run with autodiff enabled?  This will override
         # the `advance_to` method with a custom autodiff rule.
         self.enable_autodiff = options.enable_autodiff
+        # Set when the simulation runs under jax.vmap (see simulate()): the
+        # major- and minor-step loops then use _recording_while_loop.
+        self.batched = False
 
         if ode_solver is None:
             ode_solver = ODESolver(system, options=options.ode_options)
@@ -2002,10 +2025,20 @@ class Simulator:
         pure-Python loop (NumPy backend) is used.
         """
         use_bounded = self.enable_autodiff or self._explicit_max_major_steps
+        bound = self.max_major_steps
+        recording = (
+            self.batched
+            and backend.active_backend == "jax"
+            and not self.enable_autodiff
+            and _has_results_data(val)
+        )
         if use_bounded:
-            return _bounded_while_loop(cond_fun, body_fun, val, self.max_major_steps)
-        else:
-            return backend.while_loop(cond_fun, body_fun, val)
+            if recording:
+                return _recording_while_loop(cond_fun, body_fun, val, bound)
+            return _bounded_while_loop(cond_fun, body_fun, val, bound)
+        if recording:
+            return _recording_while_loop(cond_fun, body_fun, val)
+        return backend.while_loop(cond_fun, body_fun, val)
 
     def initialize(self, context: ContextBase) -> SimulatorState:
         """Perform initial setup for the simulation."""
@@ -2266,7 +2299,15 @@ class Simulator:
             return (solver_state.t < tf) & (~triggered)
 
         carry = (False, solver_state, context, results_data, zc_events)
-        triggered, solver_state, context, results_data, zc_events = backend.while_loop(
+        loop = (
+            _recording_while_loop
+            if self.batched
+            and backend.active_backend == "jax"
+            and not self.enable_autodiff
+            and results_data is not None
+            else backend.while_loop
+        )
+        triggered, solver_state, context, results_data, zc_events = loop(
             _cond_fun,
             _ode_step,
             carry,
@@ -3642,6 +3683,145 @@ class Simulator:
             logger.debug("Done finalizing solution")
 
         return sim_state
+
+
+def _has_results_data(val: Any) -> bool:
+    from ..backend._jax.results_data import JaxResultsData
+
+    return any(
+        isinstance(x, JaxResultsData)
+        for x in jax.tree_util.tree_leaves(
+            val, is_leaf=lambda x: isinstance(x, JaxResultsData)
+        )
+    )
+
+
+def _recording_while_loop(
+    cond_fun: Callable, body_fun: Callable, val: Any, cap: int | None = None
+) -> Any:
+    """``lax.while_loop`` whose vmap does not select over recording buffers.
+
+    With ``cap`` it is ``_bounded_while_loop`` instead (unbatched), and the
+    batched loop also stops after ``cap`` iterations.
+
+    vmap of a while loop with a batched predicate runs the body for every
+    member and keeps the old carry for members that are done: a select over
+    every carry leaf, including the recorder's (batch, buffer_length) arrays,
+    on every step.  Here members that are done run the body with a recorder
+    step that does not fire, so their buffer writes are dropped (out of
+    bounds) and the buffers are taken from the body unchanged; only the small
+    leaves are selected.  The result is the same as the plain loop's.
+    """
+    from ..backend._jax.results_data import JaxResultsData
+
+    def _plain(r):
+        return (
+            isinstance(r, JaxResultsData)
+            and r.per_signal_buffers is None
+            and r.interpolant_buffer is None
+        )
+
+    is_rd = lambda x: isinstance(x, JaxResultsData)  # noqa: E731
+
+    # custom_vmap cannot close over values that get batched, so the loop's
+    # closed-over values (every tracer it captures) become explicit arguments.
+    def _set_vmapped(tree, flag):
+        return jax.tree.map(
+            lambda x: dataclasses.replace(x, vmapped=flag) if _plain(x) else x,
+            tree,
+            is_leaf=is_rd,
+        )
+
+    def _explicit(fun, vmapped=False):
+        # The body is traced with the recorder marked ``vmapped`` (its
+        # vmap-friendly update); its outputs get the carry's flag back.
+        traced_val = _set_vmapped(val, True) if vmapped else val
+        closed, out_shape = jax.make_jaxpr(fun, return_shape=True)(traced_val)
+        # a loop body returns the carry's structure: give it the carry's flags
+        out_tree = jax.tree_util.tree_structure(val if vmapped else out_shape)
+        consts = closed.consts
+        traced = [isinstance(k, jax.core.Tracer) for k in consts]
+
+        def f(c, *dynamic):
+            it = iter(dynamic)
+            full = [next(it) if t else k for k, t in zip(consts, traced)]
+            out = jax.core.eval_jaxpr(closed.jaxpr, full, *jax.tree_util.tree_leaves(c))
+            return jax.tree_util.tree_unflatten(out_tree, out)
+
+        # concrete constants stay closed over (they are never batched)
+        return f, tuple(k for k, t in zip(consts, traced) if t)
+
+    cond_c, cond_k = _explicit(cond_fun)
+    body_c, body_k = _explicit(body_fun, vmapped=True)
+    n_cond = len(cond_k)
+
+    @jax.custom_batching.custom_vmap
+    def loop(val, *consts):
+        ck, bk = consts[:n_cond], consts[n_cond:]
+        cond = lambda c: cond_c(c, *ck)  # noqa: E731
+        body = lambda c: body_c(c, *bk)  # noqa: E731
+        if cap is None:
+            return lax.while_loop(cond, body, val)
+        return _bounded_while_loop(cond, body, val, cap)
+
+    @loop.def_vmap
+    def _loop_vmap(axis_size, in_batched, val, *consts):
+        val_batched, consts_batched = in_batched[0], in_batched[1:]
+        val = jax.tree.map(
+            lambda x, b: x if b else jnp.broadcast_to(x, (axis_size, *jnp.shape(x))),
+            val,
+            val_batched,
+        )
+        ck, bk = consts[:n_cond], consts[n_cond:]
+        ck_axes = tuple(0 if b else None for b in consts_batched[:n_cond])
+        bk_axes = tuple(0 if b else None for b in consts_batched[n_cond:])
+        vcond = jax.vmap(lambda c, *k: cond_c(c, *k), in_axes=(0, *ck_axes))
+        vbody = jax.vmap(lambda c, *k: body_c(c, *k), in_axes=(0, *bk_axes))
+        vcond = partial(lambda f, c: f(c, *ck), vcond)
+        vbody = partial(lambda f, c: f(c, *bk), vbody)
+
+        def _select(active, new, old):
+            a = active.reshape(active.shape + (1,) * (jnp.ndim(new) - 1))
+            return jnp.where(a, new, old)
+
+        def _mask(active, x):
+            if _plain(x):
+                return dataclasses.replace(
+                    x,
+                    # 1 % stride != 0 for every update in this body, however
+                    # many: nothing is recorded for members that are done.
+                    step_count=jnp.where(active, x.step_count, 1),
+                    record_stride=jnp.where(active, x.record_stride, 1 << 30),
+                )
+            return x
+
+        def _merge(active, new, old):
+            if _plain(new):
+                merged = jax.tree.map(partial(_select, active), new, old)
+                return dataclasses.replace(merged, time=new.time, outputs=new.outputs)
+            if is_rd(new):
+                return jax.tree.map(partial(_select, active), new, old)
+            return _select(active, new, old)
+
+        def _body(c):
+            active = vcond(c)
+            masked = jax.tree.map(partial(_mask, active), c, is_leaf=is_rd)
+            out = vbody(masked)
+            return jax.tree.map(partial(_merge, active), out, c, is_leaf=is_rd)
+
+        if cap is None:
+            out = lax.while_loop(lambda c: jnp.any(vcond(c)), _body, val)
+        else:
+            # A member whose condition is false stays unchanged, so the bounded
+            # loop can stop as soon as no member is active.
+            _, out = lax.while_loop(
+                lambda ic: (ic[0] < cap) & jnp.any(vcond(ic[1])),
+                lambda ic: (ic[0] + 1, _body(ic[1])),
+                (0, val),
+            )
+        return out, jax.tree.map(lambda _: True, out)
+
+    return loop(val, *cond_k, *body_k)
 
 
 def _bounded_while_loop(
