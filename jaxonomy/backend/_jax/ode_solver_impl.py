@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from jax._src.numpy.util import promote_dtypes_inexact
 from jax.flatten_util import ravel_pytree
-from jax.experimental.ode import ravel_first_arg
+from .rk4 import ravel_first_arg
 
 from ..ode_solver import ODESolverBase, ODESolverState
 

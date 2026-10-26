@@ -13,22 +13,27 @@ from jax import lax
 from jax._src.util import safe_map, safe_zip
 from jax.flatten_util import ravel_pytree
 from jax.tree_util import tree_leaves
-from jax._src import linear_util as lu
 
 map = safe_map
 zip = safe_zip
 
 
-def ravel_first_arg(f, unravel, debug_info):
-    return ravel_first_arg_(lu.wrap_init(f), unravel).call_wrapped
+def ravel_first_arg(f, unravel, debug_info=None):
+    """Wrap ``f(y, *args)`` to take and return flat arrays.
 
+    A plain closure, so it does not depend on JAX's private ``linear_util``
+    (whose ``wrap_init`` signature changed in JAX 0.11) nor on
+    ``jax.experimental.ode.ravel_first_arg`` (whose ``debug_info`` argument
+    was removed in JAX 0.11).  ``debug_info`` is accepted and ignored for
+    backwards compatibility.
+    """
+    del debug_info
 
-@lu.transformation
-def ravel_first_arg_(unravel, y_flat, *args):
-    y = unravel(y_flat)
-    ans = yield (y,) + args, {}
-    ans_flat, _ = ravel_pytree(ans)
-    yield ans_flat
+    def raveled(y_flat, *args):
+        ans_flat, _ = ravel_pytree(f(unravel(y_flat), *args))
+        return ans_flat
+
+    return raveled
 
 
 def runge_kutta_step(func, y0, t0, dt):

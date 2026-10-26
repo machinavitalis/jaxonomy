@@ -3967,13 +3967,30 @@ def _odeint_fwd(solver, ode_rhs, solver_state, tf, context, checkpoint=True):
 
 # The "reverse pass" through the ODE solve, using an augmented dynamical
 # system with the adjoint variables.
+def _is_inexact_array_like(element) -> bool:
+    """``equinox.is_inexact_array_like`` that tolerates ``__jax_array__ = None``.
+
+    equinox calls ``element.__jax_array__()`` whenever the attribute exists;
+    JAX >= 0.10 defines ``Tracer.__jax_array__ = None``, so equinox's version
+    raises on traced values.
+    """
+    to_array = getattr(element, "__jax_array__", None)
+    if callable(to_array):
+        element = to_array()
+    if isinstance(element, (np.ndarray, np.generic)):
+        return bool(np.issubdtype(element.dtype, np.inexact))
+    if isinstance(element, jax.Array):
+        return bool(jnp.issubdtype(element.dtype, jnp.inexact))
+    return isinstance(element, (float, complex))
+
+
 def _odeint_adj(solver, ode_rhs, _checkpoint, residuals, adjoints):
     primals, tf, context, ts, ys = residuals
 
     # The args may contain bools, ints, or otherwise non-differentiable data.
     # Here we can split the args into dynamic and static components, and only
     # pass the dynamic args through the adjoint system.
-    dynamic_args, static_args = eqx.partition(context, eqx.is_inexact_array_like)
+    dynamic_args, static_args = eqx.partition(context, _is_inexact_array_like)
 
     yf = primals.y
     yf_bar = adjoints.y
