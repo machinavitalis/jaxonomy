@@ -150,6 +150,9 @@ def _check_values_compatible(original_val, new_val):
     new_val = _coerce_scalar_for_jax(new_val)
 
     if _array_like(new_val, original_val):
+        if not hasattr(original_val, "shape"):
+            # Declared as a Python scalar, which has no shape or dtype of its own.
+            original_val = jnp.asarray(original_val)
         if new_val.shape != original_val.shape:
             raise ValueError(
                 f"Cannot change default value shape from {original_val.shape} to {new_val.shape}"

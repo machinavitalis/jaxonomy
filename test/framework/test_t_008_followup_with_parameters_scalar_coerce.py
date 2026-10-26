@@ -149,3 +149,50 @@ def test_with_parameter_leaf_error_names_offending_key():
     osc = _ScalarOsc(name="osc")
     with pytest.raises(ValueError, match="'c'"):
         osc.with_parameter("c", jnp.zeros(3))
+
+
+def _build_diagram_with_scalar_parameter(value):
+    """``src -> gain(k) -> integrator`` with ``k`` a diagram parameter."""
+    from jaxonomy.framework import Parameter
+    from jaxonomy.library import Constant, Integrator
+
+    k = Parameter(value, name="k")
+    builder = jaxonomy.DiagramBuilder()
+    src = builder.add(Constant(1.0, name="src"))
+    gain = builder.add(Gain(k, name="gain"))
+    integ = builder.add(Integrator(initial_state=0.0, name="out"))
+    builder.connect(src.output_ports[0], gain.input_ports[0])
+    builder.connect(gain.output_ports[0], integ.input_ports[0])
+    return builder.build(parameters={"k": k}), k
+
+
+def _final_output(diag):
+    out = next(s for s in diag.nodes if s.name == "out")
+    result = jaxonomy.simulate(
+        diag,
+        diag.create_context(),
+        (0.0, 1.0),
+        recorded_signals={"y": out.output_ports[0]},
+    )
+    return float(result.outputs["y"][-1])
+
+
+@pytest.mark.parametrize("new_value", [3.0, np.float64(3.0), jnp.asarray(3.0)])
+def test_with_parameters_replaces_a_diagram_parameter_declared_as_python_scalar(
+    new_value,
+):
+    """A diagram parameter declared from a Python float is replaced like one
+    declared from an array."""
+    diag, k = _build_diagram_with_scalar_parameter(1.0)
+    new = diag.with_parameters({"k": new_value})
+
+    # Unit input through the gain, integrated over 1 s, is the gain.
+    assert _final_output(new) == pytest.approx(3.0, rel=1e-6)
+    assert _final_output(diag) == pytest.approx(1.0, rel=1e-6)
+    assert k.get() == 1.0
+
+
+def test_with_parameters_scalar_diagram_parameter_error_names_offending_key():
+    diag, _ = _build_diagram_with_scalar_parameter(1.0)
+    with pytest.raises(ValueError, match="'k'"):
+        diag.with_parameters({"k": jnp.zeros(3)})
