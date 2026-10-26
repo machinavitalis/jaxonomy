@@ -342,6 +342,9 @@ class SystemBase:
             if key == "_dependency_graph":
                 result._dependency_graph = None
                 continue
+            if key == "_output_port_order":
+                # derived from _dependency_graph (holds it), rebuilt on demand
+                continue
             if key == "_phase1_reach_cache":
                 # derived from _dependency_graph (holds it), rebuilt on demand
                 continue
@@ -895,13 +898,28 @@ class SystemBase:
             self._phase1_reach_cache = (graph, reaches)
         return reaches
 
+    def _sorted_output_ports(self) -> List[OutputPort]:
+        """``sorted_callbacks`` filtered to output ports, cached per dependency graph.
+
+        The port cache is refreshed many times while a simulation is traced, and
+        sorting the callbacks each time is a topological sort of the whole
+        diagram.  The order only depends on the dependency graph, which is
+        rebuilt (a new object) whenever the system structure can change.
+        """
+        graph = self._dependency_graph
+        cached = self.__dict__.get("_output_port_order")
+        if graph is not None and cached is not None and cached[0] is graph:
+            return cached[1]
+        ports = [cb for cb in self.sorted_callbacks if isinstance(cb, OutputPort)]
+        if graph is not None:
+            self._output_port_order = (graph, ports)
+        return ports
+
     def recompute_port_cache(self, context: ContextBase) -> dict[Hashable, Array]:
         """Recompute all output ports and return them in a dictionary."""
         # The callbacks are already sorted in the correct order, so we can just
         # evaluate them in sequence, assuming all upstream values are correct.
-        for cb in self.sorted_callbacks:
-            if not isinstance(cb, OutputPort):
-                continue
+        for cb in self._sorted_output_ports():
             # Evaluate the callback and store the result in the cache
             val = cb.calc(context)
             context = context.with_port_cache_entry(hash(cb), val)

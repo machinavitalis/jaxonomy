@@ -1753,6 +1753,12 @@ class DiagramProcessing:
             del self.eqs[idx]
 
     @staticmethod
+    def _coefficient_keys(e: sp.Expr) -> frozenset:
+        """Terms of ``e`` with a nonzero coefficient, as in _are_proportional_exprs."""
+        c = sp.expand(e).as_coefficients_dict()
+        return frozenset(k for k, v in c.items() if v != sp.S.Zero)
+
+    @staticmethod
     def _are_proportional_exprs(e1: sp.Expr, e2: sp.Expr) -> bool:
         """
         Return True if ``e1`` and ``e2`` represent the same constraint
@@ -1821,6 +1827,9 @@ class DiagramProcessing:
             self.pp_eqs()
             print("\n")
 
+        # _are_proportional_exprs can only hold for expressions with the same
+        # set of nonzero-coefficient terms, so unique expressions are grouped by
+        # that set and each equation is compared within its group only.
         unique_exprs = {}
         duplicates = []
 
@@ -1829,7 +1838,8 @@ class DiagramProcessing:
             if self.verbose:
                 print(f"{idx=} {expr=} ")
             is_duplicate = False
-            for unique_idx, unique_expr in unique_exprs.items():
+            group = unique_exprs.setdefault(self._coefficient_keys(expr), {})
+            for unique_idx, unique_expr in group.items():
                 if self.verbose:
                     print(f"\t{unique_idx=} {unique_expr=}")
                 if self._are_proportional_exprs(expr, unique_expr):
@@ -1837,7 +1847,7 @@ class DiagramProcessing:
                     is_duplicate = True
                     break
             if not is_duplicate:
-                unique_exprs[idx] = expr
+                group[idx] = expr
 
         if duplicates:
             for duplicate in duplicates:
