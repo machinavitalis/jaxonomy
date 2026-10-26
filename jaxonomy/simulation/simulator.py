@@ -3984,12 +3984,20 @@ def _next_update_time(periodic_events: EventCollection, current_time: int) -> in
     if not periodic_events.has_events:
         return IntegerTime.max_int_time, periodic_events
 
-    # 1. Compute the next sample time for each event
+    # 1. Compute the next sample time for each event. Events that share a
+    # period and an offset fire together, so each distinct pair is computed
+    # (and traced) once.
+    shared = {}
+
     def _replace_sample_time(event_data):
-        return dataclasses.replace(
-            event_data,
-            next_sample_time=_next_sample_time(current_time, event_data),
-        )
+        key = (event_data.period, event_data.offset)
+        try:
+            next_time = shared[key]
+        except KeyError:
+            next_time = shared[key] = _next_sample_time(current_time, event_data)
+        except TypeError:  # array-valued period or offset: not hashable
+            next_time = _next_sample_time(current_time, event_data)
+        return dataclasses.replace(event_data, next_sample_time=next_time)
 
     timed_events = jax.tree_util.tree_map(
         _replace_sample_time,
