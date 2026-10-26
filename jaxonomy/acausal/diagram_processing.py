@@ -226,8 +226,16 @@ class DiagramProcessing:
         # will be applied. this means that the instance of the function
         # symbol will differ from the symbol key in the self.syms dict.
         # syms_subs() below is meant to fix this discrepancy.
+        # Returns the indices of the equations it touched.  An equation that
+        # contains neither `sym` nor a Derivative is left as is: the
+        # substitution would be a no-op and Eqn.subs would not call doit().
+        touched = []
         for i, eq in self.eqs.items():
+            if hasattr(eq.e, "has") and not eq.e.has(sym, sp.Derivative):
+                continue
             self.eqs[i] = eq.subs(sym, sub_expr)
+            touched.append(i)
+        return touched
 
     def syms_subs(self, sym, sub_expr):
         # given a substitution pair, perform the subsitution in any
@@ -1486,7 +1494,7 @@ class DiagramProcessing:
                     self.aliaser_map[aliaser] = aliasee_list
 
                 # perform the substitution
-                self.eqs_subs(alias_sym, alias_sub_expr)
+                touched = set(self.eqs_subs(alias_sym, alias_sub_expr))
                 self.syms_subs(alias_sym, alias_sub_expr)  # LUT and COND syms
                 self.zcs_subs(alias_sym, alias_sub_expr)  # for ZC exprs
 
@@ -1511,7 +1519,8 @@ class DiagramProcessing:
                 for _idx, _eq in self.eqs.items():
                     if isinstance(_eq.e, sp_bool_types):
                         changed_idxs.add(_idx)
-                    elif alias_sym in _eq.expr.atoms():
+                    elif _idx in touched and alias_sym in _eq.expr.atoms():
+                        # an untouched equation does not contain alias_sym
                         changed_idxs.add(_idx)
                 workset = list(set(workset) | changed_idxs)
 
