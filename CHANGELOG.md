@@ -15,6 +15,18 @@ Pure internal refactors live in commits, not here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Follow-up simulations reuse the compiled kernel** (`simulate`, `Context.with_parameter`, `Diagram.with_parameters`): a parameter changed through the context with a Python scalar no longer compiles again on its first new value, and a `with_parameters` copy runs on the kernel of the diagram it was copied from, unless the new value reconfigures a block or the kernel calls back into Python. `benchmarks/jit_cache.py` measures 2.6 ms per copied value on a 6-block loop and 44 ms on a 159-block diagram, with no compilation.
+- **`enable_persistent_jit_cache()` stores every compiled program**, small models included, and a later process reuses them for other parameter and initial values.
+- **The BDF solver keeps its Jacobian across steps for pure ODEs** and refreshes it when Newton fails; DAEs still refresh it every step. Results of stiff ODE runs move within solver tolerance.
+- **Shorter model builds, first calls and repeated calls** in `simulate`, `simulate_batch`, the acausal compiler and `MLP` blocks: repeated tracing, per-call walks over the diagram and one-by-one eager compiles are gone. `docs/perf_loop.md` describes how the changes were found and measured.
+
+### Fixed
+
+- **Compiled simulations follow a configuration change made through a parameter** (`simulate`, a jitted `Simulator.advance_to`): a block that reconfigures itself from a parameter value when a context is created, such as a `PID` whose gain moves to or from zero, is traced again instead of running the program compiled for its previous configuration. The context carries the configuration it was created for as `static_key`.
+- **`Diagram.with_parameters` replaces a diagram parameter declared from a Python scalar** (`Parameter(1.0)`): the new value is checked for shape and dtype like that of an array-declared parameter.
+
 ## [3.4.1] - 2026-08-11
 
 ### Added

@@ -1,0 +1,1725 @@
+{
+ "description": "Release 3.4.1 against the optimized code. Every scenario was run in fresh processes on both versions back to back, alternating the order; times are medians over the passes. speedup is time before / time after; overall figures are geometric means over (scenario, workload) pairs.",
+ "before": "release 3.4.1",
+ "after": "the commit that added this file",
+ "environment": {
+  "machine": "Apple M4 Pro, 12 cores, 64 GB, macOS 26.5",
+  "device": "CPU, one thread per process",
+  "python": "3.11",
+  "jax": "0.9.2",
+  "passes": 3
+ },
+ "pairs": 180,
+ "speedup": 2.877,
+ "speedup_first_three_workloads": 1.529,
+ "by_workload": [
+  {
+   "workload": "interactive",
+   "label": "One run",
+   "what": "build, compile, simulate once",
+   "pairs": 33,
+   "speedup": 1.31
+  },
+  {
+   "workload": "simulation",
+   "label": "100 runs",
+   "what": "the same call 100 times",
+   "pairs": 33,
+   "speedup": 1.623
+  },
+  {
+   "workload": "rollout",
+   "label": "10,000 runs",
+   "what": "the same call 10,000 times",
+   "pairs": 33,
+   "speedup": 1.682
+  },
+  {
+   "workload": "sweep",
+   "label": "Sweep, same diagram",
+   "what": "10 values through the context",
+   "pairs": 33,
+   "speedup": 7.373
+  },
+  {
+   "workload": "copies",
+   "label": "Sweep, diagram copies",
+   "what": "10 values via with_parameters",
+   "pairs": 15,
+   "speedup": 37.329
+  },
+  {
+   "workload": "restart",
+   "label": "Second process",
+   "what": "first result after a restart",
+   "pairs": 33,
+   "speedup": 2.334
+  }
+ ],
+ "by_scenario": [
+  {
+   "scenario": "bouncing_balls",
+   "pairs": 28,
+   "speedup": 2.436,
+   "speedup_first_three_workloads": 1.053
+  },
+  {
+   "scenario": "brusselator",
+   "pairs": 15,
+   "speedup": 3.17,
+   "speedup_first_three_workloads": 2.731
+  },
+  {
+   "scenario": "ensemble",
+   "pairs": 25,
+   "speedup": 3.18,
+   "speedup_first_three_workloads": 2.894
+  },
+  {
+   "scenario": "neural_ode",
+   "pairs": 28,
+   "speedup": 3.184,
+   "speedup_first_three_workloads": 1.256
+  },
+  {
+   "scenario": "osc_chain",
+   "pairs": 28,
+   "speedup": 2.195,
+   "speedup_first_three_workloads": 1.07
+  },
+  {
+   "scenario": "pid_loops",
+   "pairs": 28,
+   "speedup": 2.848,
+   "speedup_first_three_workloads": 1.253
+  },
+  {
+   "scenario": "rc_ladder",
+   "pairs": 28,
+   "speedup": 3.533,
+   "speedup_first_three_workloads": 1.759
+  }
+ ],
+ "measurements": [
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "interactive",
+   "before_s": 0.427905,
+   "after_s": 0.396292,
+   "speedup": 1.0798
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "simulation",
+   "before_s": 0.527129,
+   "after_s": 0.490159,
+   "speedup": 1.0754
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "rollout",
+   "before_s": 10.449543,
+   "after_s": 9.876828,
+   "speedup": 1.058
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "sweep",
+   "before_s": 0.211726,
+   "after_s": 0.009206,
+   "speedup": 22.9992
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "copies",
+   "before_s": 2.044692,
+   "after_s": 0.015276,
+   "speedup": 133.8518
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 1,
+   "workload": "restart",
+   "before_s": 0.408821,
+   "after_s": 0.182322,
+   "speedup": 2.2423
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 1.054869,
+   "after_s": 0.987353,
+   "speedup": 1.0684
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 2.40669,
+   "after_s": 2.204235,
+   "speedup": 1.0918
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 137.588767,
+   "after_s": 123.89251,
+   "speedup": 1.1105
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.979976,
+   "after_s": 0.122236,
+   "speedup": 8.0171
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "copies",
+   "before_s": 9.161889,
+   "after_s": 0.178897,
+   "speedup": 51.2132
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 1.04965,
+   "after_s": 0.564913,
+   "speedup": 1.8581
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "interactive",
+   "before_s": 0.524692,
+   "after_s": 0.488845,
+   "speedup": 1.0733
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "simulation",
+   "before_s": 0.784665,
+   "after_s": 0.726291,
+   "speedup": 1.0804
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "rollout",
+   "before_s": 26.781972,
+   "after_s": 24.470846,
+   "speedup": 1.0944
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "sweep",
+   "before_s": 0.322446,
+   "after_s": 0.023517,
+   "speedup": 13.7111
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "copies",
+   "before_s": 3.218572,
+   "after_s": 0.041175,
+   "speedup": 78.1677
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "forward",
+   "size": 4,
+   "workload": "restart",
+   "before_s": 0.527825,
+   "after_s": 0.238145,
+   "speedup": 2.2164
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 1,
+   "workload": "interactive",
+   "before_s": 0.854799,
+   "after_s": 0.854345,
+   "speedup": 1.0005
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 1,
+   "workload": "simulation",
+   "before_s": 1.307408,
+   "after_s": 1.30928,
+   "speedup": 0.9986
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 1,
+   "workload": "rollout",
+   "before_s": 46.568258,
+   "after_s": 46.802717,
+   "speedup": 0.995
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 1,
+   "workload": "sweep",
+   "before_s": 0.045566,
+   "after_s": 0.045716,
+   "speedup": 0.9967
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 1,
+   "workload": "restart",
+   "before_s": 0.834134,
+   "after_s": 0.512172,
+   "speedup": 1.6286
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "interactive",
+   "before_s": 1.695965,
+   "after_s": 1.702989,
+   "speedup": 0.9959
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "simulation",
+   "before_s": 2.915653,
+   "after_s": 2.855481,
+   "speedup": 1.0211
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "rollout",
+   "before_s": 124.884452,
+   "after_s": 118.104708,
+   "speedup": 1.0574
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "sweep",
+   "before_s": 0.119568,
+   "after_s": 0.113197,
+   "speedup": 1.0563
+  },
+  {
+   "scenario": "bouncing_balls",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "restart",
+   "before_s": 1.695386,
+   "after_s": 1.174348,
+   "speedup": 1.4437
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 12,
+   "workload": "interactive",
+   "before_s": 0.842194,
+   "after_s": 0.738931,
+   "speedup": 1.1397
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 12,
+   "workload": "simulation",
+   "before_s": 12.491749,
+   "after_s": 3.427161,
+   "speedup": 3.6449
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 12,
+   "workload": "rollout",
+   "before_s": 1177.447259,
+   "after_s": 272.250213,
+   "speedup": 4.3249
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 12,
+   "workload": "sweep",
+   "before_s": 1.186051,
+   "after_s": 0.274383,
+   "speedup": 4.3226
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 12,
+   "workload": "restart",
+   "before_s": 0.850877,
+   "after_s": 0.264263,
+   "speedup": 3.2198
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 20,
+   "workload": "interactive",
+   "before_s": 1.907071,
+   "after_s": 0.880092,
+   "speedup": 2.1669
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 20,
+   "workload": "simulation",
+   "before_s": 118.182525,
+   "after_s": 17.28434,
+   "speedup": 6.8375
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 20,
+   "workload": "rollout",
+   "before_s": 11745.727872,
+   "after_s": 1657.709154,
+   "speedup": 7.0855
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 20,
+   "workload": "sweep",
+   "before_s": 11.753338,
+   "after_s": 1.623821,
+   "speedup": 7.2381
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 20,
+   "workload": "restart",
+   "before_s": 1.93777,
+   "after_s": 0.413325,
+   "speedup": 4.6882
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 6,
+   "workload": "interactive",
+   "before_s": 0.783448,
+   "after_s": 0.71019,
+   "speedup": 1.1032
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 6,
+   "workload": "simulation",
+   "before_s": 1.715081,
+   "after_s": 1.072553,
+   "speedup": 1.5991
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 6,
+   "workload": "rollout",
+   "before_s": 94.878393,
+   "after_s": 37.308887,
+   "speedup": 2.5431
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 6,
+   "workload": "sweep",
+   "before_s": 0.092392,
+   "after_s": 0.036038,
+   "speedup": 2.5638
+  },
+  {
+   "scenario": "brusselator",
+   "kind": "forward",
+   "size": 6,
+   "workload": "restart",
+   "before_s": 0.772327,
+   "after_s": 0.24099,
+   "speedup": 3.2048
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 0.422961,
+   "after_s": 0.380284,
+   "speedup": 1.1122
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 1.242524,
+   "after_s": 0.423408,
+   "speedup": 2.9346
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 83.198796,
+   "after_s": 4.735778,
+   "speedup": 17.5681
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.081919,
+   "after_s": 0.004438,
+   "speedup": 18.4574
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 0.411033,
+   "after_s": 0.195252,
+   "speedup": 2.1051
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 256,
+   "workload": "interactive",
+   "before_s": 0.438171,
+   "after_s": 0.395573,
+   "speedup": 1.1077
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 256,
+   "workload": "simulation",
+   "before_s": 3.849625,
+   "after_s": 0.66964,
+   "speedup": 5.7488
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 256,
+   "workload": "rollout",
+   "before_s": 344.994962,
+   "after_s": 28.07635,
+   "speedup": 12.2877
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 256,
+   "workload": "sweep",
+   "before_s": 0.354021,
+   "after_s": 0.027924,
+   "speedup": 12.678
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 256,
+   "workload": "restart",
+   "before_s": 0.460012,
+   "after_s": 0.198693,
+   "speedup": 2.3152
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 4096,
+   "workload": "interactive",
+   "before_s": 1.127269,
+   "after_s": 0.432067,
+   "speedup": 2.609
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 4096,
+   "workload": "simulation",
+   "before_s": 70.84921,
+   "after_s": 3.56801,
+   "speedup": 19.8568
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 4096,
+   "workload": "rollout",
+   "before_s": 7043.043243,
+   "after_s": 317.162297,
+   "speedup": 22.2064
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 4096,
+   "workload": "sweep",
+   "before_s": 7.113103,
+   "after_s": 0.317446,
+   "speedup": 22.4073
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "forward",
+   "size": 4096,
+   "workload": "restart",
+   "before_s": 1.16009,
+   "after_s": 0.235336,
+   "speedup": 4.9295
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 0.879735,
+   "after_s": 0.891526,
+   "speedup": 0.9868
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 1.218983,
+   "after_s": 1.14755,
+   "speedup": 1.0622
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 35.143852,
+   "after_s": 26.749968,
+   "speedup": 1.3138
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.03369,
+   "after_s": 0.025809,
+   "speedup": 1.3054
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 0.87374,
+   "after_s": 0.574784,
+   "speedup": 1.5201
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 256,
+   "workload": "interactive",
+   "before_s": 0.917652,
+   "after_s": 0.91473,
+   "speedup": 1.0032
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 256,
+   "workload": "simulation",
+   "before_s": 3.682695,
+   "after_s": 3.435852,
+   "speedup": 1.0718
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 256,
+   "workload": "rollout",
+   "before_s": 280.186993,
+   "after_s": 255.548116,
+   "speedup": 1.0964
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 256,
+   "workload": "sweep",
+   "before_s": 0.281491,
+   "after_s": 0.250112,
+   "speedup": 1.1255
+  },
+  {
+   "scenario": "ensemble",
+   "kind": "gradient",
+   "size": 256,
+   "workload": "restart",
+   "before_s": 0.914312,
+   "after_s": 0.592002,
+   "speedup": 1.5444
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 0.811874,
+   "after_s": 0.564441,
+   "speedup": 1.4384
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 0.829723,
+   "after_s": 0.580791,
+   "speedup": 1.4286
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 2.614584,
+   "after_s": 2.215729,
+   "speedup": 1.18
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.178522,
+   "after_s": 0.001649,
+   "speedup": 108.2858
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "copies",
+   "before_s": 1.897631,
+   "after_s": 0.043049,
+   "speedup": 44.0809
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 0.812252,
+   "after_s": 0.237115,
+   "speedup": 3.4256
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "interactive",
+   "before_s": 0.75204,
+   "after_s": 0.508744,
+   "speedup": 1.4782
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "simulation",
+   "before_s": 0.824407,
+   "after_s": 0.579591,
+   "speedup": 1.4224
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "rollout",
+   "before_s": 8.06115,
+   "after_s": 7.664343,
+   "speedup": 1.0518
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "sweep",
+   "before_s": 0.189073,
+   "after_s": 0.00762,
+   "speedup": 24.814
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "copies",
+   "before_s": 1.875785,
+   "after_s": 0.055974,
+   "speedup": 33.512
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 256,
+   "workload": "restart",
+   "before_s": 0.742436,
+   "after_s": 0.235543,
+   "speedup": 3.152
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "interactive",
+   "before_s": 0.81167,
+   "after_s": 0.557702,
+   "speedup": 1.4554
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "simulation",
+   "before_s": 0.832919,
+   "after_s": 0.577857,
+   "speedup": 1.4414
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "rollout",
+   "before_s": 2.95783,
+   "after_s": 2.593327,
+   "speedup": 1.1406
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "sweep",
+   "before_s": 0.193854,
+   "after_s": 0.001937,
+   "speedup": 100.0626
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "copies",
+   "before_s": 2.04694,
+   "after_s": 0.045031,
+   "speedup": 45.4567
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "forward",
+   "size": 64,
+   "workload": "restart",
+   "before_s": 0.810515,
+   "after_s": 0.235337,
+   "speedup": 3.4441
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 1.262478,
+   "after_s": 0.990581,
+   "speedup": 1.2745
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 1.598744,
+   "after_s": 1.323856,
+   "speedup": 1.2076
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 35.225302,
+   "after_s": 34.65139,
+   "speedup": 1.0166
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.032825,
+   "after_s": 0.032779,
+   "speedup": 1.0014
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 1.274707,
+   "after_s": 0.520163,
+   "speedup": 2.4506
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 64,
+   "workload": "interactive",
+   "before_s": 1.338239,
+   "after_s": 1.043896,
+   "speedup": 1.282
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 64,
+   "workload": "simulation",
+   "before_s": 1.860812,
+   "after_s": 1.569414,
+   "speedup": 1.1857
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 64,
+   "workload": "rollout",
+   "before_s": 54.118154,
+   "after_s": 54.121263,
+   "speedup": 0.9999
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 64,
+   "workload": "sweep",
+   "before_s": 0.058152,
+   "after_s": 0.058766,
+   "speedup": 0.9896
+  },
+  {
+   "scenario": "neural_ode",
+   "kind": "gradient",
+   "size": 64,
+   "workload": "restart",
+   "before_s": 1.342246,
+   "after_s": 0.55239,
+   "speedup": 2.4299
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 0.578947,
+   "after_s": 0.515257,
+   "speedup": 1.1236
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 0.866686,
+   "after_s": 0.778218,
+   "speedup": 1.1137
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 29.640618,
+   "after_s": 27.07434,
+   "speedup": 1.0948
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.463268,
+   "after_s": 0.024815,
+   "speedup": 18.6688
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "copies",
+   "before_s": 4.949668,
+   "after_s": 0.362949,
+   "speedup": 13.6374
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 0.573073,
+   "after_s": 0.296063,
+   "speedup": 1.9356
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "interactive",
+   "before_s": 0.315096,
+   "after_s": 0.302947,
+   "speedup": 1.0401
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "simulation",
+   "before_s": 0.361392,
+   "after_s": 0.340458,
+   "speedup": 1.0615
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "rollout",
+   "before_s": 4.99093,
+   "after_s": 4.091648,
+   "speedup": 1.2198
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "sweep",
+   "before_s": 0.210217,
+   "after_s": 0.003752,
+   "speedup": 56.0251
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "copies",
+   "before_s": 2.253192,
+   "after_s": 0.074583,
+   "speedup": 30.2104
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 4,
+   "workload": "restart",
+   "before_s": 0.326432,
+   "after_s": 0.15924,
+   "speedup": 2.0499
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "interactive",
+   "before_s": 1.312897,
+   "after_s": 1.266969,
+   "speedup": 1.0363
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "simulation",
+   "before_s": 1.872532,
+   "after_s": 1.708358,
+   "speedup": 1.0961
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "rollout",
+   "before_s": 57.83603,
+   "after_s": 45.847202,
+   "speedup": 1.2615
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "sweep",
+   "before_s": 1.119643,
+   "after_s": 0.043427,
+   "speedup": 25.7825
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "copies",
+   "before_s": 13.107057,
+   "after_s": 1.12785,
+   "speedup": 11.6213
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "forward",
+   "size": 48,
+   "workload": "restart",
+   "before_s": 1.334064,
+   "after_s": 0.797208,
+   "speedup": 1.6734
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 3.618705,
+   "after_s": 3.486497,
+   "speedup": 1.0379
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 4.39624,
+   "after_s": 4.290579,
+   "speedup": 1.0246
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 82.149685,
+   "after_s": 84.698772,
+   "speedup": 0.9699
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 0.079941,
+   "after_s": 0.079835,
+   "speedup": 1.0013
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 2.732292,
+   "after_s": 2.597487,
+   "speedup": 1.0519
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "interactive",
+   "before_s": 1.197642,
+   "after_s": 1.186133,
+   "speedup": 1.0097
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "simulation",
+   "before_s": 1.701532,
+   "after_s": 1.693887,
+   "speedup": 1.0045
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "rollout",
+   "before_s": 52.090582,
+   "after_s": 52.469242,
+   "speedup": 0.9928
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "sweep",
+   "before_s": 0.051581,
+   "after_s": 0.050973,
+   "speedup": 1.0119
+  },
+  {
+   "scenario": "osc_chain",
+   "kind": "gradient",
+   "size": 4,
+   "workload": "restart",
+   "before_s": 1.174213,
+   "after_s": 0.813221,
+   "speedup": 1.4439
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "interactive",
+   "before_s": 0.340544,
+   "after_s": 0.314228,
+   "speedup": 1.0837
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "simulation",
+   "before_s": 0.397327,
+   "after_s": 0.366507,
+   "speedup": 1.0841
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "rollout",
+   "before_s": 6.075684,
+   "after_s": 5.594444,
+   "speedup": 1.086
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "sweep",
+   "before_s": 0.221818,
+   "after_s": 0.005191,
+   "speedup": 42.7333
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "copies",
+   "before_s": 2.27129,
+   "after_s": 0.043413,
+   "speedup": 52.318
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 2,
+   "workload": "restart",
+   "before_s": 0.329581,
+   "after_s": 0.159937,
+   "speedup": 2.0607
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "interactive",
+   "before_s": 3.401044,
+   "after_s": 1.180038,
+   "speedup": 2.8821
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "simulation",
+   "before_s": 3.989108,
+   "after_s": 1.694372,
+   "speedup": 2.3543
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "rollout",
+   "before_s": 62.795443,
+   "after_s": 53.127759,
+   "speedup": 1.182
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "sweep",
+   "before_s": 3.408554,
+   "after_s": 0.053138,
+   "speedup": 64.1459
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "copies",
+   "before_s": 34.876281,
+   "after_s": 0.734314,
+   "speedup": 47.495
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 32,
+   "workload": "restart",
+   "before_s": 3.347585,
+   "after_s": 0.759602,
+   "speedup": 4.407
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "interactive",
+   "before_s": 0.655,
+   "after_s": 0.470849,
+   "speedup": 1.3911
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "simulation",
+   "before_s": 0.948322,
+   "after_s": 0.748166,
+   "speedup": 1.2675
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "rollout",
+   "before_s": 30.280527,
+   "after_s": 28.479866,
+   "speedup": 1.0632
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "sweep",
+   "before_s": 0.554955,
+   "after_s": 0.02797,
+   "speedup": 19.8413
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "copies",
+   "before_s": 5.702771,
+   "after_s": 0.219786,
+   "speedup": 25.9469
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "forward",
+   "size": 8,
+   "workload": "restart",
+   "before_s": 0.65011,
+   "after_s": 0.267715,
+   "speedup": 2.4284
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "interactive",
+   "before_s": 0.944391,
+   "after_s": 0.871563,
+   "speedup": 1.0836
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "simulation",
+   "before_s": 1.561755,
+   "after_s": 1.481956,
+   "speedup": 1.0538
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "rollout",
+   "before_s": 63.29811,
+   "after_s": 62.521232,
+   "speedup": 1.0124
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "sweep",
+   "before_s": 0.06087,
+   "after_s": 0.061037,
+   "speedup": 0.9973
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "restart",
+   "before_s": 0.954266,
+   "after_s": 0.609925,
+   "speedup": 1.5646
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 8,
+   "workload": "interactive",
+   "before_s": 2.558996,
+   "after_s": 2.155536,
+   "speedup": 1.1872
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 8,
+   "workload": "simulation",
+   "before_s": 3.55168,
+   "after_s": 3.153565,
+   "speedup": 1.1262
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 8,
+   "workload": "rollout",
+   "before_s": 102.820045,
+   "after_s": 102.956427,
+   "speedup": 0.9987
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 8,
+   "workload": "sweep",
+   "before_s": 0.101263,
+   "after_s": 0.102455,
+   "speedup": 0.9884
+  },
+  {
+   "scenario": "pid_loops",
+   "kind": "gradient",
+   "size": 8,
+   "workload": "restart",
+   "before_s": 2.544784,
+   "after_s": 1.682695,
+   "speedup": 1.5123
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "interactive",
+   "before_s": 6.972525,
+   "after_s": 2.637806,
+   "speedup": 2.6433
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "simulation",
+   "before_s": 8.098944,
+   "after_s": 3.297877,
+   "speedup": 2.4558
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "rollout",
+   "before_s": 120.740884,
+   "after_s": 69.304956,
+   "speedup": 1.7422
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "sweep",
+   "before_s": 1.079766,
+   "after_s": 0.068727,
+   "speedup": 15.7108
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "copies",
+   "before_s": 19.147015,
+   "after_s": 1.28612,
+   "speedup": 14.8874
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 16,
+   "workload": "restart",
+   "before_s": 6.918751,
+   "after_s": 1.663408,
+   "speedup": 4.1594
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "interactive",
+   "before_s": 1.60989,
+   "after_s": 0.891114,
+   "speedup": 1.8066
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "simulation",
+   "before_s": 1.721712,
+   "after_s": 0.98188,
+   "speedup": 1.7535
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "rollout",
+   "before_s": 12.903912,
+   "after_s": 10.05846,
+   "speedup": 1.2829
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "sweep",
+   "before_s": 0.390686,
+   "after_s": 0.008981,
+   "speedup": 43.4999
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "copies",
+   "before_s": 5.501209,
+   "after_s": 0.103701,
+   "speedup": 53.0489
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 2,
+   "workload": "restart",
+   "before_s": 1.570499,
+   "after_s": 0.475593,
+   "speedup": 3.3022
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "interactive",
+   "before_s": 2.917216,
+   "after_s": 1.330906,
+   "speedup": 2.1919
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "simulation",
+   "before_s": 3.224251,
+   "after_s": 1.513908,
+   "speedup": 2.1298
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "rollout",
+   "before_s": 33.927726,
+   "after_s": 19.814142,
+   "speedup": 1.7123
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "sweep",
+   "before_s": 0.5749,
+   "after_s": 0.019253,
+   "speedup": 29.861
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "copies",
+   "before_s": 8.764005,
+   "after_s": 0.201867,
+   "speedup": 43.4146
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "forward",
+   "size": 6,
+   "workload": "restart",
+   "before_s": 2.889478,
+   "after_s": 0.776294,
+   "speedup": 3.7221
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "interactive",
+   "before_s": 2.932968,
+   "after_s": 2.253568,
+   "speedup": 1.3015
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "simulation",
+   "before_s": 3.812391,
+   "after_s": 2.776433,
+   "speedup": 1.3731
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "rollout",
+   "before_s": 91.754731,
+   "after_s": 55.062938,
+   "speedup": 1.6664
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "sweep",
+   "before_s": 0.098839,
+   "after_s": 0.056887,
+   "speedup": 1.7375
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 2,
+   "workload": "restart",
+   "before_s": 2.945881,
+   "after_s": 1.32073,
+   "speedup": 2.2305
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 6,
+   "workload": "interactive",
+   "before_s": 5.435418,
+   "after_s": 3.830746,
+   "speedup": 1.4189
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 6,
+   "workload": "simulation",
+   "before_s": 10.915394,
+   "after_s": 6.708308,
+   "speedup": 1.6271
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 6,
+   "workload": "rollout",
+   "before_s": 558.912984,
+   "after_s": 294.464543,
+   "speedup": 1.8981
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 6,
+   "workload": "sweep",
+   "before_s": 0.613278,
+   "after_s": 0.325015,
+   "speedup": 1.8869
+  },
+  {
+   "scenario": "rc_ladder",
+   "kind": "gradient",
+   "size": 6,
+   "workload": "restart",
+   "before_s": 4.189421,
+   "after_s": 2.362228,
+   "speedup": 1.7735
+  }
+ ]
+}

@@ -51,6 +51,61 @@ JIT (~50 ms) is the only compile-time cost; resampling and stacking are
 now fully host-side numpy with no per-shape recompiles. Sim wall time
 still scales linearly with N as expected.
 
+## `jit_cache.py` — persistent cache, kernel reuse, repeated gradients
+
+The measured run behind `docs/jit_cache.md`. Every number comes from its
+own Python process; values are medians over `--runs` processes.
+
+```bash
+python benchmarks/jit_cache.py            # print the tables
+python benchmarks/jit_cache.py --json out.json
+```
+
+Measured on macOS-arm64, Python 3.11, JAX 0.9.2, 5 processes per value.
+
+Build + first `simulate` in a fresh process:
+
+| model | no cache | writing the cache | later process, other values | cache size |
+| --- | --- | --- | --- | --- |
+| pid_loop (6 blocks) | 239 ms | 238 ms | 119 ms (0 new entries) | 59 kB |
+| oscillator_chain (159 blocks) | 713 ms | 730 ms | 402 ms (0 new entries) | 180 kB |
+
+More runs in the same process:
+
+| model | first simulate | same call again | new value through the context | new value through `Diagram.with_parameters` | the same with the disk cache on |
+| --- | --- | --- | --- | --- | --- |
+| pid_loop | 182 ms | 0.4 ms | 0.3 ms (0 compiles) | 2.6 ms (0 compiles per value) | 2.5 ms (0 new cache entries per value) |
+| oscillator_chain | 605 ms | 3.1 ms | 3.0 ms (0 compiles) | 44 ms (0 compiles per value) | 43 ms (0 new cache entries per value) |
+
+Gradient of a scalar loss with respect to the initial state:
+
+| model | bare: first call | bare: later calls | jitted: first call | jitted: later calls |
+| --- | --- | --- | --- | --- |
+| pid_loop | 769 ms (10 programs) | 6.2 ms | 648 ms (1 program) | 3.7 ms |
+| oscillator_chain | 5710 ms (11 programs) | 75 ms | 4926 ms (1 program) | 11 ms |
+
+## `perf_loop/` — measurements behind `docs/perf_loop.md`
+
+Recorded once, on the machine named in the files; not re-run by CI.
+
+- `accepted_changes.json`: every change the optimization loop accepted, with
+  the speedup measured when it was accepted, the later replication, and the
+  running product over the kept ones.
+- `end_to_end.json`: release 3.4.1 against the optimized code on every
+  (scenario, workload) pair of the loop's grid, with the before and after
+  times and the summaries by workload and by scenario family.
+- `make_figures.py`: redraws the two figures of the page from those files
+  (standard library only).
+
+```bash
+python benchmarks/perf_loop/make_figures.py
+```
+
+`test/docs/test_perf_loop_data.py` checks that the summaries, the figures and
+the numbers quoted on the page follow from the recorded measurements. The
+loop, its scenario grid and its reference outputs are not in this repository;
+`jit_cache.py` above reproduces the follow-up-run effects on two models.
+
 ## T-017a — `simulate_batch` finalize hotspot (resolved)
 
 T-017's profile pointed at "vmap-of-jit lowering," but instrumented

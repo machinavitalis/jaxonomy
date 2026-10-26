@@ -1,0 +1,65 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 860 400' width='860' height='400' role='img' aria-label='Cumulative speedup of the accepted changes by loop iteration'>
+<title>Cumulative speedup of the accepted changes by loop iteration</title>
+<rect width='860' height='400' rx='10' fill='#ffffff' stroke='#d9e2ec'/>
+<text x='70.0' y='30.0' font-size='16' fill='#1f2933' text-anchor='start' font-weight='600' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>Cumulative speedup of the accepted changes</text>
+<line x1='70' x2='832' y1='346.0' y2='346.0' stroke='#d9e2ec'/>
+<text x='60.0' y='350.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+0%</text>
+<line x1='70' x2='832' y1='309.5' y2='309.5' stroke='#d9e2ec'/>
+<text x='60.0' y='313.5' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+25%</text>
+<line x1='70' x2='832' y1='273.0' y2='273.0' stroke='#d9e2ec'/>
+<text x='60.0' y='277.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+50%</text>
+<line x1='70' x2='832' y1='236.5' y2='236.5' stroke='#d9e2ec'/>
+<text x='60.0' y='240.5' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+75%</text>
+<line x1='70' x2='832' y1='200.0' y2='200.0' stroke='#d9e2ec'/>
+<text x='60.0' y='204.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+100%</text>
+<line x1='70' x2='832' y1='163.5' y2='163.5' stroke='#d9e2ec'/>
+<text x='60.0' y='167.5' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+125%</text>
+<line x1='70' x2='832' y1='127.0' y2='127.0' stroke='#d9e2ec'/>
+<text x='60.0' y='131.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+150%</text>
+<line x1='70' x2='832' y1='90.5' y2='90.5' stroke='#d9e2ec'/>
+<text x='60.0' y='94.5' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+175%</text>
+<line x1='70' x2='832' y1='54.0' y2='54.0' stroke='#d9e2ec'/>
+<text x='60.0' y='58.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>+200%</text>
+<text x='167.1' y='380.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>3 workloads</text>
+<rect x='264.3' y='54' width='139.3' height='292' fill='#d9e2ec' opacity='0.35'/>
+<text x='333.9' y='380.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>5 workloads</text>
+<text x='617.8' y='380.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>6 workloads</text>
+<polyline fill='none' stroke='#3b6fd4' stroke-width='2.2' points='70.0,346.0 72.7,346.0 72.7,345.1 82.4,345.1 82.4,342.5 85.1,342.5 85.1,338.3 86.0,338.3 86.0,334.1 155.2,334.1 155.2,332.9 156.0,332.9 156.0,331.7 158.7,331.7 158.7,327.7 161.4,327.7 161.4,326.6 162.3,326.6 162.3,325.2 163.1,325.2 163.1,323.4 164.0,323.4 164.0,322.4 164.9,322.4 164.9,321.4 169.4,321.4 169.4,292.1 172.9,292.1 172.9,290.7 175.6,290.7 175.6,289.9 177.3,289.9 177.3,288.0 180.9,288.0 180.9,283.5 181.8,283.5 181.8,282.1 183.5,282.1 183.5,280.9 265.2,280.9 265.2,210.8 267.8,210.8 267.8,172.8 404.4,172.8 404.4,104.1 465.6,104.1 465.6,92.8 466.5,92.8 466.5,83.5 467.4,83.5 467.4,79.3 468.3,79.3 468.3,73.0 620.9,73.0 620.9,71.1 832.0,71.1'/>
+<circle cx='72.7' cy='345.1' r='3.6' fill='#1f9d55'/>
+<circle cx='82.4' cy='342.5' r='3.6' fill='#1f9d55'/>
+<circle cx='85.1' cy='338.3' r='3.6' fill='#1f9d55'/>
+<circle cx='86.0' cy='334.1' r='3.6' fill='#1f9d55'/>
+<circle cx='155.2' cy='332.9' r='3.6' fill='#1f9d55'/>
+<circle cx='156.0' cy='331.7' r='3.6' fill='#1f9d55'/>
+<circle cx='158.7' cy='327.7' r='3.6' fill='#1f9d55'/>
+<circle cx='161.4' cy='326.6' r='3.6' fill='#1f9d55'/>
+<circle cx='162.3' cy='325.2' r='3.6' fill='#1f9d55'/>
+<circle cx='163.1' cy='323.4' r='3.6' fill='#1f9d55'/>
+<circle cx='164.0' cy='322.4' r='3.6' fill='#1f9d55'/>
+<circle cx='164.9' cy='321.4' r='3.6' fill='#1f9d55'/>
+<circle cx='169.4' cy='292.1' r='3.6' fill='#1f9d55'/>
+<circle cx='172.9' cy='290.7' r='3.6' fill='#1f9d55'/>
+<circle cx='175.6' cy='289.9' r='3.6' fill='#1f9d55'/>
+<circle cx='177.3' cy='288.0' r='3.6' fill='#1f9d55'/>
+<circle cx='180.9' cy='283.5' r='3.6' fill='#1f9d55'/>
+<circle cx='181.8' cy='282.1' r='3.6' fill='#1f9d55'/>
+<circle cx='183.5' cy='280.9' r='3.6' fill='#1f9d55'/>
+<circle cx='265.2' cy='210.8' r='3.6' fill='#1f9d55'/>
+<circle cx='267.8' cy='172.8' r='3.6' fill='#1f9d55'/>
+<circle cx='404.4' cy='104.1' r='3.6' fill='#1f9d55'/>
+<circle cx='465.6' cy='92.8' r='3.6' fill='#1f9d55'/>
+<circle cx='466.5' cy='83.5' r='3.6' fill='#1f9d55'/>
+<circle cx='467.4' cy='79.3' r='3.6' fill='#1f9d55'/>
+<circle cx='468.3' cy='73.0' r='3.6' fill='#1f9d55'/>
+<circle cx='620.9' cy='71.1' r='3.6' fill='#1f9d55'/>
+<text x='274.2' y='230.8' font-size='12' fill='#1f2933' text-anchor='start' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>Keep updated parameters weakly typed (&#215;1.33)</text>
+<text x='395.4' y='108.1' font-size='12' fill='#1f2933' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>Share compiled kernels with diagram copies (&#215;1.22)</text>
+<text x='178.4' y='312.1' font-size='12' fill='#1f2933' text-anchor='start' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>Skip buffer selects in vmapped simulations (&#215;1.17)</text>
+<text x='276.8' y='192.8' font-size='12' fill='#1f2933' text-anchor='start' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>Store every compiled program in the disk cache (&#215;1.14)</text>
+<text x='70.0' y='362.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>0</text>
+<text x='158.7' y='362.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>100</text>
+<text x='247.4' y='362.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>200</text>
+<text x='336.1' y='362.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>300</text>
+<text x='832.0' y='362.0' font-size='12' fill='#52606d' text-anchor='middle' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>859</text>
+<text x='832.0' y='392.0' font-size='12' fill='#52606d' text-anchor='end' font-weight='normal' font-family='-apple-system, Segoe UI, Helvetica, Arial, sans-serif'>loop iteration</text>
+</svg>
