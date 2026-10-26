@@ -36,7 +36,10 @@ def enable_persistent_jit_cache(cache_dir: str | None = None) -> None:
 
     resolved = str(target)
     jax.config.update("jax_compilation_cache_dir", resolved)
-    jax.config.update("jax_persistent_cache_min_compile_time_secs", 1.0)
+    # Store every compiled program: loading one from disk is several times
+    # faster than compiling it even for kernels that compile in a fraction of
+    # a second, and the many small programs of a model build add up.
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
 
     logger.info("jaxonomy: persistent JIT cache enabled at %s", resolved)
