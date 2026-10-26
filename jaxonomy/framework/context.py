@@ -70,9 +70,24 @@ def _coerce_param_for_jit_cache(orig_val, new_val):
     if isinstance(new_val, (bool, int, float, complex, np.generic, np.ndarray)):
         dtype = getattr(orig_val, "dtype", None)
         if dtype is not None:
+            if getattr(orig_val, "weak_type", False) and np.ndim(new_val) == 0:
+                # A parameter declared from a Python scalar is weakly typed, and
+                # weak vs. strong is part of a compiled function's signature.
+                # Keep the new value weak as well, or the first changed value
+                # traces and compiles the whole kernel a second time.
+                py_type = _PY_SCALAR_OF_KIND.get(np.dtype(dtype).kind)
+                try:
+                    weak = jnp.asarray(py_type(new_val)) if py_type else None
+                except (TypeError, ValueError):
+                    weak = None
+                if weak is not None and weak.dtype == dtype:
+                    return weak
             return jnp.asarray(new_val, dtype=dtype)
         return jnp.asarray(new_val)
     return new_val
+
+
+_PY_SCALAR_OF_KIND = {"f": float, "i": int, "u": int, "c": complex, "b": bool}
 
 if TYPE_CHECKING:
     from ..backend.typing import (
