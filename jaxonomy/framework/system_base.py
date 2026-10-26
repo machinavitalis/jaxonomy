@@ -230,6 +230,25 @@ def _build_priority_tiebreak(system: "SystemBase"):
     return _key
 
 
+class _KernelLineage:
+    """Shared by a system and its ``with_parameters`` copies.
+
+    Members of one lineage have the same structure and the same static data
+    and differ only in dynamic parameter values, which reach a compiled
+    kernel through the context. ``simulate`` can therefore run any of them on
+    the kernel compiled for the first.
+
+    ``epoch`` is the static-parameter epoch when the lineage started. Once
+    any static parameter changes, the members are no longer known to agree on
+    everything a kernel bakes in, and the lineage stops being used.
+    """
+
+    __slots__ = ("epoch", "__weakref__")
+
+    def __init__(self, epoch: int):
+        self.epoch = epoch
+
+
 @dataclasses.dataclass
 class SystemBase:
     """Basic building block for simulation in jaxonomy.
@@ -945,14 +964,39 @@ class SystemBase:
         )
         return (ParameterCache.epoch(), hash((tuple(reads), order)))
 
+    def _kernel_lineage_token(self) -> _KernelLineage:
+        """The lineage this system currently belongs to (started on demand)."""
+        from .parameter import ParameterCache
+
+        token = self.__dict__.get("_kernel_lineage")
+        if token is None or token.epoch != ParameterCache.epoch():
+            token = self._kernel_lineage = _KernelLineage(ParameterCache.epoch())
+        return token
+
+    def _port_cache_slots(self) -> dict[int, int]:
+        """``id(port)`` -> key of that port in this root's port cache.
+
+        The key is the port's position in the evaluation order. JAX orders the
+        entries of a dict pytree by key and writes the keys into the lowered
+        program, so keys derived from system ids made two diagrams with the
+        same structure compile to different programs.
+        """
+        ports = self._sorted_output_ports()
+        cached = self.__dict__.get("_port_slot_table")
+        if cached is not None and cached[0] is ports:
+            return cached[1]
+        table = {id(port): slot for slot, port in enumerate(ports)}
+        self._port_slot_table = (ports, table)
+        return table
+
     def recompute_port_cache(self, context: ContextBase) -> dict[Hashable, Array]:
         """Recompute all output ports and return them in a dictionary."""
         # The callbacks are already sorted in the correct order, so we can just
         # evaluate them in sequence, assuming all upstream values are correct.
-        for cb in self._sorted_output_ports():
+        for slot, cb in enumerate(self._sorted_output_ports()):
             # Evaluate the callback and store the result in the cache
             val = cb.calc(context)
-            context = context.with_port_cache_entry(hash(cb), val)
+            context = context.with_port_cache_entry(slot, val)
 
         return context
 

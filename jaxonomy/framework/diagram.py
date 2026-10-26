@@ -771,12 +771,16 @@ class Diagram(SystemBase):
             KeyError: Unknown block or parameter.
             TypeError: Attempt to replace a static parameter.
         """
+        # Taken before the updates: one that reaches a static parameter moves
+        # the static epoch on, which ends the lineage (see ``_KernelLineage``).
+        lineage = self._kernel_lineage_token()
         new = copy.deepcopy(self)
         new.system_id = next_system_id()
         new.parent = None
         new._dependency_graph = None
         new.feedthrough_pairs = None
         new._cache_update_events = None
+        new._kernel_lineage = lineage
 
         if not updates:
             _diagram_rebuild_leaf_systems(new)

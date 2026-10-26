@@ -80,16 +80,14 @@ class ContextFactory(metaclass=abc.ABCMeta):
             self.check_types(ctx, error_collector=error_collector)
 
         port_cache = {}
-        for port in self.system.sorted_callbacks:
-            if not isinstance(port, OutputPort):
-                continue
+        for slot, port in enumerate(self.system._sorted_output_ports()):
             if port.default_value is None:
                 # FIXME there are situations where we end up here, due to
                 # changes between the original PR for the port cache and later
                 # changes to fix param evaluation
                 with ErrorCollector.context(error_collector):
                     port.default_value = port.calc(ctx)
-            port_cache[hash(port)] = port.default_value
+            port_cache[slot] = port.default_value
 
         ctx = ctx.with_port_cache(port_cache)
 
@@ -308,16 +306,14 @@ class DiagramContextFactory(ContextFactory):
             self.check_types(ctx, error_collector=error_collector)
 
         port_cache = {}
-        for port in self.system.sorted_callbacks:
-            if not isinstance(port, OutputPort):
-                continue
+        for slot, port in enumerate(self.system._sorted_output_ports()):
             if port.default_value is None:
                 # FIXME there are situations where we end up here, due to
                 # changes between the original PR for the port cache and later
                 # changes to fix param evaluation
                 with ErrorCollector.context(error_collector):
                     port.default_value = port.calc(ctx)
-            port_cache[hash(port)] = port.default_value
+            port_cache[slot] = port.default_value
 
         ctx = ctx.with_port_cache(port_cache)
 

@@ -84,12 +84,15 @@ class OutputPort(PortBase):
         return "out"
 
     def eval(self, root_context: ContextBase) -> Array:
-        key = hash(self)
         # Exported subsystem ports don't appear in the cache, but these
         # are trivial anyway (just routing to the subsystem callback), so we can
         # just skip the cache in these cases.
-        if self.system.cache_enabled and key in root_context.port_cache:
-            return root_context.port_cache[key]
+        if self.system.cache_enabled:
+            cache = root_context.port_cache
+            if cache:
+                slot = root_context.owning_system._port_cache_slots().get(id(self))
+                if slot is not None and slot in cache:
+                    return cache[slot]
         return super().eval(root_context=root_context)
 
 

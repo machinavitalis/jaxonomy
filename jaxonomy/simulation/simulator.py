@@ -147,6 +147,13 @@ _SIMULATE_CACHE_MAXSIZE = 8
 _SIMULATE_CACHE_STATS = {"hits": 0, "misses": 0, "uncacheable": 0}
 
 
+# Which cache entry the members of a kernel lineage share: lineage key (the
+# cache key with the lineage in place of the system) -> cache key of the entry
+# whose kernel stands in for all of them. Entries here are hints, checked
+# against ``_SIMULATE_CACHE`` on every use.
+_LINEAGE_KERNELS: dict[tuple, tuple] = {}
+
+
 class _CachedKernel(NamedTuple):
     """A memoized ``Simulator`` plus the jitted kernel that drives it."""
 
@@ -159,6 +166,12 @@ class _CachedKernel(NamedTuple):
     # (It does not make the entry non-pinning — ``sim`` references the system
     # strongly, by construction.)
     system_ref: Any
+    # The kernel lineage of that system when the entry was made, if any: other
+    # members of the lineage may run on this kernel (``_shared_kernel``).
+    lineage: Any = None
+    # Mutable notes: the jitted kernel and the arguments of its first call,
+    # until ``_kernel_is_shareable`` has decided, then ``shareable``.
+    info: Any = None
 
 
 def clear_simulate_cache() -> None:
@@ -171,6 +184,7 @@ def clear_simulate_cache() -> None:
     the cache is what releases them.
     """
     _SIMULATE_CACHE.clear()
+    _LINEAGE_KERNELS.clear()
     for k in _SIMULATE_CACHE_STATS:
         _SIMULATE_CACHE_STATS[k] = 0
 
@@ -189,19 +203,89 @@ def simulate_cache_info() -> dict:
     }
 
 
-def _recorded_signal_key(recorded_signals) -> tuple:
+def _recorded_signal_key(recorded_signals, system=None) -> tuple:
     """Identity key for the recorded-signal set.
 
     The ports are baked into the traced program (the recorder reads exactly
     these cache sources), so two calls may share a kernel only if they record
-    the same ports under the same names. The cache entry keeps the resolved
-    options — and therefore the port objects — alive, so ``id()`` stays valid
-    for as long as the key can match.
+    the same ports under the same names. A port is identified by its position
+    in the system's evaluation order, which is the same for every member of a
+    kernel lineage; a port outside that order falls back to ``id()``, which
+    the cache entry keeps valid by keeping the resolved options alive.
     """
     if not recorded_signals:
         return ()
+    slots = system._port_cache_slots() if system is not None else {}
     return tuple(
-        (name, id(recorded_signals[name])) for name in sorted(recorded_signals)
+        (name, slots.get(id(recorded_signals[name]), ("id", id(recorded_signals[name]))))
+        for name in sorted(recorded_signals)
+    )
+
+
+def _kernel_has_host_callbacks(jitted, example) -> bool:
+    """True if the traced kernel calls back into Python, or if that cannot be
+    established. Such a kernel runs code of the block objects it was traced
+    with, so it must not stand in for another system's."""
+    try:
+        stack = [jitted.trace(*example).jaxpr.jaxpr]
+    except Exception:  # tracers of a finished transformation, an older JAX, ...
+        return True
+    seen = set()
+    while stack:
+        jaxpr = stack.pop()
+        if id(jaxpr) in seen:
+            continue
+        seen.add(id(jaxpr))
+        for eqn in jaxpr.eqns:
+            if "callback" in eqn.primitive.name:
+                return True
+            for value in eqn.params.values():
+                for sub in value if isinstance(value, (tuple, list)) else (value,):
+                    sub = getattr(sub, "jaxpr", sub)
+                    if hasattr(sub, "eqns"):
+                        stack.append(sub)
+    return False
+
+
+def _kernel_is_shareable(entry: "_CachedKernel") -> bool:
+    """Whether other members of the entry's lineage may run on its kernel.
+
+    Decided once, the first time another member asks: the traced program is
+    looked up again (not traced again) and searched for host callbacks.
+    """
+    info = entry.info
+    if info is None:
+        return False
+    if "shareable" not in info:
+        jitted, example = info.pop("jitted", None), info.pop("example", None)
+        info["shareable"] = (
+            jitted is not None
+            and example is not None
+            and not _kernel_has_host_callbacks(jitted, example)
+        )
+    return info["shareable"]
+
+
+def _rebind_context(context, root):
+    """``context`` with the same values, owned by ``root`` and its leaf systems.
+
+    For two systems of one kernel lineage: their contexts differ only in which
+    system objects own them. Returns ``None`` if the two do not line up.
+    """
+    from ..framework.context import DiagramContext
+
+    if not isinstance(context, DiagramContext) or not isinstance(root, Diagram):
+        return None
+    leaves, subcontexts = root.leaf_systems, context.subcontexts
+    if leaves is None or len(leaves) != len(subcontexts):
+        return None
+    return dataclasses.replace(
+        context,
+        owning_system=root,
+        subcontexts=OrderedDict(
+            (leaf.system_id, dataclasses.replace(sub, owning_system=leaf))
+            for leaf, sub in zip(leaves, subcontexts.values())
+        ),
     )
 
 
@@ -245,7 +329,7 @@ def _simulate_cache_key(system, options, t_span, context) -> tuple | None:
             # residual risk that a caller reset the counter.
             system.system_id,
             tuple(option_items),
-            _recorded_signal_key(options.recorded_signals),
+            _recorded_signal_key(options.recorded_signals, system),
             # Set globally by ``_check_options`` from ``t_span`` and baked into
             # every time computation in the traced program.
             IntegerTime.time_scale,
@@ -1036,6 +1120,7 @@ def simulate(
         # JIT-compile the simulation, if allowed
         if options.enable_tracing:
             _wrapped_simulate = jax.jit(_wrapped_simulate)
+            sim._kernel_jit = _wrapped_simulate  # for ``_kernel_is_shareable``
             _wrapped_simulate = Profiler.jaxjit_profiledfunc(
                 _wrapped_simulate, "_wrapped_simulate"
             )
@@ -1062,6 +1147,36 @@ def simulate(
         entry = None
         _SIMULATE_CACHE.pop(cache_key, None)
 
+    # A ``with_parameters`` copy has the static data of its original, so as
+    # long as both are configured alike (``static_key``) it can run on the
+    # original's kernel, or the other way round, instead of tracing and
+    # compiling its own. The kernel is called with the copy's values in a
+    # context owned by the system it was traced for, and the final context is
+    # handed back owned by the copy.
+    lineage = system._kernel_lineage_token() if cache_key is not None else None
+    lineage_key = (
+        (("lineage", id(lineage)), context.static_key, *cache_key[1:])
+        if lineage is not None
+        else None
+    )
+    kernel_context = context
+    hit_key = cache_key
+    if entry is None and lineage_key is not None:
+        owner_key = _LINEAGE_KERNELS.get(lineage_key)
+        shared = _SIMULATE_CACHE.get(owner_key) if owner_key is not None else None
+        owner = shared.system_ref() if shared is not None else None
+        if (
+            owner is not None
+            and owner is not system
+            and shared.lineage is lineage
+            and _kernel_is_shareable(shared)
+            # Should the call trace again, it traces the owner as it is now.
+            and owner._structure_key() == context.static_key
+        ):
+            rebound = _rebind_context(context, owner)
+            if rebound is not None:
+                entry, kernel_context, hit_key = shared, rebound, owner_key
+
     if entry is None:
         ode_solver = ODESolver(system, options=options.ode_options)
         sim = Simulator(system, ode_solver=ode_solver, options=options)
@@ -1070,15 +1185,30 @@ def simulate(
         logger.info("Simulator ready to start: %s, %s", options, ode_solver)
         run = _build_kernel(sim, options, t_span, context)
         if cache_key is not None:
-            _SIMULATE_CACHE[cache_key] = _CachedKernel(
+            new_entry = _CachedKernel(
                 sim=sim,
                 run=run,
                 options=options,
                 system_ref=weakref.ref(system),
+                lineage=lineage,
+                info={
+                    "jitted": getattr(sim, "_kernel_jit", None),
+                    "example": (t_span[0], t_span[1], context),
+                },
             )
+            _SIMULATE_CACHE[cache_key] = new_entry
             _SIMULATE_CACHE.move_to_end(cache_key)
             while len(_SIMULATE_CACHE) > _SIMULATE_CACHE_MAXSIZE:
                 _SIMULATE_CACHE.popitem(last=False)
+            if lineage_key is not None:
+                # This kernel stands in for the lineage unless a live one
+                # already does (which then was not shareable for this call).
+                if _LINEAGE_KERNELS.get(lineage_key) not in _SIMULATE_CACHE:
+                    _LINEAGE_KERNELS[lineage_key] = cache_key
+                if len(_LINEAGE_KERNELS) > 4 * _SIMULATE_CACHE_MAXSIZE:
+                    for stale in [k for k, v in _LINEAGE_KERNELS.items()
+                                  if v not in _SIMULATE_CACHE]:
+                        del _LINEAGE_KERNELS[stale]
             _SIMULATE_CACHE_STATS["misses"] += 1
         else:
             _SIMULATE_CACHE_STATS["uncacheable"] += 1
@@ -1087,8 +1217,8 @@ def simulate(
         # Refresh LRU position. A concurrent caller may have evicted the entry
         # between the lookup and here; we already hold what we need, so losing
         # that race is harmless.
-        if cache_key in _SIMULATE_CACHE:
-            _SIMULATE_CACHE.move_to_end(cache_key)
+        if hit_key in _SIMULATE_CACHE:
+            _SIMULATE_CACHE.move_to_end(hit_key)
         _SIMULATE_CACHE_STATS["hits"] += 1
         logger.info("Reusing compiled simulate kernel for %s", system.name)
 
@@ -1107,10 +1237,15 @@ def simulate(
     _event._SEVER_DISCRETE_COTANGENTS[0] = bool(options.enable_autodiff)
     try:
         system.cache_enabled = True
+        # The system the kernel was traced for; another one only for a shared
+        # kernel. Its port cache has to be on too, should the call trace again.
+        sim.system.cache_enabled = True
         try:
-            final_context, results_data = run(t_span[0], t_span[1], context)
+            final_context, results_data = run(t_span[0], t_span[1], kernel_context)
         finally:
             _event._SEVER_DISCRETE_COTANGENTS[0] = sever_prev
+        if kernel_context is not context and final_context is not None:
+            final_context = _rebind_context(final_context, system) or final_context
 
         if postprocess and results_data is not None:
             time, outputs = results_data.finalize()
@@ -1161,6 +1296,7 @@ def simulate(
     finally:
         system.post_simulation_finalize()
         system.cache_enabled = False
+        sim.system.cache_enabled = False
         jax.config.update("jax_enable_x64", orig_x64)
 
     # T-038a-followup-bdf-condition-check: emit ONE aggregated
