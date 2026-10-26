@@ -450,7 +450,7 @@ def _get_jacoboian_at_t0(t, eqs, X, ics, ics_weak, knowns, full_X=False):
 
         X_0 = jnp.array([ics_all[var] for var in X])
 
-        jac_F = jax.jacfwd(F)(X_0)
+        jac_F = jax.jit(jax.jacfwd(F))(X_0)
 
     else:
         # When there are no strong ICs (only weak ICs), `ics` is empty and
@@ -473,7 +473,8 @@ def _get_jacoboian_at_t0(t, eqs, X, ics, ics_weak, knowns, full_X=False):
             res_squeezed = [jnp.squeeze(val) for val in res]
             return jnp.array(res_squeezed)
 
-        jac_F = jax.jacfwd(F)(jnp.array(y_0))
+        # one compiled program instead of an eager op per equation term
+        jac_F = jax.jit(jax.jacfwd(F))(jnp.array(y_0))
 
     return jac_F
 
