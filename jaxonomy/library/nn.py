@@ -256,7 +256,18 @@ class MLP(FeedthroughBlock):
             mlp = eqx.combine(mlp_params, self.mlp_static)
             return mlp(inputs)
 
-        self.replace_op(_eval_MLP)
+        _eval_MLP_jit = jax.jit(_eval_MLP)
+
+        def _eval(inputs, **parameters):
+            # Eager calls (e.g. type checking at context creation) run as one
+            # compiled program instead of one op per layer; traced calls are
+            # left as they were.
+            if any(isinstance(x, jax.core.Tracer)
+                   for x in jax.tree_util.tree_leaves((inputs, parameters))):
+                return _eval_MLP(inputs, **parameters)
+            return _eval_MLP_jit(inputs, **parameters)
+
+        self.replace_op(_eval)
 
     def serialize(self, file_name, mlp_params=None):
         """

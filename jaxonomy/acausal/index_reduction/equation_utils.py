@@ -405,10 +405,19 @@ def scipy_roots(f, x_0, method="lm", tol=None):
     """
     from scipy.optimize import root
 
-    f = jax.jit(f)
-    df_dx = jax.jit(jax.jacfwd(f))
+    # One compiled program for the residual and its Jacobian: the solver asks
+    # for both at the same points, so the pair is computed once per point.
+    f_and_jac = jax.jit(lambda x: (f(x), jax.jacfwd(f)(x)))
+    last = {}
 
-    res = root(f, x_0, jac=df_dx, method=method, tol=tol)
+    def _at(x):
+        key = np.asarray(x).tobytes()
+        if last.get("key") != key:
+            last["key"], last["val"] = key, f_and_jac(x)
+        return last["val"]
+
+    res = root(lambda x: _at(x)[0], x_0, jac=lambda x: _at(x)[1],
+               method=method, tol=tol)
 
     if not res.success:
         raise ValueError(
