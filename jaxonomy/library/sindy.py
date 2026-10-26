@@ -620,9 +620,10 @@ class Sindy(LeafSystem):
         """
         x = state.continuous_state
         u = inputs
-        x_and_u = npa.hstack([x, u])
+        x_and_u = npa.hstack([x, npa.asarray(u)])
         features_evaluated = self.features_func(x_and_u)
-        x_dot = npa.matmul(self.coefficients, npa.atleast_1d(features_evaluated))
+        features_evaluated = npa.atleast_1d(npa.asarray(features_evaluated))
+        x_dot = npa.matmul(self.coefficients, features_evaluated)
         return x_dot
 
     def _discrete_update(self, _time, state, inputs, **_params):
@@ -631,9 +632,10 @@ class Sindy(LeafSystem):
         """
         x = state.discrete_state
         u = inputs
-        x_and_u = npa.hstack([x, u])
+        x_and_u = npa.hstack([x, npa.asarray(u)])
         features_evaluated = self.features_func(x_and_u)
-        x_plus = npa.matmul(self.coefficients, npa.atleast_1d(features_evaluated))
+        features_evaluated = npa.atleast_1d(npa.asarray(features_evaluated))
+        x_plus = npa.matmul(self.coefficients, features_evaluated)
         return x_plus
 
     def _full_discrete_state_output(self, _time, state, *_inputs, **_params):
