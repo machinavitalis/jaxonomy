@@ -915,6 +915,36 @@ class SystemBase:
             self._output_port_order = (graph, ports)
         return ports
 
+    def _structure_key(self) -> tuple:
+        """What a traced program of this system depends on besides values.
+
+        A block is configured again every time a context is created, with the
+        parameter values of the moment, and tracing bakes the result in: which
+        callbacks read their inputs and in which order output ports are
+        evaluated. A PID gain of zero makes the block non-feedthrough, for
+        instance. Parameters declared static are covered by their epoch.
+        Tickets and systems are named by position, so equal structures give
+        equal keys.
+        """
+        from .parameter import ParameterCache
+
+        leaves = getattr(self, "leaf_systems", None) or [self]
+        position = {id(leaf): i for i, leaf in enumerate(leaves)}
+        reads = []
+        for leaf in leaves:
+            local = {cb.ticket: -1 - i for i, cb in enumerate(leaf.callbacks)}
+            reads.append(
+                tuple(
+                    tuple(local.get(t, t) for t in cb.prerequisites_of_calc)
+                    for cb in leaf.callbacks
+                )
+            )
+        order = tuple(
+            (position.get(id(port.system), -1), port.index)
+            for port in self._sorted_output_ports()
+        )
+        return (ParameterCache.epoch(), hash((tuple(reads), order)))
+
     def recompute_port_cache(self, context: ContextBase) -> dict[Hashable, Array]:
         """Recompute all output ports and return them in a dictionary."""
         # The callbacks are already sorted in the correct order, so we can just

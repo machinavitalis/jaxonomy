@@ -160,6 +160,14 @@ class ContextBase(metaclass=abc.ABCMeta):
         is_initialized (bool):
             Flag indicating if the context is initialized. This should only be set
             by the ContextFactory during creation.
+        static_key (Hashable):
+            What a program traced for this context depends on besides values:
+            the static-parameter epoch and the order in which the system
+            evaluates its output ports when the root context was created (see
+            ``SystemBase._structure_key``). It is part of the context's
+            structure, not a value, so a compiled function is traced again
+            when it is handed a context made for another configuration,
+            instead of running the program it compiled for the old one.
     """
 
     owning_system: SystemBase
@@ -167,6 +175,7 @@ class ContextBase(metaclass=abc.ABCMeta):
     is_initialized: bool = False
     parameters: Optional[Mapping[str, Array]] = None
     port_cache: Optional[PortCache] = None
+    static_key: Hashable = None
 
     @abc.abstractmethod
     def __getitem__(self, key: Hashable) -> LeafContext:
@@ -265,7 +274,9 @@ class ContextBase(metaclass=abc.ABCMeta):
         pass
 
     def mark_initialized(self) -> ContextBase:
-        return dataclasses.replace(self, is_initialized=True)
+        return dataclasses.replace(
+            self, is_initialized=True, static_key=self.owning_system._structure_key()
+        )
 
     @abc.abstractmethod
     def with_updated_parameters(self) -> ContextBase:
@@ -593,16 +604,18 @@ def _leaf_context_flatten(context: LeafContext):
     aux_data = (
         context.owning_system,
         context.is_initialized,
+        context.static_key,
     )
     return children, aux_data
 
 
 def _leaf_context_unflatten(aux_data, children):
-    owning_system, is_initialized = aux_data
+    owning_system, is_initialized, static_key = aux_data
     state, parameters, time, port_cache = children
     return LeafContext(
         owning_system=owning_system,
         is_initialized=is_initialized,
+        static_key=static_key,
         state=state,
         parameters=parameters,
         time=time,
@@ -630,17 +643,19 @@ def _diagram_context_flatten(context: DiagramContext):
         keys,
         context.owning_system,
         context.is_initialized,
+        context.static_key,
     )
     return children, aux_data
 
 
 def _diagram_context_unflatten(aux_data, children):
-    keys, owning_system, is_initialized = aux_data
+    keys, owning_system, is_initialized, static_key = aux_data
     vals, time, parameters, port_cache = children
     subcontexts = OrderedDict(zip(keys, vals))
     return DiagramContext(
         owning_system=owning_system,
         is_initialized=is_initialized,
+        static_key=static_key,
         subcontexts=subcontexts,
         parameters=parameters,
         time=time,

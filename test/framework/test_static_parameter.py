@@ -136,7 +136,7 @@ def test_update_static_param_no_compilation(backend, mode):
             raise e
 
 
-# Failing test case for WC-462
+# Regression test for WC-462
 @pytest.mark.parametrize("backend", ["numpy", "jax"])
 def test_invalid_pid_ensemble_sim(backend):
     set_backend(backend)
@@ -178,7 +178,7 @@ def test_invalid_pid_ensemble_sim(backend):
     print("results_kp_0", results_kp_0)
 
     # Now change to 1.0 - makes the block feedthrough
-    # This requires a reconfiguration & recompilation, which will fail with JAX
+    # This requires a reconfiguration & recompilation
     kp.set(1.0)
     context = diagram.create_context(time=0.0, check_types=True)
     recorded_signals["output"] = err_cum.output_ports[0]
@@ -197,17 +197,105 @@ def test_invalid_pid_ensemble_sim(backend):
     results_kp_1_resampled = resample(times_kp_1, results_kp_1, times_kp_0)
     print("results_kp_1_resampled", results_kp_1_resampled)
 
-    if backend == "numpy":
-        assert not np.allclose(results_kp_0, results_kp_1_resampled)
+    assert not np.allclose(results_kp_0, results_kp_1_resampled)
 
-    if backend == "jax":
-        # THIS CHECK IS INVALID! THIS IS TESTING A BUG!
-        # If this bug finally gets fixed, amend this check accordingly.
-        np.testing.assert_allclose(results_kp_0, results_kp_1)
-        pytest.xfail(
-            "The results are the same after changing Kp! "
-            "They should have changed! This tests a known bug."
+
+def _pid_chain(kp, closed_loop):
+    builder = DiagramBuilder()
+    ref = builder.add(Constant(1.0))
+    pid = builder.add(PID(kp=kp, ki=0, kd=0, n=100))
+    acc = builder.add(Integrator(initial_state=0.0))
+    if closed_loop:
+        err = builder.add(Adder(n_in=2, operators="+-"))
+        tf = builder.add(TransferFunction([1], [1, 1]))
+        builder.connect(ref.output_ports[0], err.input_ports[0])
+        builder.connect(tf.output_ports[0], err.input_ports[1])
+        builder.connect(err.output_ports[0], pid.input_ports[0])
+        builder.connect(pid.output_ports[0], tf.input_ports[0])
+        builder.connect(err.output_ports[0], acc.input_ports[0])
+    else:
+        builder.connect(ref.output_ports[0], pid.input_ports[0])
+        builder.connect(pid.output_ports[0], acc.input_ports[0])
+    if isinstance(kp, Parameter):
+        return builder.build(parameters={"kp": kp}), acc
+    return builder.build(), acc
+
+
+def _final_value(diagram, acc, advance_to=None):
+    options = SimulatorOptions(
+        recorded_signals={"y": acc.output_ports[0]}, save_time_series=True
+    )
+    if advance_to is None:
+        advance_to = npa.jit(Simulator(diagram, options=options).advance_to)
+    simstate = advance_to(1.0, diagram.create_context(time=0.0))
+    _times, outputs = simstate.results_data.finalize()
+    return advance_to, float(outputs["y"][-1])
+
+
+# A function compiled for one configuration of the diagram must not be run for
+# another: a zero gain makes the PID non-feedthrough, any other value does not.
+@pytest.mark.parametrize("closed_loop", [True, False])
+def test_kept_jit_follows_feedthrough_change(closed_loop):
+    set_backend("jax")
+
+    kp = Parameter(1.0, name="kp")
+    diagram, acc = _pid_chain(kp, closed_loop)
+    expected = {
+        value: _final_value(*_pid_chain(value, closed_loop))[1]
+        for value in (0.0, 1.0, 2.0)
+    }
+    assert not np.isclose(expected[0.0], expected[1.0])
+
+    kp.set(0.0)
+    advance_to, result = _final_value(diagram, acc)
+    np.testing.assert_allclose(result, expected[0.0])
+
+    kp.set(1.0)
+    _, result = _final_value(diagram, acc, advance_to)
+    np.testing.assert_allclose(result, expected[1.0])
+
+    # Another non-zero gain is the same configuration: nothing is recompiled.
+    compiled = advance_to._cache_size()
+    kp.set(2.0)
+    _, result = _final_value(diagram, acc, advance_to)
+    np.testing.assert_allclose(result, expected[2.0])
+    assert advance_to._cache_size() == compiled
+
+
+@pytest.mark.parametrize("closed_loop", [True, False])
+def test_simulate_follows_feedthrough_change(closed_loop):
+    set_backend("jax")
+
+    def final_value(diagram, acc):
+        results = simulate(
+            diagram,
+            diagram.create_context(),
+            (0.0, 1.0),
+            recorded_signals={"y": acc.output_ports[0]},
         )
+        return float(results.outputs["y"][-1])
+
+    kp = Parameter(1.0, name="kp")
+    diagram, acc = _pid_chain(kp, closed_loop)
+
+    for value in (0.0, 1.0, 0.0):
+        kp.set(value)
+        expected = final_value(*_pid_chain(value, closed_loop))
+        np.testing.assert_allclose(final_value(diagram, acc), expected)
+
+
+def test_context_static_key_is_positional():
+    set_backend("jax")
+
+    kp = Parameter(1.0, name="kp")
+    diagram, _ = _pid_chain(kp, True)
+    twin, _ = _pid_chain(Parameter(1.0, name="kp"), True)
+
+    key = diagram.create_context().static_key
+    assert twin.create_context().static_key == key
+
+    kp.set(0.0)
+    assert diagram.create_context().static_key != key
 
 
 if __name__ == "__main__":
