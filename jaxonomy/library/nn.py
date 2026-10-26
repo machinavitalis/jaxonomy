@@ -52,6 +52,20 @@ def _mlp_builder(in_size, out_size, width_size, depth, activation_str,
         _MLP_BUILDERS[k] = eqx.filter_jit(_make)
     return _MLP_BUILDERS[k]
 
+
+_MLP_APPLY = {}
+
+
+def _mlp_apply():
+    """Jitted ``(mlp, inputs) -> mlp(inputs)``, shared by every MLP block.
+
+    One program per network structure, so a copy of a block (or another block
+    of the same architecture) reuses it instead of compiling its own.
+    """
+    if "f" not in _MLP_APPLY:
+        _MLP_APPLY["f"] = eqx.filter_jit(lambda mlp, inputs: mlp(inputs))
+    return _MLP_APPLY["f"]
+
 class MLP(FeedthroughBlock):
     """
     A feedforward neural network block representing an Equinox multi-layer
@@ -256,8 +270,6 @@ class MLP(FeedthroughBlock):
             mlp = eqx.combine(mlp_params, self.mlp_static)
             return mlp(inputs)
 
-        _eval_MLP_jit = jax.jit(_eval_MLP)
-
         def _eval(inputs, **parameters):
             # Eager calls (e.g. type checking at context creation) run as one
             # compiled program instead of one op per layer; traced calls are
@@ -265,7 +277,8 @@ class MLP(FeedthroughBlock):
             if any(isinstance(x, jax.core.Tracer)
                    for x in jax.tree_util.tree_leaves((inputs, parameters))):
                 return _eval_MLP(inputs, **parameters)
-            return _eval_MLP_jit(inputs, **parameters)
+            mlp = eqx.combine(parameters["mlp_params"], self.mlp_static)
+            return _mlp_apply()(mlp, inputs)
 
         self.replace_op(_eval)
 
