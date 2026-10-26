@@ -743,6 +743,7 @@ def _vmap_path(
     ode_solver = ODESolver(diagram, options=opts.ode_options)
     sim = Simulator(diagram, ode_solver=ode_solver, options=opts)
     sim.batched = True  # run under jax.vmap below
+    sim.batch_axis_name = "batch"
 
     t0 = float(t_span[0])
     tf = float(t_span[1])

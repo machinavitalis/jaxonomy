@@ -205,20 +205,25 @@ def _recorded_signal_key(recorded_signals) -> tuple:
     )
 
 
-def _under_vmap() -> bool:
-    """Whether ``simulate`` is being called under ``jax.vmap``.
+def _under_vmap() -> tuple[bool, Any]:
+    """Whether ``simulate`` is being called under ``jax.vmap``, and its axis name.
 
     O(1): looks at the current JAX trace instead of the context's leaves
-    (flattening a context costs microseconds per call).  Falls back to False
-    (the generic loops) if JAX internals move.
+    (flattening a context costs microseconds per call).  The axis name is
+    kept so that collectives such as ``lax.axis_index`` inside the batched
+    loops still resolve.  Falls back to (False, None) (the generic loops) if
+    JAX internals move.
     """
     try:
         from jax._src import core as _core
         from jax._src.interpreters import batching as _batching
 
-        return isinstance(_core.trace_ctx.trace, _batching.BatchTrace)
+        trace = _core.trace_ctx.trace
+        if isinstance(trace, _batching.BatchTrace):
+            return True, getattr(getattr(trace, "axis_data", None), "name", None)
+        return False, None
     except Exception:  # pragma: no cover - defensive against JAX internals
-        return False
+        return False, None
 
 
 def _simulate_cache_key(system, options, t_span, context) -> tuple | None:
@@ -1038,14 +1043,14 @@ def simulate(
     # Only the traced path has a compiled kernel worth keeping; the NumPy
     # backend runs a plain Python loop, so caching would pin a Simulator for
     # no gain.
-    batched = _under_vmap()
+    batched, batch_axis_name = _under_vmap()
     cache_key = (
         _simulate_cache_key(system, options, t_span, context)
         if options.enable_tracing and options.reuse_compiled_kernel
         else None
     )
     if cache_key is not None:
-        cache_key = (*cache_key, batched)
+        cache_key = (*cache_key, batched, batch_axis_name)
 
     entry = _SIMULATE_CACHE.get(cache_key) if cache_key is not None else None
     if entry is not None and entry.system_ref() is not system:
@@ -1060,6 +1065,7 @@ def simulate(
         ode_solver = ODESolver(system, options=options.ode_options)
         sim = Simulator(system, ode_solver=ode_solver, options=options)
         sim.batched = batched
+        sim.batch_axis_name = batch_axis_name
         logger.info("Simulator ready to start: %s, %s", options, ode_solver)
         run = _build_kernel(sim, options, t_span, context)
         if cache_key is not None:
@@ -1671,6 +1677,7 @@ class Simulator:
         # Set when the simulation runs under jax.vmap (see simulate()): the
         # major- and minor-step loops then use _recording_while_loop.
         self.batched = False
+        self.batch_axis_name = None
 
         if ode_solver is None:
             ode_solver = ODESolver(system, options=options.ode_options)
@@ -2042,10 +2049,14 @@ class Simulator:
         )
         if use_bounded:
             if recording:
-                return _recording_while_loop(cond_fun, body_fun, val, bound)
+                return _recording_while_loop(
+                    cond_fun, body_fun, val, bound, axis_name=self.batch_axis_name
+                )
             return _bounded_while_loop(cond_fun, body_fun, val, bound)
         if recording:
-            return _recording_while_loop(cond_fun, body_fun, val)
+            return _recording_while_loop(
+                cond_fun, body_fun, val, axis_name=self.batch_axis_name
+            )
         return backend.while_loop(cond_fun, body_fun, val)
 
     def initialize(self, context: ContextBase) -> SimulatorState:
@@ -2308,7 +2319,7 @@ class Simulator:
 
         carry = (False, solver_state, context, results_data, zc_events)
         loop = (
-            _recording_while_loop
+            partial(_recording_while_loop, axis_name=self.batch_axis_name)
             if self.batched
             and backend.active_backend == "jax"
             and not self.enable_autodiff
@@ -3705,7 +3716,11 @@ def _has_results_data(val: Any) -> bool:
 
 
 def _recording_while_loop(
-    cond_fun: Callable, body_fun: Callable, val: Any, cap: int | None = None
+    cond_fun: Callable,
+    body_fun: Callable,
+    val: Any,
+    cap: int | None = None,
+    axis_name: Any = None,
 ) -> Any:
     """``lax.while_loop`` whose vmap does not select over recording buffers.
 
@@ -3783,8 +3798,13 @@ def _recording_while_loop(
         ck, bk = consts[:n_cond], consts[n_cond:]
         ck_axes = tuple(0 if b else None for b in consts_batched[:n_cond])
         bk_axes = tuple(0 if b else None for b in consts_batched[n_cond:])
-        vcond = jax.vmap(lambda c, *k: cond_c(c, *k), in_axes=(0, *ck_axes))
-        vbody = jax.vmap(lambda c, *k: body_c(c, *k), in_axes=(0, *bk_axes))
+        # the outer vmap's axis name, so collectives (lax.axis_index) resolve
+        vcond = jax.vmap(
+            lambda c, *k: cond_c(c, *k), in_axes=(0, *ck_axes), axis_name=axis_name
+        )
+        vbody = jax.vmap(
+            lambda c, *k: body_c(c, *k), in_axes=(0, *bk_axes), axis_name=axis_name
+        )
         vcond = partial(lambda f, c: f(c, *ck), vcond)
         vbody = partial(lambda f, c: f(c, *bk), vbody)
 
