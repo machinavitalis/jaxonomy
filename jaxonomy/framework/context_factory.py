@@ -256,6 +256,13 @@ class DiagramContextFactory(ContextFactory):
 
         for sys in nodes:
             root_context = sys.context_factory.initialize_static_data(root_context)
+
+        from .diagram import Diagram
+
+        if type(system).initialize_static_data is Diagram.initialize_static_data:
+            # The default Diagram.initialize_static_data only runs the children
+            # again, which were just initialized above in dependency order.
+            return root_context
         return super().initialize_static_data(root_context)
 
     # Inherit docstring from ContextFactory
