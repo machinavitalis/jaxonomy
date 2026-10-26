@@ -243,13 +243,15 @@ class DiagramContextFactory(ContextFactory):
         # Multiple events may refer to the same system, we need to keep the order
         # with regards to the last occuring event of a system.
         nodes = []
+        seen = set()
         for cb in reversed(system.sorted_callbacks):
-            if cb.system not in nodes:
+            if cb.system not in seen:
+                seen.add(cb.system)
                 nodes.append(cb.system)
         nodes = list(reversed(nodes))
 
         for sys in system.nodes:
-            if sys not in nodes:
+            if sys not in seen:
                 nodes.append(sys)
 
         for sys in nodes:

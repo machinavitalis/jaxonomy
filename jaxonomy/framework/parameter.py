@@ -607,6 +607,12 @@ class ParameterCache:
 
         if isinstance(param.value, Array):
             vals = _resolve_array_param_value(param)
+            if vals is param.value and (
+                vals.weak_type
+                or jax.dtypes.canonicalize_dtype(vals.dtype) == vals.dtype
+            ):
+                # jnp.array would return an equal copy: an eager op per call
+                return vals
             if param.value.weak_type:
                 return jnp.array(vals)
             return jnp.array(vals, dtype=param.value.dtype)
@@ -809,6 +815,9 @@ class Parameter:
                         for k, v in value.items()
                     },
                 )
+            elif isinstance(value, Array):
+                # immutable; a deep copy of a JAX array is a device copy
+                setattr(result, field.name, value)
             else:
                 setattr(result, field.name, copy.deepcopy(value, memo))
         result.__post_init__()
