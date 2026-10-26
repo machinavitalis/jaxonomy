@@ -109,6 +109,15 @@ class DiagramProcessing:
             print(tabs + f"\t{eq_idx}: {eq}")
 
     def sanitize_solve(self, s, eq):
+        # Fast path: alias equations are linear in `s` with a numeric
+        # coefficient, so the single solution is -(rest)/coef.
+        if isinstance(eq.e, sp.Equality):
+            expr = eq.e.lhs - eq.e.rhs
+            coef = expr.diff(s)
+            if coef.is_number and coef != 0:
+                rest = sp.expand(expr - coef * s)
+                if not rest.has(s):
+                    return -rest / coef
         # handle the various options for what can be returned from solve().
         exprs = sp.solve(eq.e, s)
         if isinstance(exprs, list):
