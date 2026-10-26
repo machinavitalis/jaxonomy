@@ -134,10 +134,12 @@ notebooks — prefer those over guessing an API.
 
 Hard-won usage tips (harvested from prior consumer sessions):
 
-- **Parameter sweeps re-JIT per iteration.** `diagram.with_parameter("p", float(v))`
-  in a Python loop keys the trace cache on the *value*, recompiling every step.
-  Wrap the scalar as `jnp.asarray(v)`, or use `simulate_batch` / `jax.vmap` from
-  the start. `scipy.optimize.minimize_scalar` inherits the same blowup.
+- **A diagram copy per sweep value is slow on large models.**
+  `diagram.with_parameters({"block.p": v})` in a Python loop reuses the compiled
+  kernel, but copies the diagram and creates a context for every value (44 ms at
+  159 blocks, against 3 ms through the context). For a long sweep change the
+  value through the context, or use `simulate_batch` / `jax.vmap` from the start.
+  `scipy.optimize.minimize_scalar` pays the same cost per evaluation.
 - **Update sub-system parameters by dot-path on the *outer* diagram:**
   `outer.with_parameters({"inner.gain.gain": jnp.array(5.0)})` — don't reach into
   `outer["inner"]` (you'll get a stale outer diagram). The dot-path form also

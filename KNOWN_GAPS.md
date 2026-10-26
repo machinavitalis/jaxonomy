@@ -129,26 +129,27 @@ Each entry has the same shape:
   substepping; under adaptive solvers, tighten `max_minor_step_size` to
   bound intra-step drift
 
-### Performance — parameter sweeps re-JIT on every value
+### Performance — a diagram copy per sweep value costs a copy and a context
 
-- **Area**: `Context.with_parameter(name, float(value))`
+- **Area**: `Diagram.with_parameters({...})` in a Python loop
 - **Status**: known limitation
-- **What works**: explicitly traced parameter sweeps using `jax.vmap`
-  or `simulate_batch`
-- **What doesn't**: the natural Python-loop sweep pattern
-  `for v in v_grid: simulate(diag.with_parameter("p", float(v)))`
-  triggers a fresh JIT trace per iteration (the trace cache keys on
-  the value, not on abstract type/shape). Per-iteration cost scales
-  with model size: measured (2026-07, jax 0.9.2, arm64 CPU) at
-  ~0.15–0.2 s on a bouncing-ball plant with
-  `record_event_times=True`, and ~2.3 s on a 160-block diagram.
-- **Workaround**: promote sweep parameters to `jnp.asarray` and key
-  the loop on traced inputs, or use `simulate_batch`. The persistent
-  JIT cache (`enable_persistent_jit_cache`, `docs/jit_cache.md`) does
-  **not** mitigate this: each float value is baked into the HLO as a
-  constant, so every sweep value is a compulsory cache miss (measured:
-  a 3-value sweep against a warm cache added 3 new cache entries and
-  every iteration paid the full re-trace + compile cost).
+- **What works**: sweeps that change the value through the context
+  (`context.with_parameter`, or `with_parameter` on a block's
+  subcontext) reuse the compiled kernel: measured 0.3 ms per value on a
+  6-block PID loop and 3 ms on a 159-block diagram, with no compilation.
+  A `with_parameters` copy runs on the kernel of the diagram it was
+  copied from, also without compilation. Explicitly traced sweeps using
+  `jax.vmap` or `simulate_batch` work too.
+- **What doesn't**: the Python-loop pattern
+  `for v in v_grid: simulate(diag.with_parameters({"block.p": v}), ...)`
+  deep-copies the diagram and creates a context for every value, which
+  grows with the model. Measured (2026-10, jax 0.9.2, arm64 CPU,
+  `benchmarks/jit_cache.py`): 2.6 ms per value on the PID loop and 44 ms
+  on the 159-block diagram. A copy is traced and compiled on its own when
+  the new value changes how a block is configured, or when the kernel
+  calls back into Python.
+- **Workaround**: change the value through the context, or use
+  `simulate_batch`.
 
 ### Container blocks
 
