@@ -82,6 +82,11 @@ def _handle_with_severed_discretes(active, callback, passthrough, context):
     discrete leaves a branch newly writes.
     """
 
+    if not _SEVER_DISCRETE_COTANGENTS[0]:
+        # No transpose to reconcile: close over the context so the cond
+        # captures only the leaves the branches read, not the whole context.
+        return cond(active, lambda: callback(context), lambda: passthrough(context))
+
     def _active(ctx):
         ctx = _sever_discrete_cotangents(ctx)
         return _sever_discrete_cotangents(callback(ctx))
