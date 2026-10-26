@@ -1182,8 +1182,10 @@ def simulate(
         try:
             _xc = final_context.continuous_state
             _leaves = jax.tree.leaves(_xc)
+            # Host-side: the state is already materialized, and a JAX
+            # reduction here costs a dispatch per leaf on every call.
             _nonfinite = any(
-                not bool(jnp.all(jnp.isfinite(l))) for l in _leaves if l is not None
+                not np.isfinite(np.asarray(l)).all() for l in _leaves if l is not None
             )
         except Exception:
             _nonfinite = False
