@@ -3916,7 +3916,7 @@ def _odeint(solver: ODESolverBase, ode_rhs, solver_state, tf, context, checkpoin
         # Store the current state and time in the checkpoints array
         # if we have reached the next checkpoint.
         yt = jnp.append(solver_state.y, solver_state.t)
-        checkpoints = jnp.where(chk_step, checkpoints.at[index].set(yt), checkpoints)
+        checkpoints = checkpoints.at[index].set(jnp.where(chk_step, yt, checkpoints[index]))
 
         return i, index, depth, solver_state, checkpoints
 
