@@ -265,18 +265,10 @@ class MLP(FeedthroughBlock):
         else:
             self.declare_dynamic_parameter("mlp_params", mlp_params, as_array=False)
 
-        def _eval_MLP(inputs, **parameters):
-            mlp_params = parameters["mlp_params"]
-            mlp = eqx.combine(mlp_params, self.mlp_static)
-            return mlp(inputs)
-
         def _eval(inputs, **parameters):
-            # Eager calls (e.g. type checking at context creation) run as one
-            # compiled program instead of one op per layer; traced calls are
-            # left as they were.
-            if any(isinstance(x, jax.core.Tracer)
-                   for x in jax.tree_util.tree_leaves((inputs, parameters))):
-                return _eval_MLP(inputs, **parameters)
+            # One compiled program per architecture, shared by every block and
+            # every copy, for eager calls (type checking at context creation)
+            # and traced ones alike.
             mlp = eqx.combine(parameters["mlp_params"], self.mlp_static)
             return _mlp_apply()(mlp, inputs)
 
