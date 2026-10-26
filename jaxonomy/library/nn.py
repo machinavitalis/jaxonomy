@@ -23,6 +23,35 @@ else:
     eqx = LazyLoader("eqx", globals(), "equinox")
 
 
+
+_MLP_BUILDERS = {}
+
+
+def _mlp_builder(in_size, out_size, width_size, depth, activation_str,
+                 final_activation_str, use_bias, use_final_bias, match_activation):
+    """Jitted ``key -> eqx.nn.MLP`` for one architecture, built once per process."""
+    k = (in_size, out_size, width_size, depth, activation_str, final_activation_str,
+         use_bias, use_final_bias)
+    if k not in _MLP_BUILDERS:
+        activation = match_activation(activation_str)
+        final_activation = match_activation(final_activation_str)
+
+        def _make(key):
+            return eqx.nn.MLP(
+                in_size,
+                out_size,
+                width_size,
+                depth,
+                key=key,
+                activation=activation,
+                final_activation=final_activation,
+                use_bias=use_bias,
+                use_final_bias=use_final_bias,
+            )
+
+        _MLP_BUILDERS[k] = eqx.filter_jit(_make)
+    return _MLP_BUILDERS[k]
+
 class MLP(FeedthroughBlock):
     """
     A feedforward neural network block representing an Equinox multi-layer
@@ -196,17 +225,19 @@ class MLP(FeedthroughBlock):
         )
         self.key = random.PRNGKey(seed)
 
-        self._mlp = eqx.nn.MLP(
+        # One compiled program (cached per architecture) instead of an eager op
+        # and compilation per layer initializer; the weights are the same.
+        self._mlp = _mlp_builder(
             in_size,
             out_size,
             width_size,
             depth,
-            key=self.key,
-            activation=_match_activation(activation_str),
-            final_activation=_match_activation(final_activation_str),
-            use_bias=use_bias,
-            use_final_bias=use_final_bias,
-        )
+            activation_str,
+            final_activation_str,
+            bool(use_bias),
+            bool(use_final_bias),
+            _match_activation,
+        )(self.key)
 
         if file_name is not None:
             with open(file_name, "rb") as fp:
