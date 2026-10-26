@@ -1094,9 +1094,16 @@ def simulate(
             _monitor.reset()
 
     # Run the simulation
+    from ..framework import event as _event
+
+    sever_prev = _event._SEVER_DISCRETE_COTANGENTS[0]
+    _event._SEVER_DISCRETE_COTANGENTS[0] = bool(options.enable_autodiff)
     try:
         system.cache_enabled = True
-        final_context, results_data = run(t_span[0], t_span[1], context)
+        try:
+            final_context, results_data = run(t_span[0], t_span[1], context)
+        finally:
+            _event._SEVER_DISCRETE_COTANGENTS[0] = sever_prev
 
         if postprocess and results_data is not None:
             time, outputs = results_data.finalize()
@@ -1954,6 +1961,7 @@ class Simulator:
             lower_triangular_discrete_update=getattr(
                 options, "lower_triangular_discrete_update", False,
             ),
+            bisection_early_exit=not self.enable_autodiff,
         )
 
         if self.max_major_step_length is None:

@@ -23,6 +23,13 @@ from jax import tree_util
 from ..backend import cond, stop_gradient, numpy_api as npa
 
 
+# Severing only matters when the traced program is reverse-differentiated (it
+# shapes the cond transpose).  ``simulate`` turns it off for simulations without
+# ``enable_autodiff``, whose loops cannot be reverse-differentiated anyway; the
+# per-event map over the whole context is then skipped (it adds no equations).
+_SEVER_DISCRETE_COTANGENTS = [True]
+
+
 def _sever_discrete_cotangents(tree: Any) -> Any:
     """Apply ``stop_gradient`` to every integer / boolean leaf of ``tree``.
 
@@ -46,6 +53,9 @@ def _sever_discrete_cotangents(tree: Any) -> Any:
     ``stop_gradient`` is the identity in value (and a no-op under the numpy
     backend).
     """
+
+    if not _SEVER_DISCRETE_COTANGENTS[0]:
+        return tree
 
     def _maybe_sever(leaf):
         dtype = getattr(leaf, "dtype", None)

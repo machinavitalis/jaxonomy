@@ -43,9 +43,11 @@ class ZeroCrossingHandler:
         system: "SystemBase",
         zc_bisection_loop_count: int,
         lower_triangular_discrete_update: bool = False,
+        bisection_early_exit: bool = False,
     ):
         self.system = system
         self.zc_bisection_loop_count = zc_bisection_loop_count
+        self.bisection_early_exit = bisection_early_exit
         self.lower_triangular_discrete_update = lower_triangular_discrete_update
 
     def evaluate_guards(self, context: "ContextBase") -> "EventCollection":
@@ -140,9 +142,25 @@ class ZeroCrossingHandler:
         """
         _body_fun = partial(_bisection_step_fun, solver_state)
         carry = GuardIsolationData(int_t0, int_t1, zc_events, context_tf)
-        search_data = backend.fori_loop(
-            0, self.zc_bisection_loop_count, _body_fun, carry
-        )
+        bounds = (0, self.zc_bisection_loop_count)
+        if self.bisection_early_exit:
+            # Once the integer interval has length 1 the midpoint is its left
+            # end, where the guards are not triggered, so every further step
+            # returns the carry unchanged; stop there.  (A while loop is not
+            # reverse-differentiable, so autodiff keeps the fixed count.)
+            def _cond(c):
+                i, d = c
+                return (i < bounds[1]) & (
+                    d.zc_after_time - d.zc_before_time > 1
+                )
+
+            def _body(c):
+                i, d = c
+                return i + 1, _body_fun(i, d)
+
+            _, search_data = backend.while_loop(_cond, _body, (bounds[0], carry))
+        else:
+            search_data = backend.fori_loop(*bounds, _body_fun, carry)
         return search_data.context, search_data.guards
 
     def check_after_discrete_update(
