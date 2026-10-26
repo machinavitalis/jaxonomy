@@ -290,7 +290,7 @@ class TestInvalidation:
         assert gain_value == pytest.approx(0.99, rel=1e-9)
         assert integ_value != gain_value
 
-    def test_with_parameters_copies_do_not_share_a_kernel(self):
+    def test_with_parameters_copies_get_their_own_values(self):
         diagram, _ = _chain(n_blocks=5, gain=1.0)
         diagram.create_context()
 
@@ -299,6 +299,205 @@ class TestInvalidation:
             integ = next(s for s in swept.nodes if s.name == "out")
             got = float(_run(swept, swept.create_context(), integ, 1.0).outputs["y"][-1])
             assert got == pytest.approx(value, rel=1e-6)
+
+
+def _out(diagram):
+    return next(s for s in diagram.nodes if s.name == "out")
+
+
+def _final(diagram, tf=1.0, **kwargs):
+    result = _run(diagram, diagram.create_context(), _out(diagram), tf, **kwargs)
+    return result, float(result.outputs["y"][-1])
+
+
+def _final_state(diagram):
+    result = jaxonomy.simulate(diagram, diagram.create_context(), (0.0, 1.0))
+    return float(result.context[_out(diagram).system_id].continuous_state)
+
+
+class _HostGain(LeafSystem):
+    """Gain evaluated on the host: the traced kernel calls back into Python."""
+
+    def __init__(self, gain, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.declare_dynamic_parameter("gain", gain)
+        self.declare_input_port()
+
+        def host(u, gain):
+            return np.asarray(u * gain, dtype=np.float64)
+
+        def output(time, state, u, gain):
+            return jax.pure_callback(host, jax.ShapeDtypeStruct((), jnp.float64), u, gain)
+
+        self.declare_output_port(output, requires_inputs=True)
+
+
+def _pid_plant(kp):
+    from jaxonomy.library import PID
+
+    builder = jaxonomy.DiagramBuilder()
+    src = builder.add(Constant(1.0, name="src"))
+    pid = builder.add(PID(kp=kp, ki=0, kd=0, n=100, name="pid"))
+    integ = builder.add(Integrator(initial_state=0.0, name="out"))
+    builder.connect(src.output_ports[0], pid.input_ports[0])
+    builder.connect(pid.output_ports[0], integ.input_ports[0])
+    return builder.build(name="pid_plant", parameters={"kp": kp})
+
+
+class TestKernelSharing:
+    """A ``with_parameters`` copy runs on the kernel compiled for its original
+    (or the other way round) whenever that is the same program."""
+
+    def test_copies_run_on_the_original_kernel(self):
+        diagram, _ = _chain(n_blocks=5, gain=1.0)
+        _, base = _final(diagram)
+        assert base == pytest.approx(1.0, rel=1e-6)
+        built = simulate_cache_info()["misses"]
+
+        for value in (0.5, 2.0, 3.0):
+            swept = diagram.with_parameters({"g0.gain": value})
+            result, got = _final(swept)
+            assert got == pytest.approx(value, rel=1e-6)
+            # The context that comes back belongs to the copy, not the original.
+            assert result.context.owning_system is swept
+            for sub, leaf in zip(result.context.subcontexts.values(), swept.leaf_systems):
+                assert sub.owning_system is leaf
+            g0 = next(s for s in swept.nodes if s.name == "g0")
+            assert float(result.context[g0.system_id].parameters["gain"]) == value
+
+        assert simulate_cache_info()["misses"] == built
+
+    def test_shared_kernel_matches_a_kernel_of_its_own(self):
+        diagram, _ = _chain(n_blocks=5, gain=1.0)
+        _final(diagram)
+        shared, _ = _final(diagram.with_parameters({"g0.gain": 1.7}), tf=2.0)
+
+        clear_simulate_cache()
+        own, _ = _final(diagram.with_parameters({"g0.gain": 1.7}), tf=2.0)
+
+        for a, b in zip(
+            jax.tree.leaves((shared.context.continuous_state, shared.time, shared.outputs)),
+            jax.tree.leaves((own.context.continuous_state, own.time, own.outputs)),
+        ):
+            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+
+    def test_the_original_runs_on_a_copy_kernel(self):
+        diagram, _ = _chain(n_blocks=5, gain=1.0)
+        diagram.create_context()
+        _, got = _final(diagram.with_parameters({"g0.gain": 2.0}))
+        assert got == pytest.approx(2.0, rel=1e-6)
+        built = simulate_cache_info()["misses"]
+
+        _, got = _final(diagram)
+        assert got == pytest.approx(1.0, rel=1e-6)
+        _, got = _final(diagram.with_parameters({"g0.gain": 4.0}))
+        assert got == pytest.approx(4.0, rel=1e-6)
+        assert simulate_cache_info()["misses"] == built
+
+    def test_copies_record_their_own_ports(self):
+        diagram, _ = _chain(n_blocks=3, gain=2.0)
+        _final(diagram)
+        built = simulate_cache_info()["misses"]
+
+        swept = diagram.with_parameters({"g0.gain": 5.0})
+        g1 = next(s for s in swept.nodes if s.name == "g1")
+        recorded = jaxonomy.simulate(
+            swept, swept.create_context(), (0.0, 1.0),
+            recorded_signals={"y": g1.output_ports[0]},
+        )
+        # Another recorded port is another program: 5 * 2, not the integral.
+        assert float(recorded.outputs["y"][-1]) == pytest.approx(10.0, rel=1e-9)
+        assert simulate_cache_info()["misses"] == built + 1
+
+    def test_a_copy_configured_differently_gets_its_own_kernel(self):
+        # A zero gain makes the PID non-feedthrough: another traced program,
+        # which never reads the block's input.
+        final_state = _final_state
+        diagram = _pid_plant(Parameter(jnp.asarray(0.0), name="kp"))
+        assert final_state(diagram) == pytest.approx(0.0, abs=1e-12)
+        built = simulate_cache_info()["misses"]
+
+        assert final_state(diagram.with_parameters({"kp": 2.0})) == pytest.approx(
+            2.0, rel=1e-6
+        )
+        assert simulate_cache_info()["misses"] == built + 1
+
+        # Copies configured like one of the two share with it.
+        assert final_state(diagram.with_parameters({"kp": 3.0})) == pytest.approx(
+            3.0, rel=1e-6
+        )
+        assert final_state(diagram.with_parameters({"kp": 0.0})) == pytest.approx(
+            0.0, abs=1e-12
+        )
+        assert simulate_cache_info()["misses"] == built + 1
+
+    def test_a_reconfigured_original_stops_lending_its_kernel(self):
+        kp = Parameter(jnp.asarray(1.0), name="kp")
+        diagram = _pid_plant(kp)
+        assert _final_state(diagram) == pytest.approx(1.0, rel=1e-6)
+        built = simulate_cache_info()["misses"]
+        swept = diagram.with_parameters({"kp": 2.0})
+
+        # Now non-feedthrough: a new trace of its kernel would be another program.
+        kp.set(0.0)
+        diagram.create_context()
+
+        assert _final_state(swept) == pytest.approx(2.0, rel=1e-6)
+        assert simulate_cache_info()["misses"] == built + 1
+
+    def test_a_static_change_ends_the_sharing(self):
+        p = Parameter(2.0, name="p")
+        builder = jaxonomy.DiagramBuilder()
+        src = builder.add(Constant(1.0, name="src"))
+        static = builder.add(_GainWithStaticParam(p, name="static"))
+        gain = builder.add(Gain(1.0, name="g0"))
+        integ = builder.add(Integrator(initial_state=0.0, name="out"))
+        builder.connect(src.output_ports[0], static.input_ports[0])
+        builder.connect(static.output_ports[0], gain.input_ports[0])
+        builder.connect(gain.output_ports[0], integ.input_ports[0])
+        diagram = builder.build(name="static_chain")
+
+        _, got = _final(diagram)
+        assert got == pytest.approx(2.0, rel=1e-6)
+        before = diagram.with_parameters({"g0.gain": 3.0})  # has p = 2 baked in
+
+        p.set(5.0)
+        _, got = _final(diagram)
+        assert got == pytest.approx(5.0, rel=1e-6)
+        _, got = _final(before)
+        assert got == pytest.approx(6.0, rel=1e-6)
+        _, got = _final(diagram.with_parameters({"g0.gain": 3.0}))
+        assert got == pytest.approx(15.0, rel=1e-6)
+
+    def test_kernels_with_host_callbacks_are_not_shared(self):
+        builder = jaxonomy.DiagramBuilder()
+        src = builder.add(Constant(1.0, name="src"))
+        host = builder.add(_HostGain(2.0, name="host"))
+        integ = builder.add(Integrator(initial_state=0.0, name="out"))
+        builder.connect(src.output_ports[0], host.input_ports[0])
+        builder.connect(host.output_ports[0], integ.input_ports[0])
+        diagram = builder.build(name="host_chain")
+
+        _, got = _final(diagram)
+        assert got == pytest.approx(2.0, rel=1e-6)
+        built = simulate_cache_info()["misses"]
+
+        # The program runs code of the blocks it was traced with.
+        _, got = _final(diagram.with_parameters({"host.gain": 3.0}))
+        assert got == pytest.approx(3.0, rel=1e-6)
+        assert simulate_cache_info()["misses"] == built + 1
+
+    def test_opt_out_does_not_share(self):
+        diagram, _ = _chain(n_blocks=5, gain=1.0)
+        _final(diagram)
+        info = simulate_cache_info()
+
+        _, got = _final(
+            diagram.with_parameters({"g0.gain": 2.0}),
+            options=SimulatorOptions(reuse_compiled_kernel=False),
+        )
+        assert got == pytest.approx(2.0, rel=1e-6)
+        assert simulate_cache_info()["hits"] == info["hits"]
 
 
 class TestPerRunState:

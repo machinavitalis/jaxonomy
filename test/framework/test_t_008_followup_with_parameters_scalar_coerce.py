@@ -136,6 +136,51 @@ def test_with_parameter_sweep_reuses_jit_cache():
     )
 
 
+@pytest.mark.parametrize("value", [0.4, 1, np.float64(0.3), np.float32(0.25), np.asarray(0.2)])
+def test_with_parameter_reuses_the_trace_of_the_original_context(value):
+    """The first changed value must not compile the kernel a second time.
+
+    ``jnp.asarray(0.5)`` (like any parameter declared from a Python scalar) is
+    weakly typed, and weak vs. strong is part of a compiled function's
+    signature. A value set through ``with_parameter`` has to stay weak, or a
+    kernel traced with the original context is traced again for the first
+    value of a sweep.
+    """
+    osc = _ScalarOsc(name="osc")
+    base_ctx = osc.create_context()
+    assert base_ctx.parameters["c"].weak_type
+
+    trace_count = {"n": 0}
+
+    @jax.jit
+    def kernel(ctx):
+        trace_count["n"] += 1
+        return ctx.parameters["c"] * 2.0
+
+    kernel(base_ctx)
+    new_ctx = base_ctx.with_parameter("c", value)
+    new = new_ctx.parameters["c"]
+    assert new.weak_type and new.dtype == base_ctx.parameters["c"].dtype
+    assert float(kernel(new_ctx)) == pytest.approx(2.0 * float(value))
+    assert trace_count["n"] == 1, "a changed parameter value retraced the kernel"
+
+
+def test_with_parameter_keeps_a_strongly_typed_parameter_strong():
+    """The counterpart: a parameter declared with an explicit dtype stays strong."""
+
+    class _StrongOsc(_ScalarOsc):
+        def __init__(self, *args, **kwargs):
+            jaxonomy.LeafSystem.__init__(self, *args, **kwargs)
+            self.declare_continuous_state(1, ode=self._ode)
+            self.declare_dynamic_parameter("c", jnp.asarray(0.5, dtype=jnp.float32))
+            self.declare_continuous_state_output()
+
+    ctx = _StrongOsc(name="osc").create_context()
+    assert not ctx.parameters["c"].weak_type
+    new = ctx.with_parameter("c", 0.4).parameters["c"]
+    assert not new.weak_type and new.dtype == jnp.float32
+
+
 def test_with_parameters_diagram_error_names_offending_key():
     """When validation does fail (shape mismatch), the error must name the
     parameter so the user knows which entry to fix."""
