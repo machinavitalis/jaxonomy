@@ -406,11 +406,14 @@ class Diagram(SystemBase):
             "Can only get periodic events from top-level Diagram, not "
             f"{self.system_id} with parent {self.parent.system_id}"
         )
-        events = sum(
-            [sys.state_update_events for sys in self.leaf_systems],
-            start=FlatEventCollection(),
+        # One pass: summing collections re-copies the growing tuple per leaf.
+        return FlatEventCollection(
+            tuple(
+                event
+                for sys in self.leaf_systems
+                for event in sys.state_update_events.events
+            )
         )
-        return events
 
     @property
     def zero_crossing_events(self) -> DiagramEventCollection:

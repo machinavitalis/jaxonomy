@@ -618,16 +618,17 @@ def estimate_max_major_steps(
     #   jaxonomy.simulate(my_model, options=options)
 
     # Find the smallest period amongst the periodic events of the system
-    if system.periodic_events.has_events or max_major_step_length is not None:
+    periodic_events = system.periodic_events
+    if periodic_events.has_events or max_major_step_length is not None:
         # Initialize to infinity - will be overwritten by at least one conditional
         min_discrete_step = np.inf
 
         # Bound the number of major steps based on the smallest discrete period in
         # the system.
-        if system.periodic_events.has_events:
+        if periodic_events.has_events:
             event_periods = jax.tree_util.tree_map(
                 lambda event_data: event_data.period,
-                system.periodic_events,
+                periodic_events,
                 is_leaf=is_event_data,
             )
             min_discrete_step = jax.tree_util.tree_reduce(min, event_periods)

@@ -90,7 +90,9 @@ def validate_diagram(
             for subsystem in system.nodes:
                 walk(subsystem, name)
 
-    walk(diagram)
+    # Every per-block check above only reports under autodiff.
+    if options and getattr(options, "enable_autodiff", False):
+        walk(diagram)
 
     # --- SimulatorOptions checks ---
     if options:
