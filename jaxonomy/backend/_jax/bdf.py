@@ -565,7 +565,12 @@ class BDFSolver(ODESolverImpl):
     def _lu_factor(self, A, pred=None, LU=None):
         if pred is None:
             return lu_factor(A)
-        return jax.tree.map(partial(jnp.where, pred), lu_factor(A), LU)
+        return lax.cond(
+            pred,
+            lambda A: jax.tree.map(partial(jnp.where, pred), lu_factor(A), LU),
+            lambda A: LU,
+            A,
+        )
 
     def _maybe_emit_condition(self, A, t):
         """T-038a-followup-bdf-condition-check.
