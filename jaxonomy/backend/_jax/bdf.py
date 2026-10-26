@@ -873,8 +873,15 @@ class BDFSolver(ODESolverImpl):
             n_equal_steps=solver_state.n_equal_steps + 1,
         )
 
-        return jax.tree.map(
-            partial(jnp.where, n_equal_steps < solver_state.order + 1),
-            self._update_difference_matrix(solver_state, d),
-            self._update_difference_matrix_order_change(solver_state, d, y_new, n_iter),
+        def _normal_branch(s):
+            return self._update_difference_matrix(s, d)
+
+        def _order_change_branch(s):
+            return self._update_difference_matrix_order_change(s, d, y_new, n_iter)
+
+        return lax.cond(
+            n_equal_steps < solver_state.order + 1,
+            _normal_branch,
+            _order_change_branch,
+            solver_state,
         )
