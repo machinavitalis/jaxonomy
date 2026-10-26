@@ -342,6 +342,9 @@ class SystemBase:
             if key == "_dependency_graph":
                 result._dependency_graph = None
                 continue
+            if key == "_phase1_reach_cache":
+                # derived from _dependency_graph (holds it), rebuilt on demand
+                continue
             setattr(result, key, copy.deepcopy(value, memo))
         return result
 
@@ -642,15 +645,23 @@ class SystemBase:
                     phase1_events,
                     key=lambda e: _phase1_priority_tiebreak(e.system_id),
                 )
+            # A downstream feedthrough cache update must read its upstream's
+            # fresh current-tick output, so the port cache is refreshed before
+            # an update whenever a block updated since the last refresh can
+            # reach it.  Updates that cannot reach it (e.g. independent loops)
+            # skip the refresh: every port they read is unchanged.
+            reaches = self._phase1_reach() if _multi_p1 else None
+            dirty = set()
             for event in phase1_events:
                 system_id = event.system_id
+                if dirty and reaches(dirty, system_id):
+                    context = context.refresh_port_cache()
+                    dirty = set()
                 state = event.handle(context)
                 local_context = context[system_id].with_state(state)
                 context = context.with_subcontext(system_id, local_context)
                 if _multi_p1:
-                    # Refresh so the next (downstream) feedthrough cache update
-                    # reads this block's fresh current-tick output.
-                    context = context.refresh_port_cache()
+                    dirty.add(system_id)
 
             # Between phases: refresh the root port_cache so that Phase 2 state
             # update callbacks (which use OutputPort.eval → port_cache lookup) see
@@ -833,6 +844,56 @@ class SystemBase:
 
         # Retrieve the callback associated with each tracker.
         return [tracker.cache_source for tracker in trackers]
+
+    def _phase1_reach(self):
+        """``reaches(updated_ids, system_id)``: can an update of any system in
+        ``updated_ids`` change a port that ``system_id`` reads?
+
+        Conservative, at the granularity of this system's direct children: each
+        child is taken to feed through from every input to every output and to
+        depend on itself, and a child reaches another if there is a connection
+        path from it.  Only "no" answers skip work, and those are exact.
+        Cached per dependency graph (rebuilt whenever the structure can change).
+        """
+        graph = self._dependency_graph
+        cached = self.__dict__.get("_phase1_reach_cache")
+        if graph is not None and cached is not None and cached[0] is graph:
+            return cached[1]
+        nodes = getattr(self, "nodes", None)
+        if not nodes:
+            reaches = lambda updated, system_id: True  # noqa: E731
+        else:
+            top = {}
+
+            def _walk(node, root_id):
+                top[node.system_id] = root_id
+                for sub in getattr(node, "nodes", None) or []:
+                    _walk(sub, root_id)
+
+            for node in nodes:
+                _walk(node, node.system_id)
+            parents = {node.system_id: set() for node in nodes}
+            for (dst, _), (src, _) in self.connection_map.items():
+                parents[dst.system_id].add(src.system_id)
+            upstream = {}
+            for nid in parents:
+                seen, stack = {nid}, [nid]
+                while stack:
+                    for p in parents[stack.pop()]:
+                        if p not in seen:
+                            seen.add(p)
+                            stack.append(p)
+                upstream[nid] = seen
+
+            def reaches(updated, system_id):
+                ups = upstream.get(top.get(system_id))
+                if ups is None:
+                    return True
+                return any(top.get(u) in ups or top.get(u) is None for u in updated)
+
+        if graph is not None:
+            self._phase1_reach_cache = (graph, reaches)
+        return reaches
 
     def recompute_port_cache(self, context: ContextBase) -> dict[Hashable, Array]:
         """Recompute all output ports and return them in a dictionary."""
