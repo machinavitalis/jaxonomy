@@ -386,6 +386,8 @@ class BDFSolver(ODESolverImpl):
     error estimate from the Newton iteration.
     """
 
+    _reuse_jacobian = False  # set per problem in _initialize_state
+
     def _finalize(self):
         self.supports_mass_matrix = True
         super()._finalize()
@@ -417,6 +419,9 @@ class BDFSolver(ODESolverImpl):
         D = D.at[1].set(f0 * dt)
         c = (dt / ALPHA[order]).astype(xc0.dtype)
 
+        # A DAE (singular mass matrix) needs a fresh Jacobian every step to
+        # stay robust across switching; an ODE can reuse it as scipy does.
+        self._reuse_jacobian = mass is None
         if mass is None:
             M = np.eye(len(xc0), dtype=xc0.dtype)
         else:
@@ -475,7 +480,7 @@ class BDFSolver(ODESolverImpl):
 
         # Update LU: `c` has changed (maybe)
         c = (h / ALPHA[order]).astype(y0.dtype)
-        LU = self._lu_factor(M - c * J, recalc_lu, LU)
+        LU = self._lu_factor(M, c, J, recalc_lu, LU)
         LU = (LU[0].astype(y0.dtype), LU[1])
 
         y_predict = self.predict(D, order=order)
@@ -512,13 +517,19 @@ class BDFSolver(ODESolverImpl):
 
             # The `cond_fun` check will break out of the loop if not converged but the Jacobian
             # is up to date.  Here we will just update the Jacobian if not converged.
-            current_jac, J, recalc_lu = jax.tree.map(
-                partial(jnp.where, ~converged & current_jac),
-                (current_jac, J, False),
-                (True, jac_fn(y_predict, t_new), True),
-            )
+            if self._reuse_jacobian:
+                # ODE: keep J across steps; refresh only when Newton fails.
+                recalc_lu = ~converged & ~current_jac
+                J = lax.cond(recalc_lu, lambda: jac_fn(y_predict, t_new), lambda: J)
+                current_jac = current_jac | recalc_lu
+            else:
+                current_jac, J, recalc_lu = jax.tree.map(
+                    partial(jnp.where, ~converged & current_jac),
+                    (current_jac, J, False),
+                    (True, jac_fn(y_predict, t_new), True),
+                )
             # Update LU: Jacobian has changed (maybe)
-            LU = self._lu_factor(M - c * J, recalc_lu, LU)
+            LU = self._lu_factor(M, c, J, recalc_lu, LU)
 
             return exit_flag, n_iter, converged, current_jac, J, LU, y_new, d
 
@@ -562,15 +573,11 @@ class BDFSolver(ODESolverImpl):
         self._maybe_emit_condition(M - c * J, t_new)
         return converged, k, y_new, d, state
 
-    def _lu_factor(self, A, pred=None, LU=None):
+    def _lu_factor(self, A, c=None, J=None, pred=None, LU=None):
+        """Factor ``A`` or, given ``pred``, ``A - c*J`` only where ``pred`` holds."""
         if pred is None:
             return lu_factor(A)
-        return lax.cond(
-            pred,
-            lambda A: jax.tree.map(partial(jnp.where, pred), lu_factor(A), LU),
-            lambda A: LU,
-            A,
-        )
+        return lax.cond(pred, lambda: lu_factor(A - c * J), lambda: LU)
 
     def _maybe_emit_condition(self, A, t):
         """T-038a-followup-bdf-condition-check.
@@ -808,6 +815,11 @@ class BDFSolver(ODESolverImpl):
             D=D,
             n_equal_steps=n_equal_steps,
         )
+        if self._reuse_jacobian:
+            solver_state = dataclasses.replace(
+                solver_state,
+                updated_jacobian=jnp.zeros_like(solver_state.updated_jacobian),
+            )
 
         def cond_fun(carry):
             accepted = carry[1]
