@@ -398,16 +398,18 @@ def homotopy_roots(
     return sol_x
 
 
-def scipy_roots(f, x_0, method="lm", tol=None):
+def scipy_roots(f, x_0, method="lm", tol=None, f_and_jac=None):
     """
     Find the roots of a system of equations `f(x)=0` starting from `x=x_0`
-    with `scipy.optimize.root`
+    with `scipy.optimize.root`. `f_and_jac`, if given, computes `f` and its
+    Jacobian at the same point.
     """
     from scipy.optimize import root
 
     # One compiled program for the residual and its Jacobian: the solver asks
     # for both at the same points, so the pair is computed once per point.
-    f_and_jac = jax.jit(lambda x: (f(x), jax.jacfwd(f)(x)))
+    if f_and_jac is None:
+        f_and_jac = jax.jit(lambda x: (f(x), jax.jacfwd(f)(x)))
     last = {}
 
     def _at(x):
@@ -522,6 +524,11 @@ def order_vars_by_impact(t, eqs, X, ics, ics_weak, knowns):
     return ordered_ics
 
 
+# Residuals by symbolic problem: copies of a system pose the same equations
+# with other values, so they share the lambdified residual and its program.
+_ROOT_FUNCTIONS = {}
+
+
 def _get_root_function(t, eqs, X, ics, ics_weak, knowns):
     assert set({**ics_weak, **ics}.keys()) == set(X)
     knowns_symbols, knowns_vals = zip(*knowns.items())
@@ -532,13 +539,30 @@ def _get_root_function(t, eqs, X, ics, ics_weak, knowns):
     x_0_arr = jnp.array(x_0)
 
     sym_args = (t, x + y, knowns_symbols)
-    F_full = sp.lambdify(sym_args, eqs, modules=["jax", {"npa": npa}])
-    def F(y_vals):
-        res = F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals)
-        res_squeezed = [jnp.squeeze(val) for val in res]
-        return jnp.array(res_squeezed)
+    key = (sym_args, tuple(eqs))
+    entry = _ROOT_FUNCTIONS.get(key)
+    if entry is None:
+        if len(_ROOT_FUNCTIONS) >= 64:
+            _ROOT_FUNCTIONS.clear()
+        F_full = sp.lambdify(sym_args, eqs, modules=["jax", {"npa": npa}])
 
-    return F, y
+        def F_of(y_vals, x_0_arr, knowns_vals):
+            res = F_full(0.0, jnp.hstack((x_0_arr, y_vals)), knowns_vals)
+            res_squeezed = [jnp.squeeze(val) for val in res]
+            return jnp.array(res_squeezed)
+
+        # the values are arguments, so one compiled program serves them all
+        pair = jax.jit(lambda *a: (F_of(*a), jax.jacfwd(F_of)(*a)))
+        entry = _ROOT_FUNCTIONS[key] = (F_of, pair)
+    F_of, pair = entry
+
+    def F(y_vals):
+        return F_of(y_vals, x_0_arr, knowns_vals)
+
+    def f_and_jac(y_vals):
+        return pair(y_vals, x_0_arr, knowns_vals)
+
+    return F, y, f_and_jac
 
 
 def _compute_consistent_initial_conditions(
@@ -568,7 +592,9 @@ def _compute_consistent_initial_conditions(
         #     },
         # }
 
-    root_func, x_free = _get_root_function(t, eqs, X, ics, ics_weak, knowns)
+    root_func, x_free, f_and_jac = _get_root_function(
+        t, eqs, X, ics, ics_weak, knowns
+    )
 
     x_0 = jnp.array([ics_weak[var] for var in x_free])
 
@@ -579,6 +605,7 @@ def _compute_consistent_initial_conditions(
             x_0,
             method=options.get("solver", "lm"),
             tol=options.get("tol", None),
+            f_and_jac=f_and_jac,
         )
     elif config["method"] == "homotopy":
         options = config["homotopy_options"]
