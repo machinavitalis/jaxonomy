@@ -240,7 +240,7 @@ class DiagramProcessing:
         # substitution would be a no-op and Eqn.subs would not call doit().
         touched = []
         for i, eq in self.eqs.items():
-            if hasattr(eq.e, "has") and not eq.e.has(sym, sp.Derivative):
+            if hasattr(eq.e, "has") and not eq.e.has(sym):
                 continue
             self.eqs[i] = eq.subs(sym, sub_expr)
             touched.append(i)
