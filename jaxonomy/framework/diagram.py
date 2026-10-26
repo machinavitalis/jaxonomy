@@ -936,18 +936,18 @@ class Diagram(SystemBase):
             # use the port directly as a key, since it is a unique hashable object.
             input_system, input_index = input_port_locator
             input_port = input_system.input_ports[input_index]
-            logger.debug(f"Adding locator {input_port} to nodes")
+            logger.debug("Adding locator %s to nodes", input_port)
             nodes.add(input_port)
 
             output_system, output_index = output_port_locator
             output_port = output_system.output_ports[output_index]
-            logger.debug(f"Adding locator {output_port} to nodes")
+            logger.debug("Adding locator %s to nodes", output_port)
             nodes.add(output_port)
 
             if output_port not in edges:
                 edges[output_port] = set()
 
-            logger.debug(f"Adding edge[{output_port}] = {input_port}")
+            logger.debug("Adding edge[%s] = %s", output_port, input_port)
             edges[output_port].add(input_port)
 
         # Add more edges based on each System's direct feedthrough.
@@ -957,11 +957,11 @@ class Diagram(SystemBase):
         # the level of this diagram (higher-level diagrams will test for cycles at
         # their level).
         for system in self.nodes:
-            logger.debug(f"Checking feedthrough for system {system.name}")
+            logger.debug("Checking feedthrough for system %s", system.name)
             for input_index, output_index in system.get_feedthrough():
                 input_port = system.input_ports[input_index]
                 output_port = system.output_ports[output_index]
-                logger.debug(f"Feedthrough from {input_port} to {output_port}")
+                logger.debug("Feedthrough from %s to %s", input_port, output_port)
                 if input_port in nodes and output_port in nodes:
                     if input_port not in edges:
                         edges[input_port] = set()
@@ -992,7 +992,7 @@ class Diagram(SystemBase):
             work: List[Tuple[PortBase, Iterator[PortBase], bool]] = []
 
             def _enter(node: PortBase) -> None:
-                logger.debug(f"Checking node {node}")
+                logger.debug("Checking node %s", node)
                 visited.add(node.directed_locator)
                 if node in edges:
                     stack.append(node.directed_locator)
@@ -1009,7 +1009,7 @@ class Diagram(SystemBase):
                     # not-yet-visited target cannot be a back-edge; testing
                     # `stack` first is equivalent to the recursive ordering.
                     if target.directed_locator in stack:
-                        logger.debug(f"Found target {target} in stack {stack}")
+                        logger.debug("Found target %s in stack %s", target, stack)
                         return True
                     if target.directed_locator not in visited:
                         _enter(target)

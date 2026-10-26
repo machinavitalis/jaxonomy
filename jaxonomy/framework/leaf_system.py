@@ -215,7 +215,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
     # SystemBase is a dataclass, so we need to call __post_init__ explicitly
     def __post_init__(self):
         super().__post_init__()
-        logger.debug(f"Initializing {self.name} [{self.system_id}]")
+        logger.debug("Initializing %s [%s]", self.name, self.system_id)
 
         # If not None, this defines the shape and data type of the continuous state
         # component.  This value will be used to initialize the context, so it will
@@ -480,8 +480,8 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         local_events = events[self.system_id]
         state = context[self.system_id].state
 
-        logger.debug(f"Eval update events for {self.name}")
-        logger.debug(f"local events: {local_events}")
+        logger.debug("Eval update events for %s", self.name)
+        logger.debug("local events: %s", local_events)
 
         for event in local_events:
             # This is evaluated conditionally on event_data.active
@@ -524,7 +524,9 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
             tuple(_conditionally_activate(e) for e in self.zero_crossing_events)
         )
 
-        logger.debug(f"Zero-crossing events for {self.name}: {zero_crossing_events}")
+        logger.debug(
+            "Zero-crossing events for %s: %s", self.name, zero_crossing_events
+        )
         return zero_crossing_events
 
     @property
@@ -831,7 +833,9 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         if as_array:
             default_value = utils.make_array(default_value, dtype=dtype, shape=shape)
 
-        logger.debug(f"In block {self.name} [{self.system_id}]: {default_value=}")
+        logger.debug(
+            "In block %s [%s]: default_value=%r", self.name, self.system_id, default_value
+        )
 
         # Tree-map the default value to ensure that it is an array-like with the
         # correct shape and dtype. This is necessary because the default value
@@ -1621,11 +1625,11 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
         ) -> LeafState:
             if reset_map is not None:
                 state = reset_map(time, state, *inputs, **parameters)
-            logger.debug(f"Updating mode from {state.mode} to {end_mode}")
+            logger.debug("Updating mode from %s to %s", state.mode, end_mode)
 
             # If the start and end modes are declared, update the mode
             if start_mode is not None:
-                logger.debug(f"Updating mode from {state.mode} to {end_mode}")
+                logger.debug("Updating mode from %s to %s", state.mode, end_mode)
                 state = state.with_mode(end_mode)
 
             return state
@@ -1995,7 +1999,7 @@ class LeafSystem(SystemBase, metaclass=InitializeParameterResolver):
             # feed through to this output.
             cache = _mark_out_of_date(cache, output_port.callback_index)
 
-        logger.debug(f"{self.name} feedthrough pairs: {feedthrough}")
+        logger.debug("%s feedthrough pairs: %s", self.name, feedthrough)
 
         # Conservatively assume everything still unknown is feedthrough
         for pair in unknown:
