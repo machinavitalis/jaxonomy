@@ -707,7 +707,12 @@ class BDFSolver(ODESolverImpl):
         factor = jnp.where(
             retry_nonfinite, jnp.asarray(0.5, dtype=dtype), factor
         )
-        force_accept = (would_retry | nonfinite) & ~dt_above_floor
+        # A retry can shrink dt so far that ``t + dt`` rounds to ``t``. The
+        # resulting zero-length step converges trivially with zero error and
+        # would be accepted forever without advancing time, so it counts as
+        # a stall too.
+        stalled = (state.dt == 0) & (state.t < boundary_time)
+        force_accept = (would_retry | nonfinite | stalled) & ~dt_above_floor
         factor = jnp.where(
             force_accept, jnp.asarray(-jnp.inf, dtype=dtype), factor
         )
