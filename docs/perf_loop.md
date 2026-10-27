@@ -1,6 +1,6 @@
 # Case study: an optimization loop that measures before it commits
 
-Between release 3.4.1 and the version this page ships with, Jaxonomy's
+Between releases 3.4.1 and 3.5.0, Jaxonomy's
 simulation core was made faster by 27 small changes. None of them was
 committed on a hunch. Each one was proposed, applied to a scratch copy,
 checked against reference results, timed against the unchanged code, and

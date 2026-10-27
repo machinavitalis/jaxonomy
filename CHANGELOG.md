@@ -15,6 +15,8 @@ Pure internal refactors live in commits, not here.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-27
+
 ### Changed
 
 - **Follow-up simulations reuse the compiled kernel** (`simulate`, `Context.with_parameter`, `Diagram.with_parameters`): a parameter changed through the context with a Python scalar no longer compiles again on its first new value, and a `with_parameters` copy runs on the kernel of the diagram it was copied from, unless the new value reconfigures a block or the kernel calls back into Python. `benchmarks/jit_cache.py` measures 2.6 ms per copied value on a 6-block loop and 44 ms on a 159-block diagram, with no compilation.
