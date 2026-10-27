@@ -276,12 +276,16 @@ class SimulatorOptions:
     max_minor_step_size: float = None
 
     # This is used to bound the number of "checkpoints" in the adjoint solver and
-    # is used only when autodiff is enabled.  Increasing this may improve the
-    # accuracy of the adjoint solver (especially over long integration times), but
-    # will also increase memory usage.  Whether or not the resulting adjoint solve
-    # is faster depends on the details of the problem, for instance on the number of
-    # major steps and the ODE solver tolerance.  This can also be set to None to
-    # disable checkpointing altogether.
+    # is used only when autodiff is enabled.  The adjoint re-integrates the state
+    # backward in time from each checkpoint, which amplifies error in a decaying
+    # (dissipative) state by roughly exp(gap / tau), where gap is the time between
+    # checkpoints and tau the state's time constant.  Over horizons much longer
+    # than tau the gradient is then dominated by that error; keep gap within a few
+    # tau by raising this value (it must be even).  Memory grows with
+    # max_checkpoints x number of states for every interval of continuous
+    # integration.  Whether or not the resulting adjoint solve is faster depends
+    # on the details of the problem, for instance on the number of major steps
+    # and the ODE solver tolerance.
     max_checkpoints: int = 16
 
     # This option determines whether the simulator saves any data.  If the

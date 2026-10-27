@@ -151,6 +151,30 @@ Each entry has the same shape:
 - **Workaround**: change the value through the context, or use
   `simulate_batch`.
 
+### Autodiff — long horizons need more adjoint checkpoints
+
+- **Area**: gradients of `simulate` with `enable_autodiff=True`
+- **Status**: known limitation
+- **What works**: the adjoint gradient matches finite differences when the
+  time between adjoint checkpoints stays within a few time constants of
+  the model's decaying states. Measured (2026-10) on the battery
+  parameter-estimation tutorial, whose RC branch decays in about 30 s:
+  over a 1,000 s horizon with the default 16 checkpoints (within 1%),
+  and over the full 15,966 s horizon with `max_checkpoints=1024`, where
+  the largest gradient components agree with finite differences to
+  three digits.
+- **What doesn't**: the backward pass re-integrates the state backward in
+  time from each checkpoint, which amplifies error in a decaying state
+  roughly as exp(gap / time constant). With the default 16 checkpoints
+  over the full 15,966 s horizon, the same gradient reaches 1e40 against
+  a true value below 1, with no error or warning, and an optimizer fed
+  with it diverges. `test/autodiff/test_adjoint_checkpoint_spacing.py`
+  reproduces it in miniature and fails loudly once it is fixed.
+- **Workaround**: raise `SimulatorOptions(max_checkpoints=...)` (an even
+  number) until the gap between checkpoints is a few time constants;
+  memory grows with `max_checkpoints` times the number of states for
+  every interval of continuous integration.
+
 ### Container blocks
 
 - **Area**: control-flow container blocks
