@@ -99,8 +99,9 @@ DuckDB SQL backend (T-015a-followup-resample-pushdown-duckdb):
       * ``.collect()`` / ``.to_numpy()`` — `connection.execute(sql)
         .fetchnumpy()`.
       * ``.to_pandas()`` — `.df()`.
-      * ``.to_polars()`` — `.pl()` if pyarrow is available, else fall
-        back to materialising via numpy then handing to polars.
+      * ``.to_polars()`` — `connection.sql(sql).pl()` if pyarrow is
+        available, else fall back to materialising via numpy then handing
+        to polars.
       * ``.to_parquet(path)`` — `COPY (sql) TO 'path' (FORMAT PARQUET)`,
         which is genuinely streaming on DuckDB's side.
   - ``LazyResults.from_parquet(path, backend="duckdb")`` reads the file
@@ -1572,7 +1573,8 @@ class _DuckDBPlan:
     def fetch_polars(self):
         sql = self._compose_sql()
         try:
-            return self.conn.execute(sql).pl()
+            # The relation API: DuckDB 2.0 removed ``.pl()`` from connections.
+            return self.conn.sql(sql).pl()
         except (ImportError, ModuleNotFoundError):
             # ``.pl()`` requires pyarrow; fall back to building a
             # polars DataFrame from fetchnumpy (no Arrow dependency).
